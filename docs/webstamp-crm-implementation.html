@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>WebStamp CRM - Technical Implementation Guide</title>
+    <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; line-height: 1.6; margin: 24px; }
+        h1, h2, h3 { color: #0f172a; }
+        h1 { margin-top: 0; }
+        code, pre { font-family: "Courier New", Courier, monospace; font-size: 13px; }
+        pre { background: #f5f5f5; padding: 12px; border-radius: 8px; overflow-x: auto; }
+        .note { background: #fff7ed; border: 1px solid #fed7aa; padding: 10px 12px; border-radius: 8px; }
+        .grid { display: grid; gap: 12px; }
+    </style>
+</head>
+<body>
+    <h1>WebStamp CRM - Technical Implementation Guide</h1>
+    <p>
+        This document describes how the WebStamp CRM application is built, including architecture, data model,
+        API routes, authentication and roles, UI structure, background processing, deployment, and troubleshooting.
+        It is based on the current codebase.
+    </p>
+
+    <h2>1. Architecture Overview</h2>
+    <ul>
+        <li><strong>Framework</strong>: Laravel 12 (PHP 8.2+)</li>
+        <li><strong>Architecture</strong>: API-first REST + single Blade view for the UI shell</li>
+        <li><strong>Frontend</strong>: Blade template + vanilla JavaScript (Axios) + custom CSS (Tailwind v4 build pipeline)</li>
+        <li><strong>Auth</strong>: Laravel Sanctum token-based auth (Bearer tokens)</li>
+        <li><strong>RBAC</strong>: Role-based access control using role middleware</li>
+        <li><strong>Storage</strong>: Private disk for invoices and branding assets</li>
+        <li><strong>Queues</strong>: Database queue for invoice emails and PDF generation</li>
+        <li><strong>Scheduler</strong>: Daily scheduled command to generate subscription invoices</li>
+    </ul>
+
+    <h2>2. Project Structure (Key Paths)</h2>
+    <ul>
+        <li><code>routes/web.php</code> - Serves the SPA-like Blade app shell</li>
+        <li><code>routes/api.php</code> - All JSON API endpoints</li>
+        <li><code>app/Http/Controllers</code> - API controllers</li>
+        <li><code>app/Models</code> - Eloquent models and relationships</li>
+        <li><code>app/Http/Resources</code> - API response shaping</li>
+        <li><code>resources/views/app.blade.php</code> - Main UI shell</li>
+        <li><code>resources/js/app.js</code> - Frontend logic</li>
+        <li><code>resources/css/app.css</code> - UI styles and theme system</li>
+        <li><code>database/migrations</code> - Schema definition</li>
+        <li><code>app/Jobs</code> + <code>app/Services</code> - Invoice emails and PDF generation</li>
+        <li><code>routes/console.php</code> - Scheduler configuration</li>
+    </ul>
+
+    <h2>3. Authentication and Authorization</h2>
+    <h3>Authentication</h3>
+    <ul>
+        <li>Login: <code>POST /api/auth/login</code> with <code>email</code> and <code>password</code></li>
+        <li>Returns a Sanctum token: <code>{ token, user }</code></li>
+        <li>Frontend stores token in <code>localStorage</code> and sends <code>Authorization: Bearer &lt;token&gt;</code></li>
+        <li>Logout: <code>POST /api/auth/logout</code> revokes the current token</li>
+    </ul>
+
+    <h3>Authorization (RBAC)</h3>
+    <ul>
+        <li>Middleware aliases defined in <code>bootstrap/app.php</code>: <code>role</code>, <code>permission</code></li>
+        <li>Role checks are enforced on API routes via <code>EnsureRole</code> middleware</li>
+        <li>Roles used: <code>admin</code>, <code>staff</code>, <code>customer</code></li>
+        <li>Permissions model exists but is not currently enforced in routes</li>
+    </ul>
+
+    <h3>Role Enforcement Summary</h3>
+    <ul>
+        <li><strong>Admin + Staff</strong>: full CRUD on customers, jobs, subscriptions, invoices, websites, and revenue stats</li>
+        <li><strong>Admin only</strong>: update brand logo</li>
+        <li><strong>Customer only</strong>: portal endpoints (own jobs, subscriptions, invoices, websites)</li>
+    </ul>
+
+    <h2>4. Database Schema</h2>
+    <p>
+        The schema is defined by migrations and mirrored in <code>webstamp_crm_schema.sql</code>.
+        Soft deletes are enabled for customers, jobs, subscriptions, invoices, and websites.
+    </p>
+
+    <h3>Core Tables (High-Level)</h3>
+    <ul>
+        <li><strong>users</strong>: application users</li>
+        <li><strong>roles</strong>, <strong>permissions</strong>, <strong>role_user</strong>, <strong>permission_role</strong>: RBAC</li>
+        <li><strong>customers</strong>: customer records (optional portal linkage via <code>user_id</code>)</li>
+        <li><strong>jobs</strong>: one-off work</li>
+        <li><strong>subscriptions</strong>: recurring billing</li>
+        <li><strong>invoices</strong>, <strong>invoice_line_items</strong>: billing</li>
+        <li><strong>websites</strong>: customer websites and login URLs</li>
+        <li><strong>files</strong>: stored files (PDFs, logos)</li>
+        <li><strong>brand_settings</strong>: logo configuration</li>
+        <li><strong>user_preferences</strong>: theme preference</li>
+        <li><strong>queue_jobs</strong>, <strong>job_batches</strong>, <strong>failed_jobs</strong>: background processing</li>
+        <li><strong>personal_access_tokens</strong>: Sanctum tokens</li>
+    </ul>
+
+    <h3>Full DDL (MySQL)</h3>
+    <pre>
+-- See webstamp_crm_schema.sql for the canonical schema used for phpMyAdmin imports.
+-- The following is that schema embedded for reference:
+
+CREATE TABLE `users` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `email_verified_at` TIMESTAMP NULL DEFAULT NULL,
+  `password` VARCHAR(255) NOT NULL,
+  `remember_token` VARCHAR(100) NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `users_email_unique` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `password_reset_tokens` (
+  `email` VARCHAR(255) NOT NULL,
+  `token` VARCHAR(255) NOT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `sessions` (
+  `id` VARCHAR(255) NOT NULL,
+  `user_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `ip_address` VARCHAR(45) NULL DEFAULT NULL,
+  `user_agent` TEXT NULL,
+  `payload` LONGTEXT NOT NULL,
+  `last_activity` INT NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `sessions_user_id_index` (`user_id`),
+  KEY `sessions_last_activity_index` (`last_activity`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `cache` (
+  `key` VARCHAR(255) NOT NULL,
+  `value` MEDIUMTEXT NOT NULL,
+  `expiration` INT NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `cache_locks` (
+  `key` VARCHAR(255) NOT NULL,
+  `owner` VARCHAR(255) NOT NULL,
+  `expiration` INT NOT NULL,
+  PRIMARY KEY (`key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `queue_jobs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `queue` VARCHAR(255) NOT NULL,
+  `payload` LONGTEXT NOT NULL,
+  `attempts` TINYINT UNSIGNED NOT NULL,
+  `reserved_at` INT UNSIGNED NULL DEFAULT NULL,
+  `available_at` INT UNSIGNED NOT NULL,
+  `created_at` INT UNSIGNED NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `queue_jobs_queue_index` (`queue`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `job_batches` (
+  `id` VARCHAR(255) NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `total_jobs` INT NOT NULL,
+  `pending_jobs` INT NOT NULL,
+  `failed_jobs` INT NOT NULL,
+  `failed_job_ids` LONGTEXT NOT NULL,
+  `options` MEDIUMTEXT NULL,
+  `cancelled_at` INT NULL,
+  `created_at` INT NOT NULL,
+  `finished_at` INT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `failed_jobs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `uuid` VARCHAR(255) NOT NULL,
+  `connection` TEXT NOT NULL,
+  `queue` TEXT NOT NULL,
+  `payload` LONGTEXT NOT NULL,
+  `exception` LONGTEXT NOT NULL,
+  `failed_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `failed_jobs_uuid_unique` (`uuid`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `roles` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `slug` VARCHAR(255) NOT NULL,
+  `description` TEXT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `roles_slug_unique` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `permissions` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `slug` VARCHAR(255) NOT NULL,
+  `description` TEXT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `permissions_slug_unique` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `permission_role` (
+  `role_id` BIGINT UNSIGNED NOT NULL,
+  `permission_id` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`role_id`, `permission_id`),
+  CONSTRAINT `permission_role_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `permission_role_permission_id_foreign` FOREIGN KEY (`permission_id`) REFERENCES `permissions` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `role_user` (
+  `role_id` BIGINT UNSIGNED NOT NULL,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY (`role_id`, `user_id`),
+  CONSTRAINT `role_user_role_id_foreign` FOREIGN KEY (`role_id`) REFERENCES `roles` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `role_user_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `customers` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(255) NOT NULL,
+  `email` VARCHAR(255) NOT NULL,
+  `billing_address` TEXT NOT NULL,
+  `notes` TEXT NULL,
+  `user_id` BIGINT UNSIGNED NULL,
+  `created_by_user_id` BIGINT UNSIGNED NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `customers_user_id_unique` (`user_id`),
+  CONSTRAINT `customers_created_by_user_id_foreign` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `customers_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `files` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `disk` VARCHAR(255) NOT NULL,
+  `path` VARCHAR(255) NOT NULL,
+  `original_name` VARCHAR(255) NOT NULL,
+  `mime_type` VARCHAR(255) NULL DEFAULT NULL,
+  `size` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `category` VARCHAR(255) NULL DEFAULT NULL,
+  `checksum` VARCHAR(128) NULL DEFAULT NULL,
+  `is_private` TINYINT(1) NOT NULL DEFAULT 1,
+  `uploaded_by_user_id` BIGINT UNSIGNED NULL,
+  `owner_type` VARCHAR(255) NULL DEFAULT NULL,
+  `owner_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `metadata` JSON NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `files_uploaded_by_user_id_foreign` (`uploaded_by_user_id`),
+  KEY `files_owner_type_owner_id_index` (`owner_type`, `owner_id`),
+  CONSTRAINT `files_uploaded_by_user_id_foreign` FOREIGN KEY (`uploaded_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `websites` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `name` VARCHAR(255) NOT NULL,
+  `login_url` VARCHAR(255) NOT NULL,
+  `notes` TEXT NULL,
+  `login_token_encrypted` TEXT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `websites_customer_id_foreign` (`customer_id`),
+  CONSTRAINT `websites_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `jobs` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `created_by_user_id` BIGINT UNSIGNED NULL,
+  `description` TEXT NOT NULL,
+  `cost` DECIMAL(12, 2) NOT NULL,
+  `status` VARCHAR(255) NOT NULL DEFAULT 'draft',
+  `completed_at` TIMESTAMP NULL DEFAULT NULL,
+  `invoiced_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `jobs_customer_id_foreign` (`customer_id`),
+  KEY `jobs_created_by_user_id_foreign` (`created_by_user_id`),
+  CONSTRAINT `jobs_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `jobs_created_by_user_id_foreign` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `subscriptions` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `created_by_user_id` BIGINT UNSIGNED NULL,
+  `description` TEXT NOT NULL,
+  `monthly_cost` DECIMAL(12, 2) NOT NULL,
+  `billing_frequency` VARCHAR(255) NOT NULL DEFAULT 'monthly',
+  `start_date` DATE NOT NULL,
+  `next_invoice_date` DATE NULL DEFAULT NULL,
+  `status` VARCHAR(255) NOT NULL DEFAULT 'active',
+  `paused_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `subscriptions_customer_id_foreign` (`customer_id`),
+  KEY `subscriptions_created_by_user_id_foreign` (`created_by_user_id`),
+  CONSTRAINT `subscriptions_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `subscriptions_created_by_user_id_foreign` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `invoices` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `created_by_user_id` BIGINT UNSIGNED NULL,
+  `invoice_number` VARCHAR(255) NOT NULL,
+  `issue_date` DATE NOT NULL,
+  `due_date` DATE NOT NULL,
+  `status` VARCHAR(255) NOT NULL DEFAULT 'draft',
+  `subtotal` DECIMAL(12, 2) NOT NULL,
+  `tax_amount` DECIMAL(12, 2) NOT NULL DEFAULT 0,
+  `total` DECIMAL(12, 2) NOT NULL,
+  `pdf_file_id` BIGINT UNSIGNED NULL,
+  `sent_at` TIMESTAMP NULL DEFAULT NULL,
+  `paid_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `invoices_invoice_number_unique` (`invoice_number`),
+  KEY `invoices_customer_id_foreign` (`customer_id`),
+  KEY `invoices_created_by_user_id_foreign` (`created_by_user_id`),
+  KEY `invoices_pdf_file_id_foreign` (`pdf_file_id`),
+  CONSTRAINT `invoices_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `invoices_created_by_user_id_foreign` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `invoices_pdf_file_id_foreign` FOREIGN KEY (`pdf_file_id`) REFERENCES `files` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `invoice_line_items` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `invoice_id` BIGINT UNSIGNED NOT NULL,
+  `billable_type` VARCHAR(255) NULL DEFAULT NULL,
+  `billable_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `description` TEXT NOT NULL,
+  `quantity` INT UNSIGNED NOT NULL DEFAULT 1,
+  `unit_price` DECIMAL(12, 2) NOT NULL,
+  `total` DECIMAL(12, 2) NOT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `invoice_line_items_invoice_id_foreign` (`invoice_id`),
+  KEY `invoice_line_items_billable_type_billable_id_index` (`billable_type`, `billable_id`),
+  CONSTRAINT `invoice_line_items_invoice_id_foreign` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `user_preferences` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `user_id` BIGINT UNSIGNED NOT NULL,
+  `theme` VARCHAR(255) NOT NULL DEFAULT 'light',
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_preferences_user_id_unique` (`user_id`),
+  CONSTRAINT `user_preferences_user_id_foreign` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `brand_settings` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `logo_file_id` BIGINT UNSIGNED NULL,
+  `updated_by_user_id` BIGINT UNSIGNED NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  CONSTRAINT `brand_settings_logo_file_id_foreign` FOREIGN KEY (`logo_file_id`) REFERENCES `files` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `brand_settings_updated_by_user_id_foreign` FOREIGN KEY (`updated_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `personal_access_tokens` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `tokenable_type` VARCHAR(255) NOT NULL,
+  `tokenable_id` BIGINT UNSIGNED NOT NULL,
+  `name` TEXT NOT NULL,
+  `token` VARCHAR(64) NOT NULL,
+  `abilities` TEXT NULL,
+  `last_used_at` TIMESTAMP NULL DEFAULT NULL,
+  `expires_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `personal_access_tokens_token_unique` (`token`),
+  KEY `personal_access_tokens_tokenable_type_tokenable_id_index` (`tokenable_type`, `tokenable_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    </pre>
+
+    <h2>5. API Endpoints</h2>
+    <p>All routes are defined in <code>routes/api.php</code>. Unless noted, routes require <code>auth:sanctum</code>.</p>
+
+    <h3>Auth</h3>
+    <ul>
+        <li><code>POST /api/auth/login</code> (public) - returns token + user</li>
+        <li><code>GET /api/auth/me</code></li>
+        <li><code>POST /api/auth/logout</code></li>
+    </ul>
+
+    <h3>Account (Authenticated)</h3>
+    <ul>
+        <li><code>PUT /api/account/profile</code> - update name/email</li>
+        <li><code>PUT /api/account/password</code> - update password</li>
+    </ul>
+
+    <h3>Preferences</h3>
+    <ul>
+        <li><code>GET /api/preferences</code> - get theme</li>
+        <li><code>PUT /api/preferences</code> - update theme</li>
+    </ul>
+
+    <h3>Branding</h3>
+    <ul>
+        <li><code>GET /api/brand</code> - current brand settings</li>
+        <li><code>GET /api/brand/logo</code> (public) - serve current logo file</li>
+        <li><code>POST /api/brand/logo</code> (admin only) - upload logo</li>
+    </ul>
+
+    <h3>Customers (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/customers</code> - supports <code>search</code>, <code>per_page</code></li>
+        <li><code>POST /api/customers</code></li>
+        <li><code>GET /api/customers/{id}</code></li>
+        <li><code>PUT /api/customers/{id}</code></li>
+        <li><code>DELETE /api/customers/{id}</code></li>
+    </ul>
+
+    <h3>Jobs (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/jobs</code> - supports <code>customer_id</code>, <code>status</code>, <code>per_page</code></li>
+        <li><code>POST /api/jobs</code></li>
+        <li><code>GET /api/jobs/{id}</code></li>
+        <li><code>PUT /api/jobs/{id}</code></li>
+        <li><code>DELETE /api/jobs/{id}</code></li>
+    </ul>
+
+    <h3>Subscriptions (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/subscriptions</code> - supports <code>customer_id</code>, <code>status</code>, <code>per_page</code></li>
+        <li><code>POST /api/subscriptions</code></li>
+        <li><code>GET /api/subscriptions/{id}</code></li>
+        <li><code>PUT /api/subscriptions/{id}</code></li>
+        <li><code>DELETE /api/subscriptions/{id}</code></li>
+    </ul>
+
+    <h3>Invoices (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/invoices</code> - supports <code>customer_id</code>, <code>status</code>, <code>per_page</code></li>
+        <li><code>POST /api/invoices</code> - includes line items</li>
+        <li><code>GET /api/invoices/{id}</code></li>
+        <li><code>PUT /api/invoices/{id}</code></li>
+        <li><code>DELETE /api/invoices/{id}</code></li>
+        <li><code>POST /api/invoices/{id}/send</code> - generate PDF + send email</li>
+        <li><code>GET /api/invoices/{id}/download</code> - download PDF</li>
+    </ul>
+
+    <h3>Websites (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/websites</code> - supports <code>customer_id</code>, <code>per_page</code></li>
+        <li><code>POST /api/websites</code></li>
+        <li><code>GET /api/websites/{id}</code></li>
+        <li><code>PUT /api/websites/{id}</code></li>
+        <li><code>DELETE /api/websites/{id}</code></li>
+    </ul>
+
+    <h3>Stats (admin, staff)</h3>
+    <ul>
+        <li><code>GET /api/stats/revenue</code> - returns completed jobs total + active subscriptions total</li>
+    </ul>
+
+    <h3>Customer Portal (customer)</h3>
+    <ul>
+        <li><code>GET /api/portal/jobs</code></li>
+        <li><code>GET /api/portal/subscriptions</code></li>
+        <li><code>GET /api/portal/invoices</code></li>
+        <li><code>GET /api/portal/invoices/{id}</code></li>
+        <li><code>GET /api/portal/invoices/{id}/download</code></li>
+        <li><code>GET /api/portal/websites</code></li>
+    </ul>
+
+    <h2>6. Business Logic Details</h2>
+    <h3>Customers</h3>
+    <ul>
+        <li>Customers can be linked to a portal user via <code>customers.user_id</code></li>
+        <li>Customer detail view loads jobs, subscriptions, invoices, and websites</li>
+        <li>Aggregates (via API): jobs count, subscriptions count, total spent, and monthly recurring revenue</li>
+    </ul>
+
+    <h3>Jobs</h3>
+    <ul>
+        <li>Statuses: <code>draft</code>, <code>completed</code>, <code>invoiced</code></li>
+        <li>When status becomes <code>completed</code> or <code>invoiced</code>, timestamps are set if missing</li>
+    </ul>
+
+    <h3>Subscriptions</h3>
+    <ul>
+        <li>Billing frequency currently fixed to <code>monthly</code></li>
+        <li><code>next_invoice_date</code> defaults to <code>start_date</code></li>
+        <li>Status: <code>active</code> or <code>paused</code></li>
+    </ul>
+
+    <h3>Invoices</h3>
+    <ul>
+        <li>Invoice numbers generated as <code>INV-YYYYMMDD-XXXXXX</code> if not supplied</li>
+        <li>Line items support manual entries or linking to jobs/subscriptions via <code>billable_type</code>/<code>billable_id</code></li>
+        <li>When a job is linked as a line item, the job is marked as <code>invoiced</code></li>
+        <li>Totals are computed on the server from line items + tax</li>
+    </ul>
+
+    <h3>Revenue Calculation</h3>
+    <div class="note">
+        Current implementation returns total completed jobs plus total active subscriptions (not time-filtered).
+        If you want true "this month" reporting, a date filter will be needed.
+    </div>
+
+    <h2>7. Background Jobs and Scheduling</h2>
+    <ul>
+        <li><strong>Job</strong>: <code>SendInvoiceEmail</code> (queued)</li>
+        <li><strong>PDF Generation</strong>: <code>InvoicePdfService</code> uses DomPDF</li>
+        <li><strong>Recurring Invoices</strong>: <code>invoices:generate-recurring</code></li>
+        <li><strong>Schedule</strong>: daily at 02:00, configured in <code>routes/console.php</code></li>
+        <li>Auto-send recurring invoices controlled by <code>INVOICES_AUTO_SEND_RECURRING=true</code></li>
+    </ul>
+
+    <h2>8. Storage and Files</h2>
+    <ul>
+        <li>Private disk: <code>storage/app/private</code></li>
+        <li>Invoices and logos are stored as private files and served via controller</li>
+        <li>Brand logo is served via <code>/api/brand/logo</code> (public)</li>
+    </ul>
+
+    <h2>9. UI / UX Implementation</h2>
+    <h3>App Shell</h3>
+    <ul>
+        <li>Single Blade view with multiple sections (<code>data-view</code>)</li>
+        <li>Navigation updates active view and triggers data loads via JS</li>
+        <li>Logo area links to Admin page</li>
+    </ul>
+
+    <h3>Theme System</h3>
+    <ul>
+        <li>CSS variables define theme colors and accents</li>
+        <li>Light and Dark themes toggle via <code>data-theme</code> on <code>&lt;html&gt;</code></li>
+        <li>User preference stored in <code>user_preferences</code> and localStorage</li>
+    </ul>
+
+    <h3>Responsive Behavior</h3>
+    <ul>
+        <li>Mobile menu at <= 964px with full-screen overlay</li>
+        <li>Customer cards hide columns at <= 725px</li>
+        <li>Logout button moves into menu at <= 450px</li>
+    </ul>
+
+    <h3>Formatting</h3>
+    <ul>
+        <li>Currency formatted as GBP (<code>en-GB</code>)</li>
+        <li>Dates formatted for display (short format)</li>
+    </ul>
+
+    <h2>10. Deployment</h2>
+    <h3>Environment Setup</h3>
+    <ul>
+        <li>Configure <code>.env</code>: DB_*, APP_URL, MAIL_*, QUEUE_CONNECTION=database</li>
+        <li>Set <code>INVOICES_AUTO_SEND_RECURRING</code> if desired</li>
+    </ul>
+
+    <h3>Build and Run</h3>
+    <pre><code>composer install
+cp .env.example .env
+php artisan key:generate
+php artisan migrate
+npm install
+npm run build
+</code></pre>
+
+    <h3>Queues</h3>
+    <pre><code>php artisan queue:work</code></pre>
+
+    <h3>Scheduler (Production Cron)</h3>
+    <pre><code>* * * * * php /path/to/artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre>
+
+    <h2>11. Troubleshooting</h2>
+    <h3>Revenue Box Shows "--"</h3>
+    <ul>
+        <li>Check network call to <code>/api/stats/revenue</code></li>
+        <li>Ensure auth token is set and API route is accessible</li>
+        <li>Clear config/route cache after deploy</li>
+    </ul>
+
+    <h3>Logo Not Showing</h3>
+    <ul>
+        <li>Ensure a logo file exists in <code>brand_settings.logo_file_id</code></li>
+        <li>Confirm <code>/api/brand/logo</code> returns 200</li>
+        <li>Check storage permissions for <code>storage/app/private</code></li>
+    </ul>
+
+    <h3>No Emails / PDFs Sent</h3>
+    <ul>
+        <li>Queue worker not running</li>
+        <li>Mail configuration missing in <code>.env</code></li>
+    </ul>
+
+    <h3>Assets Not Updating</h3>
+    <ul>
+        <li>Rebuild <code>npm run build</code></li>
+        <li>Deploy <code>public/build</code> and <code>public/manifest.json</code></li>
+    </ul>
+
+    <h2>12. Security Notes</h2>
+    <ul>
+        <li>Passwords are hashed via Laravel</li>
+        <li>Portal data is restricted via role middleware and customer linkage</li>
+        <li>Files are stored on the private disk and served via controller responses</li>
+    </ul>
+
+    <h2>13. Future Improvements (Optional)</h2>
+    <ul>
+        <li>Monthly revenue with date filtering and invoice status filtering</li>
+        <li>Permissions-based authorization enforcement</li>
+        <li>Granular audit logs for billing changes</li>
+        <li>Multi-currency support</li>
+        <li>Public customer portal subdomain</li>
+    </ul>
+
+    <p><strong>Document version:</strong> 2026-02-06</p>
+</body>
+</html>
