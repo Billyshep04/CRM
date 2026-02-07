@@ -22,3 +22,9 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/node_modules/
+/vendor/
+/storage/
+/bootstrap/cache/
+.env
+CRM.zip
