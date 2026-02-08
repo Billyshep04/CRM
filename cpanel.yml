@@ -1,5 +1,0 @@
----
-deployment:
-  tasks:
-    - export DEPLOYPATH=/home/webstamp/public_html/crm/
-    - /bin/rsync -a --delete --exclude='.env' --exclude='storage' --exclude='bootstrap/cache' ./ $DEPLOYPATH
