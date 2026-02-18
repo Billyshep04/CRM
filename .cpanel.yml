@@ -5,3 +5,5 @@ deployment:
     - /bin/rsync -rltD --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r --exclude='.git/' --exclude='.env' --exclude='storage/' --exclude='bootstrap/cache/' --exclude='vendor/' ./ $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/storage/framework/cache/data $DEPLOYPATH/storage/framework/sessions $DEPLOYPATH/storage/framework/views $DEPLOYPATH/storage/logs
     - /bin/chmod -R 775 $DEPLOYPATH/storage $DEPLOYPATH/bootstrap/cache
+    - php $DEPLOYPATH/artisan migrate --force
+    - php $DEPLOYPATH/artisan optimize:clear
