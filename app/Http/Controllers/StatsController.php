@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Cost;
 use App\Models\Job;
-use App\Models\Subscription;
 use App\Models\SubscriptionMonth;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -31,9 +30,18 @@ class StatsController extends Controller
             })
             ->sum('cost');
 
-        $activeSubscriptionsTotal = (float) Subscription::query()
-            ->where('status', 'active')
-            ->sum('monthly_cost');
+        $paidSubscriptionsTotal = 0.0;
+        if (Schema::hasTable('subscription_months')) {
+            $paidSubscriptionMonths = SubscriptionMonth::query()
+                ->with('subscription:id,monthly_cost')
+                ->where('payment_status', 'paid')
+                ->whereDate('month_start', $startOfMonth->toDateString())
+                ->get(['subscription_id']);
+
+            $paidSubscriptionsTotal = (float) $paidSubscriptionMonths->sum(
+                static fn (SubscriptionMonth $month): float => (float) ($month->subscription?->monthly_cost ?? 0)
+            );
+        }
 
         $monthlyCostsTotal = 0.0;
         if (Schema::hasTable('costs')) {
@@ -42,12 +50,13 @@ class StatsController extends Controller
                 ->sum('amount');
         }
 
-        $revenueTotal = $completedJobsTotal + $activeSubscriptionsTotal;
+        $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
         $profitTotal = $revenueTotal - $monthlyCostsTotal;
 
         return response()->json([
             'completed_jobs_total' => $completedJobsTotal,
-            'active_subscriptions_total' => $activeSubscriptionsTotal,
+            'active_subscriptions_total' => $paidSubscriptionsTotal,
+            'paid_subscriptions_total' => $paidSubscriptionsTotal,
             'costs_total' => $monthlyCostsTotal,
             'profit_total' => $profitTotal,
             'total' => $revenueTotal,
@@ -93,47 +102,23 @@ class StatsController extends Controller
         }
 
         if (Schema::hasTable('subscription_months')) {
-            $activeMonths = SubscriptionMonth::query()
+            $paidMonths = SubscriptionMonth::query()
                 ->with('subscription:id,monthly_cost')
-                ->where('subscription_status', 'active')
+                ->where('payment_status', 'paid')
                 ->whereBetween('month_start', [$startOfYear->toDateString(), $endOfYear->toDateString()])
                 ->get(['subscription_id', 'month_start']);
 
-            foreach ($activeMonths as $activeMonth) {
+            foreach ($paidMonths as $paidMonth) {
                 $bucketKey = $this->resolveWeekBucketKey(
                     $startOfYear,
                     $endOfYear,
-                    Carbon::parse($activeMonth->month_start)
+                    Carbon::parse($paidMonth->month_start)
                 );
                 if (!$bucketKey) {
                     continue;
                 }
 
-                $weeks[$bucketKey]['revenue'] += (float) ($activeMonth->subscription?->monthly_cost ?? 0);
-            }
-        } else {
-            $subscriptions = Subscription::query()
-                ->whereDate('start_date', '<=', $endOfYear->toDateString())
-                ->get(['monthly_cost', 'start_date', 'status']);
-
-            foreach ($subscriptions as $subscription) {
-                if ((string) $subscription->status !== 'active') {
-                    continue;
-                }
-
-                $monthCursor = Carbon::parse($subscription->start_date ?? $startOfYear)->startOfMonth();
-                if ($monthCursor->lt($startOfYear)) {
-                    $monthCursor = $startOfYear->copy()->startOfMonth();
-                }
-
-                while ($monthCursor->lte($endOfYear)) {
-                    $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, $monthCursor);
-                    if ($bucketKey) {
-                        $weeks[$bucketKey]['revenue'] += (float) $subscription->monthly_cost;
-                    }
-
-                    $monthCursor->addMonthNoOverflow();
-                }
+                $weeks[$bucketKey]['revenue'] += (float) ($paidMonth->subscription?->monthly_cost ?? 0);
             }
         }
 

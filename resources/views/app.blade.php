@@ -115,7 +115,7 @@
                         <div class="card highlight">
                             <div class="card-label">Revenue this month</div>
                             <div class="card-value" id="dashboard-revenue">--</div>
-                            <div class="card-meta">Completed jobs this month + active subscriptions</div>
+                            <div class="card-meta">Completed jobs this month + paid subscriptions</div>
                         </div>
                         <div class="card">
                             <div class="card-label">Costs this month</div>
