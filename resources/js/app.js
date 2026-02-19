@@ -1707,7 +1707,7 @@ async function handleSubscriptionMonthAction(event) {
         };
 
         try {
-            await api.post(`/api/subscriptions/${subscriptionId}/months/${monthId}/payment`, payload);
+            await api.post(`/api/subscription-months/${monthId}/payment`, payload);
         } catch (error) {
             const statusCode = Number(error?.response?.status || 0);
 
@@ -1715,8 +1715,18 @@ async function handleSubscriptionMonthAction(event) {
                 throw error;
             }
 
-            // Backward compatibility for servers that only have the older PATCH route.
-            await api.patch(`/api/subscriptions/${subscriptionId}/months/${monthId}`, payload);
+            try {
+                await api.post(`/api/subscriptions/${subscriptionId}/months/${monthId}/payment`, payload);
+            } catch (nestedError) {
+                const nestedStatusCode = Number(nestedError?.response?.status || 0);
+
+                if (nestedStatusCode !== 404 && nestedStatusCode !== 405) {
+                    throw nestedError;
+                }
+
+                // Backward compatibility for servers that only have the older PATCH route.
+                await api.patch(`/api/subscriptions/${subscriptionId}/months/${monthId}`, payload);
+            }
         }
 
         setFormStatus(dom.subscriptionMonthsStatus, 'Monthly payment status updated.');

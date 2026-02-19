@@ -33,6 +33,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
         Route::apiResource('customers', CustomerController::class);
         Route::apiResource('jobs', JobController::class);
+        Route::post('subscription-months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPaymentById']);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);
         Route::patch('subscriptions/{subscription}/months/{subscriptionMonth}', [SubscriptionController::class, 'updateMonth']);
         Route::post('subscriptions/{subscription}/months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPayment']);

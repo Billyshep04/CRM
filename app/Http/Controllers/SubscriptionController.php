@@ -129,13 +129,18 @@ class SubscriptionController extends Controller
             'payment_status' => ['required', Rule::in(['paid', 'unpaid'])],
         ]);
 
-        $paymentStatus = $validated['payment_status'];
-        $subscriptionMonth->update([
-            'payment_status' => $paymentStatus,
-            'paid_at' => $paymentStatus === 'paid' ? ($subscriptionMonth->paid_at ?? now()) : null,
+        return $this->persistMonthPaymentStatus($subscriptionMonth, $validated['payment_status']);
+    }
+
+    public function updateMonthPaymentById(Request $request, SubscriptionMonth $subscriptionMonth)
+    {
+        $this->ensureSubscriptionMonthsTableExists();
+
+        $validated = $request->validate([
+            'payment_status' => ['required', Rule::in(['paid', 'unpaid'])],
         ]);
 
-        return new SubscriptionMonthResource($subscriptionMonth);
+        return $this->persistMonthPaymentStatus($subscriptionMonth, $validated['payment_status']);
     }
 
     public function destroy(Subscription $subscription)
@@ -207,5 +212,15 @@ class SubscriptionController extends Controller
             $table->unique(['subscription_id', 'month_start']);
             $table->index(['subscription_id', 'month_start']);
         });
+    }
+
+    private function persistMonthPaymentStatus(SubscriptionMonth $subscriptionMonth, string $paymentStatus): SubscriptionMonthResource
+    {
+        $subscriptionMonth->update([
+            'payment_status' => $paymentStatus,
+            'paid_at' => $paymentStatus === 'paid' ? ($subscriptionMonth->paid_at ?? now()) : null,
+        ]);
+
+        return new SubscriptionMonthResource($subscriptionMonth);
     }
 }

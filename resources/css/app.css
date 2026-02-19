@@ -669,6 +669,7 @@ body[data-role="admin"] .view.admin-view.active {
 .payment-status {
     font-weight: 600;
     text-transform: capitalize;
+    white-space: nowrap;
 }
 
 .payment-status-paid {
