@@ -114,6 +114,11 @@ class SubscriptionController extends Controller
 
     public function updateMonth(Request $request, Subscription $subscription, SubscriptionMonth $subscriptionMonth)
     {
+        return $this->updateMonthPayment($request, $subscription, $subscriptionMonth);
+    }
+
+    public function updateMonthPayment(Request $request, Subscription $subscription, SubscriptionMonth $subscriptionMonth)
+    {
         $this->ensureSubscriptionMonthsTableExists();
 
         if ($subscriptionMonth->subscription_id !== $subscription->id) {

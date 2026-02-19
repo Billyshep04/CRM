@@ -35,6 +35,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('jobs', JobController::class);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);
         Route::patch('subscriptions/{subscription}/months/{subscriptionMonth}', [SubscriptionController::class, 'updateMonth']);
+        Route::post('subscriptions/{subscription}/months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPayment']);
         Route::apiResource('subscriptions', SubscriptionController::class);
         Route::apiResource('invoices', InvoiceController::class);
         Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);

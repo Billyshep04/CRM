@@ -88,6 +88,7 @@ const dom = {
     subscriptionForm: document.getElementById('subscription-form'),
     subscriptionFormTitle: document.getElementById('subscription-form-title'),
     subscriptionFormStatus: document.getElementById('subscription-form-status'),
+    subscriptionMonthsStatus: document.getElementById('subscription-months-status'),
     subscriptionFormCancel: document.getElementById('subscription-form-cancel'),
     subscriptionMonthsTable: document.getElementById('subscription-months-table'),
     subscriptionMonthsRefresh: document.getElementById('subscription-months-refresh'),
@@ -1640,7 +1641,7 @@ function renderSubscriptionMonths(errorMessage = '') {
             <span>${escapeHtml(month.subscription_status || 'active')}</span>
             <span>${escapeHtml(month.payment_status || 'unpaid')}</span>
             <div class="row-actions">
-                <button class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${month.id}" data-next-status="${nextPaymentStatus}">${toggleLabel}</button>
+                <button type="button" class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${month.id}" data-next-status="${nextPaymentStatus}">${toggleLabel}</button>
             </div>
             <span>${month.paid_at ? formatDate(month.paid_at) : ''}</span>
             <span></span>
@@ -1654,10 +1655,12 @@ async function loadSubscriptionMonths(subscriptionId = state.editing.subscriptio
 
     if (!subscriptionId) {
         state.subscriptionMonths = [];
+        setFormStatus(dom.subscriptionMonthsStatus, '');
         renderSubscriptionMonths();
         return;
     }
 
+    setFormStatus(dom.subscriptionMonthsStatus, '');
     resetTable(dom.subscriptionMonthsTable);
     const loadingRow = document.createElement('div');
     loadingRow.className = 'table-row table-empty subscriptions';
@@ -1687,14 +1690,18 @@ async function handleSubscriptionMonthAction(event) {
         return;
     }
 
+    actionButton.disabled = true;
+
     try {
-        await api.patch(`/api/subscriptions/${subscriptionId}/months/${monthId}`, {
+        await api.post(`/api/subscriptions/${subscriptionId}/months/${monthId}/payment`, {
             payment_status: nextStatus === 'paid' ? 'paid' : 'unpaid',
         });
-        setFormStatus(dom.subscriptionFormStatus, 'Monthly payment status updated.');
+        setFormStatus(dom.subscriptionMonthsStatus, 'Monthly payment status updated.');
         await loadSubscriptionMonths(subscriptionId);
     } catch (error) {
-        setFormStatus(dom.subscriptionFormStatus, 'Unable to update monthly payment status.', true);
+        setFormStatus(dom.subscriptionMonthsStatus, 'Unable to update monthly payment status.', true);
+    } finally {
+        actionButton.disabled = false;
     }
 }
 
@@ -1706,6 +1713,7 @@ function resetSubscriptionForm() {
     state.subscriptionMonths = [];
     if (dom.subscriptionFormTitle) dom.subscriptionFormTitle.textContent = 'New subscription';
     setFormStatus(dom.subscriptionFormStatus, '');
+    setFormStatus(dom.subscriptionMonthsStatus, '');
     renderSubscriptionMonths();
 }
 

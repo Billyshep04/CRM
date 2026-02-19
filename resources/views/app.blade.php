@@ -580,6 +580,7 @@
                                 </div>
                                 <button class="btn btn-outline" id="subscription-months-refresh" type="button">Refresh</button>
                             </div>
+                            <div id="subscription-months-status" class="form-hint"></div>
                             <div class="table" id="subscription-months-table">
                                 <div class="table-row table-header subscriptions">
                                     <span>Month</span>
