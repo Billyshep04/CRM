@@ -666,6 +666,19 @@ body[data-role="admin"] .view.admin-view.active {
     background: transparent;
 }
 
+.payment-status {
+    font-weight: 600;
+    text-transform: capitalize;
+}
+
+.payment-status-paid {
+    color: #22c55e;
+}
+
+.payment-status-unpaid {
+    color: #ef4444;
+}
+
 .pill {
     display: inline-flex;
     align-items: center;

@@ -336,6 +336,11 @@ function formatMonth(value) {
     return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
 
+function formatDateInput(value) {
+    if (!value) return '';
+    return String(value).slice(0, 10);
+}
+
 function truncate(value, length = 32) {
     const text = String(value ?? '');
     if (text.length <= length) return text;
@@ -1634,12 +1639,14 @@ function renderSubscriptionMonths(errorMessage = '') {
     state.subscriptionMonths.forEach((month) => {
         const row = document.createElement('div');
         row.className = 'table-row subscriptions';
-        const nextPaymentStatus = month.payment_status === 'paid' ? 'unpaid' : 'paid';
-        const toggleLabel = month.payment_status === 'paid' ? 'Mark unpaid' : 'Mark paid';
+        const paymentStatus = month.payment_status === 'paid' ? 'paid' : 'unpaid';
+        const nextPaymentStatus = paymentStatus === 'paid' ? 'unpaid' : 'paid';
+        const toggleLabel = paymentStatus === 'paid' ? 'Mark unpaid' : 'Mark paid';
+        const paymentClass = paymentStatus === 'paid' ? 'payment-status payment-status-paid' : 'payment-status payment-status-unpaid';
         row.innerHTML = `
             <span>${formatMonth(month.month_start)}</span>
             <span>${escapeHtml(month.subscription_status || 'active')}</span>
-            <span>${escapeHtml(month.payment_status || 'unpaid')}</span>
+            <span class="${paymentClass}">${escapeHtml(paymentStatus)}</span>
             <div class="row-actions">
                 <button type="button" class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${month.id}" data-next-status="${nextPaymentStatus}">${toggleLabel}</button>
             </div>
@@ -1678,6 +1685,8 @@ async function loadSubscriptionMonths(subscriptionId = state.editing.subscriptio
 }
 
 async function handleSubscriptionMonthAction(event) {
+    event.preventDefault();
+
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) return;
 
@@ -1693,9 +1702,23 @@ async function handleSubscriptionMonthAction(event) {
     actionButton.disabled = true;
 
     try {
-        await api.post(`/api/subscriptions/${subscriptionId}/months/${monthId}/payment`, {
+        const payload = {
             payment_status: nextStatus === 'paid' ? 'paid' : 'unpaid',
-        });
+        };
+
+        try {
+            await api.post(`/api/subscriptions/${subscriptionId}/months/${monthId}/payment`, payload);
+        } catch (error) {
+            const statusCode = Number(error?.response?.status || 0);
+
+            if (statusCode !== 404 && statusCode !== 405) {
+                throw error;
+            }
+
+            // Backward compatibility for servers that only have the older PATCH route.
+            await api.patch(`/api/subscriptions/${subscriptionId}/months/${monthId}`, payload);
+        }
+
         setFormStatus(dom.subscriptionMonthsStatus, 'Monthly payment status updated.');
         await loadSubscriptionMonths(subscriptionId);
     } catch (error) {
@@ -1760,7 +1783,7 @@ async function handleSubscriptionAction(event) {
         dom.subscriptionForm.querySelector('select[name="customer_id"]').value = subscription.customer_id;
         dom.subscriptionForm.querySelector('textarea[name="description"]').value = subscription.description || '';
         dom.subscriptionForm.querySelector('input[name="monthly_cost"]').value = subscription.monthly_cost || '';
-        dom.subscriptionForm.querySelector('input[name="start_date"]').value = subscription.start_date || '';
+        dom.subscriptionForm.querySelector('input[name="start_date"]').value = formatDateInput(subscription.start_date);
         dom.subscriptionForm.querySelector('select[name="status"]').value = subscription.status || 'active';
         setFormStatus(dom.subscriptionFormStatus, 'Editing subscription.');
         await loadSubscriptionMonths(id);
