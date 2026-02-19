@@ -29,6 +29,7 @@ class SubscriptionResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'customer' => new CustomerResource($this->whenLoaded('customer')),
+            'months' => SubscriptionMonthResource::collection($this->whenLoaded('months')),
         ];
     }
 }

@@ -89,6 +89,8 @@ const dom = {
     subscriptionFormTitle: document.getElementById('subscription-form-title'),
     subscriptionFormStatus: document.getElementById('subscription-form-status'),
     subscriptionFormCancel: document.getElementById('subscription-form-cancel'),
+    subscriptionMonthsTable: document.getElementById('subscription-months-table'),
+    subscriptionMonthsRefresh: document.getElementById('subscription-months-refresh'),
     subscriptionCustomerSelect: document.getElementById('subscription-customer-select'),
     subscriptionsRefresh: document.getElementById('subscriptions-refresh'),
     invoicesTable: document.getElementById('invoices-table'),
@@ -124,6 +126,7 @@ const state = {
     jobs: [],
     costs: [],
     subscriptions: [],
+    subscriptionMonths: [],
     invoices: [],
     portalInvoices: [],
     currentCustomer: null,
@@ -323,6 +326,13 @@ function formatDate(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatMonth(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
 }
 
 function truncate(value, length = 32) {
@@ -1592,13 +1602,111 @@ function renderSubscriptions() {
     });
 }
 
+function renderSubscriptionMonths(errorMessage = '') {
+    if (!dom.subscriptionMonthsTable) return;
+    resetTable(dom.subscriptionMonthsTable);
+
+    if (!state.editing.subscription) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty subscriptions';
+        emptyRow.innerHTML = '<span>Select a subscription to track months.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.subscriptionMonthsTable.appendChild(emptyRow);
+        return;
+    }
+
+    if (errorMessage) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty subscriptions';
+        emptyRow.innerHTML = `<span>${escapeHtml(errorMessage)}</span><span></span><span></span><span></span><span></span><span></span>`;
+        dom.subscriptionMonthsTable.appendChild(emptyRow);
+        return;
+    }
+
+    if (!state.subscriptionMonths.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty subscriptions';
+        emptyRow.innerHTML = '<span>No monthly entries yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.subscriptionMonthsTable.appendChild(emptyRow);
+        return;
+    }
+
+    state.subscriptionMonths.forEach((month) => {
+        const row = document.createElement('div');
+        row.className = 'table-row subscriptions';
+        const nextPaymentStatus = month.payment_status === 'paid' ? 'unpaid' : 'paid';
+        const toggleLabel = month.payment_status === 'paid' ? 'Mark unpaid' : 'Mark paid';
+        row.innerHTML = `
+            <span>${formatMonth(month.month_start)}</span>
+            <span>${escapeHtml(month.subscription_status || 'active')}</span>
+            <span>${escapeHtml(month.payment_status || 'unpaid')}</span>
+            <div class="row-actions">
+                <button class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${month.id}" data-next-status="${nextPaymentStatus}">${toggleLabel}</button>
+            </div>
+            <span>${month.paid_at ? formatDate(month.paid_at) : ''}</span>
+            <span></span>
+        `;
+        dom.subscriptionMonthsTable.appendChild(row);
+    });
+}
+
+async function loadSubscriptionMonths(subscriptionId = state.editing.subscription) {
+    if (!dom.subscriptionMonthsTable) return;
+
+    if (!subscriptionId) {
+        state.subscriptionMonths = [];
+        renderSubscriptionMonths();
+        return;
+    }
+
+    resetTable(dom.subscriptionMonthsTable);
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty subscriptions';
+    loadingRow.innerHTML = '<span>Loading monthly tracking...</span><span></span><span></span><span></span><span></span><span></span>';
+    dom.subscriptionMonthsTable.appendChild(loadingRow);
+
+    try {
+        const response = await api.get(`/api/subscriptions/${subscriptionId}/months`);
+        state.subscriptionMonths = response?.data?.data ?? [];
+        renderSubscriptionMonths();
+    } catch (error) {
+        state.subscriptionMonths = [];
+        renderSubscriptionMonths('Unable to load monthly tracking.');
+    }
+}
+
+async function handleSubscriptionMonthAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const action = actionButton.dataset.action;
+    const monthId = Number(actionButton.dataset.id);
+    const nextStatus = actionButton.dataset.nextStatus;
+    const subscriptionId = state.editing.subscription;
+
+    if (action !== 'toggle-payment' || !monthId || !subscriptionId) {
+        return;
+    }
+
+    try {
+        await api.patch(`/api/subscriptions/${subscriptionId}/months/${monthId}`, {
+            payment_status: nextStatus === 'paid' ? 'paid' : 'unpaid',
+        });
+        setFormStatus(dom.subscriptionFormStatus, 'Monthly payment status updated.');
+        await loadSubscriptionMonths(subscriptionId);
+    } catch (error) {
+        setFormStatus(dom.subscriptionFormStatus, 'Unable to update monthly payment status.', true);
+    }
+}
+
 function resetSubscriptionForm() {
     if (!dom.subscriptionForm) return;
     dom.subscriptionForm.reset();
     dom.subscriptionForm.querySelector('input[name="id"]').value = '';
     state.editing.subscription = null;
+    state.subscriptionMonths = [];
     if (dom.subscriptionFormTitle) dom.subscriptionFormTitle.textContent = 'New subscription';
     setFormStatus(dom.subscriptionFormStatus, '');
+    renderSubscriptionMonths();
 }
 
 async function handleSubscriptionSubmit(event) {
@@ -1618,6 +1726,7 @@ async function handleSubscriptionSubmit(event) {
         if (state.editing.subscription) {
             await api.put(`/api/subscriptions/${state.editing.subscription}`, payload);
             setFormStatus(dom.subscriptionFormStatus, 'Subscription updated.');
+            await loadSubscriptionMonths(state.editing.subscription);
         } else {
             await api.post('/api/subscriptions', payload);
             setFormStatus(dom.subscriptionFormStatus, 'Subscription created.');
@@ -1646,12 +1755,16 @@ async function handleSubscriptionAction(event) {
         dom.subscriptionForm.querySelector('input[name="start_date"]').value = subscription.start_date || '';
         dom.subscriptionForm.querySelector('select[name="status"]').value = subscription.status || 'active';
         setFormStatus(dom.subscriptionFormStatus, 'Editing subscription.');
+        await loadSubscriptionMonths(id);
     }
 
     if (action === 'delete' && id) {
         if (!window.confirm('Delete this subscription?')) return;
         try {
             await api.delete(`/api/subscriptions/${id}`);
+            if (state.editing.subscription === id) {
+                resetSubscriptionForm();
+            }
             await loadSubscriptions();
         } catch (error) {
             setFormStatus(dom.subscriptionFormStatus, 'Unable to delete subscription.', true);
@@ -2129,8 +2242,16 @@ if (dom.subscriptionsTable) {
     dom.subscriptionsTable.addEventListener('click', handleSubscriptionAction);
 }
 
+if (dom.subscriptionMonthsTable) {
+    dom.subscriptionMonthsTable.addEventListener('click', handleSubscriptionMonthAction);
+}
+
 if (dom.subscriptionsRefresh) {
     dom.subscriptionsRefresh.addEventListener('click', loadSubscriptions);
+}
+
+if (dom.subscriptionMonthsRefresh) {
+    dom.subscriptionMonthsRefresh.addEventListener('click', () => loadSubscriptionMonths(state.editing.subscription));
 }
 
 if (dom.subscriptionsLoadMore) {
@@ -2216,4 +2337,5 @@ if (dom.portalDownloadLatest) {
 initializeInvoiceForm();
 initializeNavigation();
 applyStoredTheme();
+renderSubscriptionMonths();
 loadSession();

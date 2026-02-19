@@ -572,6 +572,32 @@
                                     <button type="button" class="btn btn-outline" id="subscription-form-cancel">Cancel</button>
                                 </div>
                             </form>
+
+                            <div class="card-header" style="margin-top: 24px;">
+                                <div>
+                                    <div class="card-title">Monthly tracking</div>
+                                    <div class="card-subtitle">Track status and paid/unpaid by month.</div>
+                                </div>
+                                <button class="btn btn-outline" id="subscription-months-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="table" id="subscription-months-table">
+                                <div class="table-row table-header subscriptions">
+                                    <span>Month</span>
+                                    <span>Status</span>
+                                    <span>Payment</span>
+                                    <span>Actions</span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                <div class="table-row table-empty subscriptions">
+                                    <span>Select a subscription to track months.</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
                         </div>
                     </section>
                 </section>
