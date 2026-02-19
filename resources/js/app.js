@@ -1614,31 +1614,31 @@ function renderSubscriptionMonths(errorMessage = '') {
 
     if (!state.editing.subscription) {
         const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty subscriptions';
-        emptyRow.innerHTML = '<span>Select a subscription to track months.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.className = 'table-row table-empty subscription-months';
+        emptyRow.innerHTML = '<span>Select a subscription to track months.</span><span></span><span></span><span></span>';
         dom.subscriptionMonthsTable.appendChild(emptyRow);
         return;
     }
 
     if (errorMessage) {
         const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty subscriptions';
-        emptyRow.innerHTML = `<span>${escapeHtml(errorMessage)}</span><span></span><span></span><span></span><span></span><span></span>`;
+        emptyRow.className = 'table-row table-empty subscription-months';
+        emptyRow.innerHTML = `<span>${escapeHtml(errorMessage)}</span><span></span><span></span><span></span>`;
         dom.subscriptionMonthsTable.appendChild(emptyRow);
         return;
     }
 
     if (!state.subscriptionMonths.length) {
         const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty subscriptions';
-        emptyRow.innerHTML = '<span>No monthly entries yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.className = 'table-row table-empty subscription-months';
+        emptyRow.innerHTML = '<span>No monthly entries yet.</span><span></span><span></span><span></span>';
         dom.subscriptionMonthsTable.appendChild(emptyRow);
         return;
     }
 
     state.subscriptionMonths.forEach((month) => {
         const row = document.createElement('div');
-        row.className = 'table-row subscriptions';
+        row.className = 'table-row subscription-months';
         const paymentStatus = month.payment_status === 'paid' ? 'paid' : 'unpaid';
         const nextPaymentStatus = paymentStatus === 'paid' ? 'unpaid' : 'paid';
         const toggleLabel = paymentStatus === 'paid' ? 'Mark unpaid' : 'Mark paid';
@@ -1650,8 +1650,6 @@ function renderSubscriptionMonths(errorMessage = '') {
             <div class="row-actions">
                 <button type="button" class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${month.id}" data-next-status="${nextPaymentStatus}">${toggleLabel}</button>
             </div>
-            <span>${month.paid_at ? formatDate(month.paid_at) : ''}</span>
-            <span></span>
         `;
         dom.subscriptionMonthsTable.appendChild(row);
     });
@@ -1670,8 +1668,8 @@ async function loadSubscriptionMonths(subscriptionId = state.editing.subscriptio
     setFormStatus(dom.subscriptionMonthsStatus, '');
     resetTable(dom.subscriptionMonthsTable);
     const loadingRow = document.createElement('div');
-    loadingRow.className = 'table-row table-empty subscriptions';
-    loadingRow.innerHTML = '<span>Loading monthly tracking...</span><span></span><span></span><span></span><span></span><span></span>';
+    loadingRow.className = 'table-row table-empty subscription-months';
+    loadingRow.innerHTML = '<span>Loading monthly tracking...</span><span></span><span></span><span></span>';
     dom.subscriptionMonthsTable.appendChild(loadingRow);
 
     try {

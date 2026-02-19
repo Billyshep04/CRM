@@ -582,18 +582,14 @@
                             </div>
                             <div id="subscription-months-status" class="form-hint"></div>
                             <div class="table" id="subscription-months-table">
-                                <div class="table-row table-header subscriptions">
+                                <div class="table-row table-header subscription-months">
                                     <span>Month</span>
                                     <span>Status</span>
                                     <span>Payment</span>
                                     <span>Actions</span>
-                                    <span></span>
-                                    <span></span>
                                 </div>
-                                <div class="table-row table-empty subscriptions">
+                                <div class="table-row table-empty subscription-months">
                                     <span>Select a subscription to track months.</span>
-                                    <span></span>
-                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
