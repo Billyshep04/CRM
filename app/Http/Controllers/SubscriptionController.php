@@ -155,15 +155,22 @@ class SubscriptionController extends Controller
             $startMonth = $currentMonth->copy();
         }
 
+        $pausedFromMonth = $subscription->paused_at?->copy()->startOfMonth();
+
         $cursor = $startMonth->copy();
         while ($cursor->lte($currentMonth)) {
+            $defaultStatus = 'active';
+            if ($pausedFromMonth && $cursor->gte($pausedFromMonth)) {
+                $defaultStatus = 'paused';
+            }
+
             SubscriptionMonth::query()->firstOrCreate(
                 [
                     'subscription_id' => $subscription->id,
                     'month_start' => $cursor->toDateString(),
                 ],
                 [
-                    'subscription_status' => 'active',
+                    'subscription_status' => $defaultStatus,
                     'payment_status' => 'unpaid',
                 ]
             );
