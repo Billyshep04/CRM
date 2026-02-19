@@ -526,6 +526,68 @@ body[data-role="admin"] .view.admin-view.active {
     grid-column: span 1;
 }
 
+.dashboard-chart-card {
+    grid-column: 1 / -1;
+}
+
+.profit-chart {
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    background: var(--bg-muted);
+    padding: 10px 12px;
+}
+
+.profit-chart-empty {
+    min-height: 210px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.profit-chart-svg {
+    display: block;
+    width: 100%;
+    height: 210px;
+}
+
+.profit-chart-baseline {
+    stroke: rgba(148, 163, 184, 0.35);
+    stroke-width: 1.5;
+}
+
+.profit-chart-area {
+    fill: rgba(47, 184, 240, 0.12);
+}
+
+.profit-chart-line {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.profit-chart-axis {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 12px;
+}
+
+.profit-chart-axis span:nth-child(2) {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.profit-chart-axis span:last-child {
+    text-align: right;
+}
+
 .card-header {
     display: flex;
     justify-content: space-between;

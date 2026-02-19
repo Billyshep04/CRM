@@ -128,11 +128,6 @@
                             <div class="card-meta">Revenue this month minus costs this month</div>
                         </div>
                         <div class="card">
-                            <div class="card-label">Customers</div>
-                            <div class="card-value" data-stat="customers">--</div>
-                            <div class="card-meta">Active accounts</div>
-                        </div>
-                        <div class="card">
                             <div class="card-label">Jobs</div>
                             <div class="card-value" data-stat="jobs">--</div>
                             <div class="card-meta">Open or invoiced</div>
@@ -145,6 +140,18 @@
                     </section>
 
                     <section class="content-grid">
+                        <div class="card dashboard-chart-card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Weekly profit (2026)</div>
+                                    <div class="card-subtitle" id="dashboard-profit-chart-range">Jan 1, 2026 to Dec 31, 2026</div>
+                                </div>
+                            </div>
+                            <div id="dashboard-profit-chart" class="profit-chart">
+                                <div class="profit-chart-empty">Loading weekly profit...</div>
+                            </div>
+                        </div>
+
                         <div class="card wide">
                             <div class="card-header">
                                 <div>

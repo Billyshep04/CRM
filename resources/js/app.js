@@ -20,6 +20,8 @@ const dom = {
     dashboardRevenue: document.getElementById('dashboard-revenue'),
     dashboardCosts: document.getElementById('dashboard-costs'),
     dashboardProfit: document.getElementById('dashboard-profit'),
+    dashboardProfitChart: document.getElementById('dashboard-profit-chart'),
+    dashboardProfitChartRange: document.getElementById('dashboard-profit-chart-range'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -106,7 +108,6 @@ const dom = {
 };
 
 const statTargets = {
-    customers: document.querySelector('[data-stat="customers"]'),
     jobs: document.querySelector('[data-stat="jobs"]'),
     subscriptions: document.querySelector('[data-stat="subscriptions"]'),
 };
@@ -117,6 +118,7 @@ const invoiceTables = {
 };
 
 const api = window.axios;
+const dashboardProfitYear = 2026;
 
 const state = {
     view: 'dashboard',
@@ -329,6 +331,13 @@ function formatDate(value) {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+function formatDateWithYear(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function formatMonth(value) {
     if (!value) return '';
     const date = new Date(value);
@@ -471,6 +480,71 @@ async function calculateDashboardMetrics() {
     };
 }
 
+async function calculateWeeklyProfit(year = dashboardProfitYear) {
+    const response = await api.get(`/api/stats/profit-weekly?year=${year}`);
+    return response?.data ?? {};
+}
+
+function renderProfitChart(payload = null) {
+    if (!dom.dashboardProfitChart) return;
+
+    const startDate = payload?.start_date ?? `${dashboardProfitYear}-01-01`;
+    const endDate = payload?.end_date ?? `${dashboardProfitYear}-12-31`;
+    if (dom.dashboardProfitChartRange) {
+        dom.dashboardProfitChartRange.textContent = `${formatDateWithYear(startDate)} to ${formatDateWithYear(endDate)}`;
+    }
+
+    const weeks = Array.isArray(payload?.weeks) ? payload.weeks : [];
+    if (!weeks.length) {
+        dom.dashboardProfitChart.innerHTML = '<div class="profit-chart-empty">No weekly profit data yet.</div>';
+        return;
+    }
+
+    const chartWidth = 900;
+    const chartHeight = 240;
+    const padding = {
+        top: 16,
+        right: 14,
+        bottom: 26,
+        left: 14,
+    };
+    const plotWidth = chartWidth - padding.left - padding.right;
+    const plotHeight = chartHeight - padding.top - padding.bottom;
+    const clampedProfits = weeks.map((week) => Math.max(Number(week?.profit ?? 0), 0));
+    const maxProfit = Math.max(...clampedProfits, 0);
+    const pointCount = weeks.length;
+    const denominator = maxProfit > 0 ? maxProfit : 1;
+    const bottomY = padding.top + plotHeight;
+
+    const points = clampedProfits.map((profit, index) => {
+        const x = pointCount > 1
+            ? padding.left + (index * plotWidth) / (pointCount - 1)
+            : padding.left + plotWidth / 2;
+        const y = bottomY - (profit / denominator) * plotHeight;
+        return { x, y };
+    });
+
+    const pointsText = points.map((point) => `${point.x},${point.y}`).join(' ');
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    const areaPoints = `${firstPoint.x},${bottomY} ${pointsText} ${lastPoint.x},${bottomY}`;
+    const startLabel = formatDate(weeks[0]?.week_start);
+    const endLabel = formatDate(weeks[weeks.length - 1]?.week_end);
+
+    dom.dashboardProfitChart.innerHTML = `
+        <svg class="profit-chart-svg" viewBox="0 0 ${chartWidth} ${chartHeight}" role="img" aria-label="Weekly profit chart for ${dashboardProfitYear}">
+            <line class="profit-chart-baseline" x1="${padding.left}" y1="${bottomY}" x2="${chartWidth - padding.right}" y2="${bottomY}"></line>
+            <polygon class="profit-chart-area" points="${areaPoints}"></polygon>
+            <polyline class="profit-chart-line" points="${pointsText}"></polyline>
+        </svg>
+        <div class="profit-chart-axis">
+            <span>${escapeHtml(startLabel)}</span>
+            <span>Peak ${escapeHtml(formatCurrency(maxProfit))}</span>
+            <span>${escapeHtml(endLabel)}</span>
+        </div>
+    `;
+}
+
 function renderInvoiceRows(container, invoices, emptyMessage) {
     if (!container) return;
     resetTable(container);
@@ -508,19 +582,15 @@ function renderInvoiceRows(container, invoices, emptyMessage) {
 
 async function loadStaffStats() {
     const results = await Promise.allSettled([
-        api.get('/api/customers?per_page=1'),
         api.get('/api/jobs?per_page=1'),
         api.get('/api/subscriptions?per_page=1'),
         api.get('/api/invoices?per_page=3'),
         calculateDashboardMetrics(),
+        calculateWeeklyProfit(),
     ]);
 
-    const [customersResult, jobsResult, subscriptionsResult, invoicesResult, metricsResult] = results;
+    const [jobsResult, subscriptionsResult, invoicesResult, metricsResult, weeklyProfitResult] = results;
 
-    if (statTargets.customers) {
-        statTargets.customers.textContent =
-            customersResult.status === 'fulfilled' ? parseTotal(customersResult.value) : '--';
-    }
     if (statTargets.jobs) {
         statTargets.jobs.textContent =
             jobsResult.status === 'fulfilled' ? parseTotal(jobsResult.value) : '--';
@@ -547,6 +617,12 @@ async function loadStaffStats() {
     if (dom.dashboardProfit) {
         dom.dashboardProfit.textContent =
             metricsResult.status === 'fulfilled' ? formatCurrency(metricsResult.value.profit) : '--';
+    }
+
+    if (weeklyProfitResult.status === 'fulfilled') {
+        renderProfitChart(weeklyProfitResult.value);
+    } else {
+        renderProfitChart(null);
     }
 
     const failures = results.filter((result) => result.status === 'rejected').length;

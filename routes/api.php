@@ -43,6 +43,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
         Route::apiResource('websites', WebsiteController::class);
         Route::get('stats/revenue', [StatsController::class, 'revenue']);
+        Route::get('stats/profit-weekly', [StatsController::class, 'weeklyProfit']);
     });
 
     Route::middleware('role:admin')->group(function (): void {
