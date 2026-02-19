@@ -93,23 +93,47 @@ class StatsController extends Controller
         }
 
         if (Schema::hasTable('subscription_months')) {
-            $paidMonths = SubscriptionMonth::query()
+            $activeMonths = SubscriptionMonth::query()
                 ->with('subscription:id,monthly_cost')
-                ->where('payment_status', 'paid')
+                ->where('subscription_status', 'active')
                 ->whereBetween('month_start', [$startOfYear->toDateString(), $endOfYear->toDateString()])
                 ->get(['subscription_id', 'month_start']);
 
-            foreach ($paidMonths as $paidMonth) {
+            foreach ($activeMonths as $activeMonth) {
                 $bucketKey = $this->resolveWeekBucketKey(
                     $startOfYear,
                     $endOfYear,
-                    Carbon::parse($paidMonth->month_start)
+                    Carbon::parse($activeMonth->month_start)
                 );
                 if (!$bucketKey) {
                     continue;
                 }
 
-                $weeks[$bucketKey]['revenue'] += (float) ($paidMonth->subscription?->monthly_cost ?? 0);
+                $weeks[$bucketKey]['revenue'] += (float) ($activeMonth->subscription?->monthly_cost ?? 0);
+            }
+        } else {
+            $subscriptions = Subscription::query()
+                ->whereDate('start_date', '<=', $endOfYear->toDateString())
+                ->get(['monthly_cost', 'start_date', 'status']);
+
+            foreach ($subscriptions as $subscription) {
+                if ((string) $subscription->status !== 'active') {
+                    continue;
+                }
+
+                $monthCursor = Carbon::parse($subscription->start_date ?? $startOfYear)->startOfMonth();
+                if ($monthCursor->lt($startOfYear)) {
+                    $monthCursor = $startOfYear->copy()->startOfMonth();
+                }
+
+                while ($monthCursor->lte($endOfYear)) {
+                    $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, $monthCursor);
+                    if ($bucketKey) {
+                        $weeks[$bucketKey]['revenue'] += (float) $subscription->monthly_cost;
+                    }
+
+                    $monthCursor->addMonthNoOverflow();
+                }
             }
         }
 
