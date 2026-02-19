@@ -18,6 +18,8 @@ const dom = {
     pageTitle: document.getElementById('page-title'),
     pageSubtitle: document.getElementById('page-subtitle'),
     dashboardRevenue: document.getElementById('dashboard-revenue'),
+    dashboardCosts: document.getElementById('dashboard-costs'),
+    dashboardProfit: document.getElementById('dashboard-profit'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -444,9 +446,13 @@ function parseTotal(response) {
     return response?.data?.meta?.total ?? response?.data?.data?.length ?? 0;
 }
 
-async function calculateDashboardRevenue() {
+async function calculateDashboardMetrics() {
     const response = await api.get('/api/stats/revenue');
-    return Number(response?.data?.total ?? 0);
+    return {
+        revenue: Number(response?.data?.total ?? 0),
+        costs: Number(response?.data?.costs_total ?? 0),
+        profit: Number(response?.data?.profit_total ?? 0),
+    };
 }
 
 function renderInvoiceRows(container, invoices, emptyMessage) {
@@ -490,10 +496,10 @@ async function loadStaffStats() {
         api.get('/api/jobs?per_page=1'),
         api.get('/api/subscriptions?per_page=1'),
         api.get('/api/invoices?per_page=3'),
-        calculateDashboardRevenue(),
+        calculateDashboardMetrics(),
     ]);
 
-    const [customersResult, jobsResult, subscriptionsResult, invoicesResult, revenueResult] = results;
+    const [customersResult, jobsResult, subscriptionsResult, invoicesResult, metricsResult] = results;
 
     if (statTargets.customers) {
         statTargets.customers.textContent =
@@ -516,7 +522,15 @@ async function loadStaffStats() {
 
     if (dom.dashboardRevenue) {
         dom.dashboardRevenue.textContent =
-            revenueResult.status === 'fulfilled' ? formatCurrency(revenueResult.value) : '--';
+            metricsResult.status === 'fulfilled' ? formatCurrency(metricsResult.value.revenue) : '--';
+    }
+    if (dom.dashboardCosts) {
+        dom.dashboardCosts.textContent =
+            metricsResult.status === 'fulfilled' ? formatCurrency(metricsResult.value.costs) : '--';
+    }
+    if (dom.dashboardProfit) {
+        dom.dashboardProfit.textContent =
+            metricsResult.status === 'fulfilled' ? formatCurrency(metricsResult.value.profit) : '--';
     }
 
     const failures = results.filter((result) => result.status === 'rejected').length;

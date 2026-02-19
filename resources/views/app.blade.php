@@ -115,7 +115,17 @@
                         <div class="card highlight">
                             <div class="card-label">Revenue this month</div>
                             <div class="card-value" id="dashboard-revenue">--</div>
-                            <div class="card-meta">Completed jobs + active subscriptions</div>
+                            <div class="card-meta">Completed jobs this month + active subscriptions</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">Costs this month</div>
+                            <div class="card-value" id="dashboard-costs">--</div>
+                            <div class="card-meta">Total incurred costs this month</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">Profit this month</div>
+                            <div class="card-value" id="dashboard-profit">--</div>
+                            <div class="card-meta">Revenue this month minus costs this month</div>
                         </div>
                         <div class="card">
                             <div class="card-label">Customers</div>
