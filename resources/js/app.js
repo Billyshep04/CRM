@@ -45,6 +45,7 @@ const dom = {
     passwordFormStatus: document.getElementById('password-form-status'),
     portalDownloadLatest: document.getElementById('portal-download-latest'),
     portalWebsites: document.getElementById('portal-websites'),
+    toast: document.getElementById('app-toast'),
     customerDetailTitle: document.getElementById('customer-detail-title'),
     customerDetailEmail: document.getElementById('customer-detail-email'),
     customerDetailBilling: document.getElementById('customer-detail-billing'),
@@ -128,6 +129,7 @@ const invoiceTables = {
 
 const api = window.axios;
 const dashboardProfitYear = 2026;
+let toastTimer = null;
 
 const state = {
     view: 'dashboard',
@@ -440,6 +442,28 @@ function setFormStatus(element, message, isError = false) {
     if (!element) return;
     element.textContent = message;
     element.style.color = isError ? '#ef4444' : '';
+}
+
+function showToast(message, isError = false) {
+    if (!dom.toast) return;
+
+    dom.toast.textContent = message;
+    dom.toast.classList.remove('toast-error', 'toast-success', 'show');
+    dom.toast.classList.add(isError ? 'toast-error' : 'toast-success');
+
+    // Force reflow so repeated toasts animate reliably.
+    // eslint-disable-next-line no-unused-expressions
+    dom.toast.offsetHeight;
+    dom.toast.classList.add('show');
+
+    if (toastTimer) {
+        window.clearTimeout(toastTimer);
+    }
+
+    toastTimer = window.setTimeout(() => {
+        if (!dom.toast) return;
+        dom.toast.classList.remove('show');
+    }, 3000);
 }
 
 function getErrorMessage(error, fallback = 'Request failed.') {
@@ -2313,8 +2337,10 @@ async function handleInvoiceAction(event) {
     if (action === 'send' && id) {
         try {
             await api.post(`/api/invoices/${id}/send`);
+            showToast('Invoice successfully sent');
             await loadInvoices();
         } catch (error) {
+            showToast('Unable to send invoice', true);
             setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, 'Unable to send invoice.'), true);
         }
     }

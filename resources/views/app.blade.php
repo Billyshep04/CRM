@@ -953,6 +953,8 @@
             </main>
         </div>
 
+        <div id="app-toast" class="toast" role="status" aria-live="polite"></div>
+
         <template id="invoice-line-item-template">
             <div class="line-item">
                 <input type="text" name="description" placeholder="Description" required>
