@@ -32,13 +32,13 @@ class AuthController extends Controller
 
         return response()->json([
             'token' => $token,
-            'user' => $user->load('roles'),
+            'user' => $user->load(['roles', 'customerProfile']),
         ]);
     }
 
     public function me(Request $request)
     {
-        return response()->json($request->user()?->load('roles'));
+        return response()->json($request->user()?->load(['roles', 'customerProfile']));
     }
 
     public function logout(Request $request)

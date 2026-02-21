@@ -958,6 +958,102 @@
                             </div>
                         </div>
                     </section>
+
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Your jobs</div>
+                                    <div class="card-subtitle">All one-off jobs on your account</div>
+                                </div>
+                            </div>
+                            <div class="table" id="portal-jobs">
+                                <div class="table-row table-header jobs-detail">
+                                    <span>Description</span>
+                                    <span>Cost</span>
+                                    <span>Status</span>
+                                    <span>Completed</span>
+                                </div>
+                                <div class="table-row table-empty jobs-detail">
+                                    <span>Loading jobs...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Your subscriptions</div>
+                                    <div class="card-subtitle">All recurring services</div>
+                                </div>
+                            </div>
+                            <div class="table" id="portal-subscriptions">
+                                <div class="table-row table-header subscriptions-detail">
+                                    <span>Billable ID</span>
+                                    <span>Description</span>
+                                    <span>Monthly</span>
+                                    <span>Status</span>
+                                    <span>Next invoice</span>
+                                </div>
+                                <div class="table-row table-empty subscriptions-detail">
+                                    <span>Loading subscriptions...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Account settings</div>
+                                    <div class="card-subtitle">Update your portal details and password</div>
+                                </div>
+                            </div>
+                            <form id="portal-profile-form" class="form-stack">
+                                <label class="field">
+                                    <span>Name</span>
+                                    <input type="text" name="name" id="portal-profile-name" required>
+                                </label>
+                                <label class="field">
+                                    <span>Email</span>
+                                    <input type="email" name="email" id="portal-profile-email" required>
+                                </label>
+                                <label class="field">
+                                    <span>Billing address</span>
+                                    <textarea name="billing_address" id="portal-profile-billing-address" rows="3" required></textarea>
+                                </label>
+                                <div id="portal-profile-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Save details</button>
+                            </form>
+
+                            <hr style="margin: 22px 0; border: 0; border-top: 1px solid var(--border);">
+
+                            <form id="portal-password-form" class="form-stack">
+                                <label class="field">
+                                    <span>Current password</span>
+                                    <input type="password" name="current_password" required>
+                                </label>
+                                <label class="field">
+                                    <span>New password</span>
+                                    <input type="password" name="password" required>
+                                </label>
+                                <label class="field">
+                                    <span>Confirm new password</span>
+                                    <input type="password" name="password_confirmation" required>
+                                </label>
+                                <div id="portal-password-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Update password</button>
+                            </form>
+                        </div>
+                    </section>
                 </section>
             </main>
         </div>

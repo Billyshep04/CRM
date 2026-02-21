@@ -44,7 +44,16 @@ const dom = {
     passwordForm: document.getElementById('password-form'),
     passwordFormStatus: document.getElementById('password-form-status'),
     portalDownloadLatest: document.getElementById('portal-download-latest'),
+    portalJobs: document.getElementById('portal-jobs'),
+    portalSubscriptions: document.getElementById('portal-subscriptions'),
     portalWebsites: document.getElementById('portal-websites'),
+    portalProfileForm: document.getElementById('portal-profile-form'),
+    portalProfileStatus: document.getElementById('portal-profile-status'),
+    portalProfileName: document.getElementById('portal-profile-name'),
+    portalProfileEmail: document.getElementById('portal-profile-email'),
+    portalProfileBillingAddress: document.getElementById('portal-profile-billing-address'),
+    portalPasswordForm: document.getElementById('portal-password-form'),
+    portalPasswordStatus: document.getElementById('portal-password-status'),
     toast: document.getElementById('app-toast'),
     customerDetailTitle: document.getElementById('customer-detail-title'),
     customerDetailEmail: document.getElementById('customer-detail-email'),
@@ -145,6 +154,8 @@ const state = {
     staffUsers: [],
     mailSettings: null,
     portalInvoices: [],
+    portalJobs: [],
+    portalSubscriptions: [],
     currentCustomer: null,
     filters: {
         customers: {
@@ -251,6 +262,22 @@ function populateProfileForm(user) {
     setFormStatus(dom.profileFormStatus, '');
 }
 
+function populatePortalProfileForm(user) {
+    if (!dom.portalProfileForm || !user) return;
+
+    const customerProfile = user.customer_profile || null;
+    if (dom.portalProfileName) {
+        dom.portalProfileName.value = customerProfile?.name || user.name || '';
+    }
+    if (dom.portalProfileEmail) {
+        dom.portalProfileEmail.value = customerProfile?.email || user.email || '';
+    }
+    if (dom.portalProfileBillingAddress) {
+        dom.portalProfileBillingAddress.value = customerProfile?.billing_address || '';
+    }
+    setFormStatus(dom.portalProfileStatus, '');
+}
+
 function setTheme(theme) {
     document.documentElement.dataset.theme = theme;
     dom.themeLabels.forEach((label) => {
@@ -319,6 +346,8 @@ function setActiveView(view) {
     }
     if (view === 'portal') {
         loadPortalInvoices();
+        loadPortalJobs();
+        loadPortalSubscriptions();
         loadPortalWebsites();
     }
     if (view === 'admin' && state.role === 'admin') {
@@ -693,6 +722,93 @@ async function loadPortalInvoices() {
     }
 }
 
+function renderPortalJobs(jobs = []) {
+    if (!dom.portalJobs) return;
+    resetTable(dom.portalJobs);
+
+    if (!jobs.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty jobs-detail';
+        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span>';
+        dom.portalJobs.appendChild(emptyRow);
+        return;
+    }
+
+    jobs.forEach((job) => {
+        const row = document.createElement('div');
+        row.className = 'table-row jobs-detail';
+        row.innerHTML = `
+            <span>${escapeHtml(truncate(job.description, 56))}</span>
+            <span>${formatCurrency(Number(job.cost))}</span>
+            <span>${escapeHtml(job.status)}</span>
+            <span>${formatDate(job.completed_at)}</span>
+        `;
+        dom.portalJobs.appendChild(row);
+    });
+}
+
+async function loadPortalJobs() {
+    try {
+        const response = await api.get('/api/portal/jobs?per_page=100');
+        const items = response?.data?.data ?? [];
+        state.portalJobs = items;
+        renderPortalJobs(items);
+    } catch (error) {
+        renderPortalJobs([]);
+        if (dom.portalJobs) {
+            resetTable(dom.portalJobs);
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'table-row table-empty jobs-detail';
+            emptyRow.innerHTML = '<span>Unable to load jobs.</span><span></span><span></span><span></span>';
+            dom.portalJobs.appendChild(emptyRow);
+        }
+    }
+}
+
+function renderPortalSubscriptions(subscriptions = []) {
+    if (!dom.portalSubscriptions) return;
+    resetTable(dom.portalSubscriptions);
+
+    if (!subscriptions.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty subscriptions-detail';
+        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span><span></span>';
+        dom.portalSubscriptions.appendChild(emptyRow);
+        return;
+    }
+
+    subscriptions.forEach((subscription) => {
+        const row = document.createElement('div');
+        row.className = 'table-row subscriptions-detail';
+        row.innerHTML = `
+            <span>#${subscription.id}</span>
+            <span>${escapeHtml(truncate(subscription.description, 42))}</span>
+            <span>${formatCurrency(Number(subscription.monthly_cost))}</span>
+            <span>${escapeHtml(subscription.status)}</span>
+            <span>${formatDate(subscription.next_invoice_date)}</span>
+        `;
+        dom.portalSubscriptions.appendChild(row);
+    });
+}
+
+async function loadPortalSubscriptions() {
+    try {
+        const response = await api.get('/api/portal/subscriptions?status=all&per_page=100');
+        const items = response?.data?.data ?? [];
+        state.portalSubscriptions = items;
+        renderPortalSubscriptions(items);
+    } catch (error) {
+        renderPortalSubscriptions([]);
+        if (dom.portalSubscriptions) {
+            resetTable(dom.portalSubscriptions);
+            const emptyRow = document.createElement('div');
+            emptyRow.className = 'table-row table-empty subscriptions-detail';
+            emptyRow.innerHTML = '<span>Unable to load subscriptions.</span><span></span><span></span><span></span><span></span>';
+            dom.portalSubscriptions.appendChild(emptyRow);
+        }
+    }
+}
+
 async function loadPortalWebsites() {
     if (!dom.portalWebsites) return;
     dom.portalWebsites.innerHTML = '';
@@ -700,8 +816,19 @@ async function loadPortalWebsites() {
     try {
         const response = await api.get('/api/portal/websites?per_page=20');
         const websites = response?.data?.data ?? [];
+        const uniqueWebsites = [];
+        const seenWebsiteIds = new Set();
 
-        if (!websites.length) {
+        websites.forEach((website) => {
+            const id = Number(website?.id);
+            if (!id || seenWebsiteIds.has(id)) {
+                return;
+            }
+            seenWebsiteIds.add(id);
+            uniqueWebsites.push(website);
+        });
+
+        if (!uniqueWebsites.length) {
             const emptyCard = document.createElement('div');
             emptyCard.className = 'site-card';
             emptyCard.innerHTML = `
@@ -714,7 +841,7 @@ async function loadPortalWebsites() {
             return;
         }
 
-        websites.forEach((website) => {
+        uniqueWebsites.forEach((website) => {
             const card = document.createElement('div');
             card.className = 'site-card';
             card.innerHTML = `
@@ -773,12 +900,12 @@ async function loadSession() {
         if (dom.userName) dom.userName.textContent = user?.name || 'User';
         if (dom.userRole) dom.userRole.textContent = role;
         populateProfileForm(user);
+        populatePortalProfileForm(user);
 
         await Promise.all([loadPreferences(), loadBrand()]);
 
         if (role === 'customer') {
             setActiveView('portal');
-            loadPortalWebsites();
         } else {
             loadCustomerOptions();
             setActiveView('dashboard');
@@ -811,15 +938,17 @@ async function handleLogin(event) {
 
     try {
         const response = await api.post('/api/auth/login', payload);
+        state.user = response.data.user;
         setToken(response.data.token);
         const role = resolveRole(response.data.user);
         setRole(role);
         if (dom.userName) dom.userName.textContent = response.data.user?.name || 'User';
         if (dom.userRole) dom.userRole.textContent = role;
+        populateProfileForm(response.data.user);
+        populatePortalProfileForm(response.data.user);
         await Promise.all([loadPreferences(), loadBrand()]);
         if (role === 'customer') {
             setActiveView('portal');
-            loadPortalWebsites();
         } else {
             setActiveView('dashboard');
             loadStaffStats();
@@ -862,6 +991,37 @@ async function handleProfileSubmit(event) {
     }
 }
 
+async function handlePortalProfileSubmit(event) {
+    event.preventDefault();
+    if (!dom.portalProfileForm) return;
+
+    const formData = new FormData(dom.portalProfileForm);
+    const payload = {
+        name: String(formData.get('name') || '').trim(),
+        email: String(formData.get('email') || '').trim(),
+        billing_address: String(formData.get('billing_address') || '').trim(),
+    };
+
+    if (!payload.name || !payload.email || !payload.billing_address) {
+        setFormStatus(dom.portalProfileStatus, 'Name, email, and billing address are required.', true);
+        return;
+    }
+
+    try {
+        const response = await api.put('/api/account/profile', payload);
+        const user = response?.data?.user ?? null;
+        if (user) {
+            state.user = user;
+            if (dom.userName) dom.userName.textContent = user?.name || 'User';
+            populatePortalProfileForm(user);
+            populateProfileForm(user);
+        }
+        setFormStatus(dom.portalProfileStatus, 'Details updated.');
+    } catch (error) {
+        setFormStatus(dom.portalProfileStatus, getErrorMessage(error, 'Unable to update details.'), true);
+    }
+}
+
 async function handlePasswordSubmit(event) {
     event.preventDefault();
     if (!dom.passwordForm) return;
@@ -888,6 +1048,35 @@ async function handlePasswordSubmit(event) {
         dom.passwordForm.reset();
     } catch (error) {
         setFormStatus(dom.passwordFormStatus, 'Unable to update password.', true);
+    }
+}
+
+async function handlePortalPasswordSubmit(event) {
+    event.preventDefault();
+    if (!dom.portalPasswordForm) return;
+
+    const formData = new FormData(dom.portalPasswordForm);
+    const payload = {
+        current_password: String(formData.get('current_password') || ''),
+        password: String(formData.get('password') || ''),
+        password_confirmation: String(formData.get('password_confirmation') || ''),
+    };
+
+    if (!payload.current_password || !payload.password || !payload.password_confirmation) {
+        setFormStatus(dom.portalPasswordStatus, 'All password fields are required.', true);
+        return;
+    }
+    if (payload.password !== payload.password_confirmation) {
+        setFormStatus(dom.portalPasswordStatus, 'New passwords do not match.', true);
+        return;
+    }
+
+    try {
+        await api.put('/api/account/password', payload);
+        setFormStatus(dom.portalPasswordStatus, 'Password updated.');
+        dom.portalPasswordForm.reset();
+    } catch (error) {
+        setFormStatus(dom.portalPasswordStatus, getErrorMessage(error, 'Unable to update password.'), true);
     }
 }
 
@@ -2441,8 +2630,16 @@ if (dom.profileForm) {
     dom.profileForm.addEventListener('submit', handleProfileSubmit);
 }
 
+if (dom.portalProfileForm) {
+    dom.portalProfileForm.addEventListener('submit', handlePortalProfileSubmit);
+}
+
 if (dom.passwordForm) {
     dom.passwordForm.addEventListener('submit', handlePasswordSubmit);
+}
+
+if (dom.portalPasswordForm) {
+    dom.portalPasswordForm.addEventListener('submit', handlePortalPasswordSubmit);
 }
 
 if (dom.staffUserForm) {

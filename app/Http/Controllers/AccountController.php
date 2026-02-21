@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
 
@@ -12,6 +13,7 @@ class AccountController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user();
+        $customerProfile = $user?->customerProfile;
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -21,13 +23,33 @@ class AccountController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user?->id),
             ],
+            'billing_address' => $customerProfile
+                ? ['required', 'string']
+                : ['nullable', 'string'],
         ]);
 
-        $user->update($validated);
+        DB::transaction(function () use ($user, $customerProfile, $validated): void {
+            if ($user) {
+                $user->update([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                ]);
+            }
+
+            if ($customerProfile) {
+                $customerProfile->update([
+                    'name' => $validated['name'],
+                    'email' => $validated['email'],
+                    'billing_address' => $validated['billing_address'],
+                ]);
+            }
+        });
+
+        $freshUser = $user?->fresh()?->load(['roles', 'customerProfile']);
 
         return response()->json([
             'message' => 'Profile updated.',
-            'user' => $user->fresh(),
+            'user' => $freshUser,
         ]);
     }
 
