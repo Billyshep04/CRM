@@ -67,7 +67,7 @@
                     <a href="#" class="nav-item" data-view="subscriptions">Subscriptions</a>
                     <a href="#" class="nav-item" data-view="costs">Costs</a>
                     <a href="#" class="nav-item" data-view="invoices">Invoices</a>
-                    <a href="#" class="nav-item admin-only" data-view="admin">Admin</a>
+                    <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
                 </nav>
@@ -255,10 +255,7 @@
                                     <span>Notes</span>
                                     <textarea name="notes" rows="3"></textarea>
                                 </label>
-                                <label class="field">
-                                    <span>Portal user ID (optional)</span>
-                                    <input type="number" name="user_id" min="1">
-                                </label>
+                                <div class="form-hint">Portal login is auto-created using this email. Default password: WebStamp123</div>
                                 <div id="customer-form-status" class="form-hint"></div>
                                 <div class="form-actions">
                                     <button type="submit" class="btn btn-primary">Save customer</button>
@@ -781,7 +778,7 @@
 
                 <section class="view staff-view admin-view" data-view="admin">
                     <section class="content-grid admin-panel">
-                        <div class="card wide">
+                        <div class="card wide admin-only">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Brand settings</div>
@@ -798,7 +795,7 @@
                             </form>
                         </div>
 
-                        <div class="card">
+                        <div class="card admin-only">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Profile</div>
@@ -819,11 +816,49 @@
                             </form>
                         </div>
 
+                        <div class="card admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Staff users</div>
+                                    <div class="card-subtitle">Create staff accounts with full CRM access (no admin controls).</div>
+                                </div>
+                                <button class="btn btn-outline" id="staff-users-refresh" type="button">Refresh</button>
+                            </div>
+                            <form id="staff-user-form" class="form-stack">
+                                <label class="field">
+                                    <span>Name</span>
+                                    <input type="text" name="name" required>
+                                </label>
+                                <label class="field">
+                                    <span>Email</span>
+                                    <input type="email" name="email" required>
+                                </label>
+                                <label class="field">
+                                    <span>Password</span>
+                                    <input type="password" name="password" minlength="8" required>
+                                </label>
+                                <div id="staff-user-form-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Create staff user</button>
+                            </form>
+                            <div class="table" id="staff-users-table" style="margin-top: 14px;">
+                                <div class="table-row table-header staff-users">
+                                    <span>Name</span>
+                                    <span>Email</span>
+                                    <span>Created</span>
+                                </div>
+                                <div class="table-row table-empty staff-users">
+                                    <span>Loading staff users...</span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div class="card">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Reset password</div>
-                                    <div class="card-subtitle">Choose a new admin password.</div>
+                                    <div class="card-subtitle">Choose a new account password.</div>
                                 </div>
                             </div>
                             <form id="password-form" class="form-stack">

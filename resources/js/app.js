@@ -28,6 +28,10 @@ const dom = {
     quickLinks: document.querySelectorAll('[data-go-view]'),
     logoUploadForm: document.getElementById('logo-upload-form'),
     logoUploadStatus: document.getElementById('logo-upload-status'),
+    staffUserForm: document.getElementById('staff-user-form'),
+    staffUserFormStatus: document.getElementById('staff-user-form-status'),
+    staffUsersTable: document.getElementById('staff-users-table'),
+    staffUsersRefresh: document.getElementById('staff-users-refresh'),
     profileForm: document.getElementById('profile-form'),
     profileFormStatus: document.getElementById('profile-form-status'),
     profileName: document.getElementById('profile-name'),
@@ -131,6 +135,7 @@ const state = {
     subscriptions: [],
     subscriptionMonths: [],
     invoices: [],
+    staffUsers: [],
     portalInvoices: [],
     currentCustomer: null,
     filters: {
@@ -308,6 +313,9 @@ function setActiveView(view) {
         loadPortalInvoices();
         loadPortalWebsites();
     }
+    if (view === 'admin' && state.role === 'admin') {
+        loadStaffUsers();
+    }
 }
 
 function escapeHtml(value) {
@@ -425,6 +433,20 @@ function setFormStatus(element, message, isError = false) {
     if (!element) return;
     element.textContent = message;
     element.style.color = isError ? '#ef4444' : '';
+}
+
+function getErrorMessage(error, fallback = 'Request failed.') {
+    const validationErrors = error?.response?.data?.errors;
+    if (validationErrors && typeof validationErrors === 'object') {
+        const firstField = Object.keys(validationErrors)[0];
+        const firstMessage = validationErrors[firstField]?.[0];
+        if (firstMessage) return String(firstMessage);
+    }
+
+    const message = error?.response?.data?.message;
+    if (message) return String(message);
+
+    return fallback;
 }
 
 async function loadPreferences() {
@@ -878,6 +900,80 @@ async function handleLogoUpload(event) {
     }
 }
 
+function renderStaffUsers() {
+    if (!dom.staffUsersTable) return;
+    resetTable(dom.staffUsersTable);
+
+    if (!state.staffUsers.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty staff-users';
+        emptyRow.innerHTML = '<span>No staff users yet.</span><span></span><span></span>';
+        dom.staffUsersTable.appendChild(emptyRow);
+        return;
+    }
+
+    state.staffUsers.forEach((user) => {
+        const row = document.createElement('div');
+        row.className = 'table-row staff-users';
+        row.innerHTML = `
+            <span>${escapeHtml(user.name || '')}</span>
+            <span>${escapeHtml(user.email || '')}</span>
+            <span>${formatDate(user.created_at)}</span>
+        `;
+        dom.staffUsersTable.appendChild(row);
+    });
+}
+
+async function loadStaffUsers() {
+    if (!dom.staffUsersTable || state.role !== 'admin') return;
+    setFormStatus(dom.staffUserFormStatus, '');
+    resetTable(dom.staffUsersTable);
+
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty staff-users';
+    loadingRow.innerHTML = '<span>Loading staff users...</span><span></span><span></span>';
+    dom.staffUsersTable.appendChild(loadingRow);
+
+    try {
+        const response = await api.get('/api/admin/staff-users');
+        state.staffUsers = response?.data?.data ?? [];
+        renderStaffUsers();
+    } catch (error) {
+        state.staffUsers = [];
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty staff-users';
+        emptyRow.innerHTML = '<span>Unable to load staff users.</span><span></span><span></span>';
+        resetTable(dom.staffUsersTable);
+        dom.staffUsersTable.appendChild(emptyRow);
+    }
+}
+
+async function handleStaffUserSubmit(event) {
+    event.preventDefault();
+    if (!dom.staffUserForm) return;
+
+    const formData = new FormData(dom.staffUserForm);
+    const payload = {
+        name: String(formData.get('name') || '').trim(),
+        email: String(formData.get('email') || '').trim(),
+        password: String(formData.get('password') || ''),
+    };
+
+    if (!payload.name || !payload.email || !payload.password) {
+        setFormStatus(dom.staffUserFormStatus, 'Name, email, and password are required.', true);
+        return;
+    }
+
+    try {
+        await api.post('/api/admin/staff-users', payload);
+        dom.staffUserForm.reset();
+        setFormStatus(dom.staffUserFormStatus, 'Staff user created.');
+        await loadStaffUsers();
+    } catch (error) {
+        setFormStatus(dom.staffUserFormStatus, getErrorMessage(error, 'Unable to create staff user.'), true);
+    }
+}
+
 function populateCustomerSelects(customers) {
     const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.invoiceCustomerSelect];
     selects.forEach((select) => {
@@ -1195,7 +1291,6 @@ async function handleCustomerSubmit(event) {
         email: String(formData.get('email') || '').trim(),
         billing_address: String(formData.get('billing_address') || '').trim(),
         notes: String(formData.get('notes') || '').trim() || null,
-        user_id: formData.get('user_id') ? Number(formData.get('user_id')) : null,
     };
 
     try {
@@ -1205,7 +1300,7 @@ async function handleCustomerSubmit(event) {
             setFormStatus(dom.customerFormStatus, 'Customer updated.');
         } else {
             response = await api.post('/api/customers', payload);
-            setFormStatus(dom.customerFormStatus, 'Customer created.');
+            setFormStatus(dom.customerFormStatus, 'Customer created. Portal password: WebStamp123');
         }
         const saved = response?.data?.data ?? response?.data;
         if (saved) {
@@ -1221,7 +1316,7 @@ async function handleCustomerSubmit(event) {
         await loadCustomers();
         resetCustomerForm();
     } catch (error) {
-        setFormStatus(dom.customerFormStatus, 'Unable to save customer.', true);
+        setFormStatus(dom.customerFormStatus, getErrorMessage(error, 'Unable to save customer.'), true);
     }
 }
 
@@ -1247,7 +1342,6 @@ async function handleCustomerAction(event) {
         dom.customerForm.querySelector('input[name="email"]').value = customer.email || '';
         dom.customerForm.querySelector('textarea[name="billing_address"]').value = customer.billing_address || '';
         dom.customerForm.querySelector('textarea[name="notes"]').value = customer.notes || '';
-        dom.customerForm.querySelector('input[name="user_id"]').value = customer.user_id || '';
         setFormStatus(dom.customerFormStatus, 'Editing customer.');
     }
 
@@ -2176,7 +2270,7 @@ function initializeNavigation() {
     dom.quickLinks.forEach((button) => {
         button.addEventListener('click', () => {
             if (button.dataset.goView) {
-                if (button.dataset.goView === 'admin' && state.role !== 'admin') {
+                if (button.dataset.goView === 'admin' && state.role === 'customer') {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -2227,6 +2321,14 @@ if (dom.profileForm) {
 
 if (dom.passwordForm) {
     dom.passwordForm.addEventListener('submit', handlePasswordSubmit);
+}
+
+if (dom.staffUserForm) {
+    dom.staffUserForm.addEventListener('submit', handleStaffUserSubmit);
+}
+
+if (dom.staffUsersRefresh) {
+    dom.staffUsersRefresh.addEventListener('click', loadStaffUsers);
 }
 
 if (dom.customerForm) {

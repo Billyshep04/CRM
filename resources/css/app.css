@@ -337,11 +337,13 @@ body[data-role="customer"] .nav-item:not(.customer-only) {
     display: none;
 }
 
-body[data-role="admin"] .view.admin-view {
+body[data-role="admin"] .view.admin-view,
+body[data-role="staff"] .view.admin-view {
     display: none;
 }
 
-body[data-role="admin"] .view.admin-view.active {
+body[data-role="admin"] .view.admin-view.active,
+body[data-role="staff"] .view.admin-view.active {
     display: block;
 }
 
@@ -680,6 +682,10 @@ body[data-role="admin"] .view.admin-view.active {
     grid-template-columns: 1.6fr 0.7fr 0.7fr 0.9fr;
 }
 
+.table-row.staff-users {
+    grid-template-columns: 1fr 1.4fr 0.7fr;
+}
+
 .table-row.invoices {
     grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr 0.7fr 1fr;
 }
@@ -868,6 +874,15 @@ body[data-role="admin"] .view.admin-view.active {
 }
 
 body[data-role="admin"] .admin-only {
+    display: block;
+}
+
+.staff-only {
+    display: none;
+}
+
+body[data-role="admin"] .staff-only,
+body[data-role="staff"] .staff-only {
     display: block;
 }
 
