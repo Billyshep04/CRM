@@ -798,6 +798,31 @@
                         <div class="card admin-only">
                             <div class="card-header">
                                 <div>
+                                    <div class="card-title">Email delivery</div>
+                                    <div class="card-subtitle">Use SMTP2GO API for invoice sending.</div>
+                                </div>
+                            </div>
+                            <form id="smtp2go-settings-form" class="form-stack">
+                                <label class="field">
+                                    <span>Provider</span>
+                                    <select name="smtp2go_enabled" id="smtp2go-enabled">
+                                        <option value="0">Default server</option>
+                                        <option value="1">SMTP2GO API</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>SMTP2GO API key</span>
+                                    <input type="password" name="smtp2go_api_key" id="smtp2go-api-key" placeholder="Paste key to save or rotate">
+                                </label>
+                                <div class="form-hint" id="smtp2go-api-key-mask"></div>
+                                <div id="smtp2go-settings-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Save mail settings</button>
+                            </form>
+                        </div>
+
+                        <div class="card admin-only">
+                            <div class="card-header">
+                                <div>
                                     <div class="card-title">Profile</div>
                                     <div class="card-subtitle">Update your admin contact details.</div>
                                 </div>

@@ -28,6 +28,11 @@ const dom = {
     quickLinks: document.querySelectorAll('[data-go-view]'),
     logoUploadForm: document.getElementById('logo-upload-form'),
     logoUploadStatus: document.getElementById('logo-upload-status'),
+    smtp2goSettingsForm: document.getElementById('smtp2go-settings-form'),
+    smtp2goSettingsStatus: document.getElementById('smtp2go-settings-status'),
+    smtp2goEnabled: document.getElementById('smtp2go-enabled'),
+    smtp2goApiKey: document.getElementById('smtp2go-api-key'),
+    smtp2goApiKeyMask: document.getElementById('smtp2go-api-key-mask'),
     staffUserForm: document.getElementById('staff-user-form'),
     staffUserFormStatus: document.getElementById('staff-user-form-status'),
     staffUsersTable: document.getElementById('staff-users-table'),
@@ -136,6 +141,7 @@ const state = {
     subscriptionMonths: [],
     invoices: [],
     staffUsers: [],
+    mailSettings: null,
     portalInvoices: [],
     currentCustomer: null,
     filters: {
@@ -315,6 +321,7 @@ function setActiveView(view) {
     }
     if (view === 'admin' && state.role === 'admin') {
         loadStaffUsers();
+        loadAdminMailSettings();
     }
 }
 
@@ -897,6 +904,65 @@ async function handleLogoUpload(event) {
         if (dom.logoUploadStatus) {
             dom.logoUploadStatus.textContent = 'Upload failed. Please try again.';
         }
+    }
+}
+
+function applyAdminMailSettings(payload) {
+    if (!dom.smtp2goEnabled || !dom.smtp2goApiKeyMask || !dom.smtp2goApiKey) return;
+
+    const enabled = Boolean(payload?.smtp2go_enabled);
+    dom.smtp2goEnabled.value = enabled ? '1' : '0';
+    dom.smtp2goApiKey.value = '';
+
+    if (payload?.smtp2go_api_key_set) {
+        const masked = payload?.smtp2go_api_key_masked || 'configured';
+        dom.smtp2goApiKeyMask.textContent = `Stored API key: ${masked}`;
+    } else {
+        dom.smtp2goApiKeyMask.textContent = 'No API key saved yet.';
+    }
+}
+
+async function loadAdminMailSettings() {
+    if (!dom.smtp2goSettingsForm || state.role !== 'admin') return;
+    setFormStatus(dom.smtp2goSettingsStatus, '');
+
+    try {
+        const response = await api.get('/api/admin/mail-settings');
+        state.mailSettings = response?.data?.data ?? null;
+        applyAdminMailSettings(state.mailSettings);
+    } catch (error) {
+        setFormStatus(dom.smtp2goSettingsStatus, 'Unable to load mail settings.', true);
+    }
+}
+
+async function handleSmtp2goSettingsSubmit(event) {
+    event.preventDefault();
+    if (!dom.smtp2goSettingsForm || !dom.smtp2goEnabled || state.role !== 'admin') return;
+
+    const formData = new FormData(dom.smtp2goSettingsForm);
+    const enabled = String(formData.get('smtp2go_enabled') || '0') === '1';
+    const apiKey = String(formData.get('smtp2go_api_key') || '').trim();
+
+    if (enabled && !apiKey && !state.mailSettings?.smtp2go_api_key_set) {
+        setFormStatus(dom.smtp2goSettingsStatus, 'API key is required when SMTP2GO is enabled.', true);
+        return;
+    }
+
+    const payload = {
+        smtp2go_enabled: enabled,
+    };
+
+    if (apiKey) {
+        payload.smtp2go_api_key = apiKey;
+    }
+
+    try {
+        const response = await api.put('/api/admin/mail-settings', payload);
+        state.mailSettings = response?.data?.data ?? null;
+        applyAdminMailSettings(state.mailSettings);
+        setFormStatus(dom.smtp2goSettingsStatus, 'Mail settings updated.');
+    } catch (error) {
+        setFormStatus(dom.smtp2goSettingsStatus, getErrorMessage(error, 'Unable to update mail settings.'), true);
     }
 }
 
@@ -2335,6 +2401,10 @@ window.addEventListener('resize', () => {
 
 if (dom.logoUploadForm) {
     dom.logoUploadForm.addEventListener('submit', handleLogoUpload);
+}
+
+if (dom.smtp2goSettingsForm) {
+    dom.smtp2goSettingsForm.addEventListener('submit', handleSmtp2goSettingsSubmit);
 }
 
 if (dom.profileForm) {
