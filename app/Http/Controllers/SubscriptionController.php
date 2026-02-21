@@ -6,6 +6,7 @@ use App\Http\Resources\SubscriptionMonthResource;
 use App\Http\Resources\SubscriptionResource;
 use App\Models\SubscriptionMonth;
 use App\Models\Subscription;
+use App\Services\RecurringInvoiceService;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -32,7 +33,7 @@ class SubscriptionController extends Controller
         );
     }
 
-    public function store(Request $request)
+    public function store(Request $request, RecurringInvoiceService $recurringInvoiceService)
     {
         $this->ensureSubscriptionMonthsTableExists();
 
@@ -59,6 +60,7 @@ class SubscriptionController extends Controller
         ]);
 
         $this->syncSubscriptionMonths($subscription);
+        $this->processRecurringInvoicesForSubscription($subscription, $recurringInvoiceService);
 
         return new SubscriptionResource($subscription->load('customer'));
     }
@@ -70,7 +72,7 @@ class SubscriptionController extends Controller
         return new SubscriptionResource($subscription->load('customer'));
     }
 
-    public function update(Request $request, Subscription $subscription)
+    public function update(Request $request, Subscription $subscription, RecurringInvoiceService $recurringInvoiceService)
     {
         $this->ensureSubscriptionMonthsTableExists();
 
@@ -96,6 +98,7 @@ class SubscriptionController extends Controller
         $subscription->update($validated);
 
         $this->syncSubscriptionMonths($subscription);
+        $this->processRecurringInvoicesForSubscription($subscription, $recurringInvoiceService);
 
         return new SubscriptionResource($subscription->load('customer'));
     }
@@ -222,5 +225,17 @@ class SubscriptionController extends Controller
         ]);
 
         return new SubscriptionMonthResource($subscriptionMonth);
+    }
+
+    private function processRecurringInvoicesForSubscription(
+        Subscription $subscription,
+        RecurringInvoiceService $recurringInvoiceService
+    ): void {
+        if ($subscription->status !== 'active') {
+            return;
+        }
+
+        $autoSend = (bool) config('invoices.auto_send_recurring', true);
+        $recurringInvoiceService->processDueSubscriptions($subscription->id, $autoSend);
     }
 }
