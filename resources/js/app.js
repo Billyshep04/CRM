@@ -1997,8 +1997,21 @@ function addInvoiceLineItem(item = {}) {
     row.querySelector('input[name="description"]').value = item.description || '';
     row.querySelector('input[name="quantity"]').value = item.quantity || 1;
     row.querySelector('input[name="unit_price"]').value = item.unit_price || '';
-    row.querySelector('select[name="billable_type"]').value = item.billable_type || '';
-    row.querySelector('input[name="billable_id"]').value = item.billable_id || '';
+    const billableTypeInput = row.querySelector('select[name="billable_type"]');
+    const billableIdInput = row.querySelector('input[name="billable_id"]');
+    billableTypeInput.value = item.billable_type || '';
+    billableIdInput.value = item.billable_id || '';
+
+    const syncBillableIdState = () => {
+        const requiresId = billableTypeInput.value === 'job' || billableTypeInput.value === 'subscription';
+        billableIdInput.disabled = !requiresId;
+        if (!requiresId) {
+            billableIdInput.value = '';
+        }
+    };
+
+    syncBillableIdState();
+    billableTypeInput.addEventListener('change', syncBillableIdState);
 
     row.addEventListener('click', (event) => {
         const button = event.target.closest('[data-action="remove-line-item"]');
@@ -2027,7 +2040,7 @@ function collectInvoiceLineItems() {
         const unitPrice = Number(row.querySelector('input[name="unit_price"]').value);
         const billableType = row.querySelector('select[name="billable_type"]').value;
         const billableIdRaw = row.querySelector('input[name="billable_id"]').value;
-        const billableId = billableIdRaw ? Number(billableIdRaw) : null;
+        const billableId = billableType ? (billableIdRaw ? Number(billableIdRaw) : null) : null;
 
         if (!description) {
             continue;
@@ -2037,6 +2050,9 @@ function collectInvoiceLineItems() {
         }
         if (Number.isNaN(unitPrice) || unitPrice < 0) {
             throw new Error('Line item unit price is invalid.');
+        }
+        if (billableType && (!billableId || Number.isNaN(billableId) || billableId < 1)) {
+            throw new Error('Select a valid Billable ID when using Job or Subscription.');
         }
 
         items.push({
@@ -2149,8 +2165,14 @@ async function handleInvoiceSubmit(event) {
         return;
     }
 
+    const customerId = Number(formData.get('customer_id'));
+    if (!customerId || Number.isNaN(customerId)) {
+        setFormStatus(dom.invoiceFormStatus, 'Select a customer.', true);
+        return;
+    }
+
     const payload = {
-        customer_id: Number(formData.get('customer_id')),
+        customer_id: customerId,
         issue_date: formData.get('issue_date'),
         due_date: formData.get('due_date'),
         tax_amount: formData.get('tax_amount') ? Number(formData.get('tax_amount')) : 0,
@@ -2169,7 +2191,7 @@ async function handleInvoiceSubmit(event) {
         await loadInvoices();
         resetInvoiceForm();
     } catch (error) {
-        setFormStatus(dom.invoiceFormStatus, 'Unable to save invoice.', true);
+        setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, 'Unable to save invoice.'), true);
     }
 }
 

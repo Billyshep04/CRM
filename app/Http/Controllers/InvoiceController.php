@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class InvoiceController extends Controller
 {
@@ -203,16 +204,17 @@ class InvoiceController extends Controller
         }
 
         foreach ($lineItems as $item) {
-            if (($item['billable_type'] ?? null) && empty($item['billable_id'])) {
-                abort(422, 'billable_id is required when billable_type is set.');
-            }
-
-            if (($item['billable_id'] ?? null) && empty($item['billable_type'])) {
-                abort(422, 'billable_type is required when billable_id is set.');
-            }
-
             $billableType = $this->resolveBillableType($item['billable_type'] ?? null);
             $billableId = $item['billable_id'] ?? null;
+
+            // Manual line items should not fail if a billable ID was typed accidentally.
+            if (!$billableType) {
+                $billableId = null;
+            } elseif (empty($billableId)) {
+                throw ValidationException::withMessages([
+                    'line_items' => ['Billable ID is required when billable type is set.'],
+                ]);
+            }
 
             if ($billableType && $billableId) {
                 $billable = $billableType::query()
