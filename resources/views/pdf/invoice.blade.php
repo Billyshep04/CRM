@@ -151,7 +151,13 @@
         </div>
 
         <div class="footer">
-            Thank you for your business. If you have any questions, please contact support.
+            <div>Thank you for your business. If you have any questions, please contact support.</div>
+            <div style="margin-top: 14px; color: #111827;">
+                <div style="font-weight: 600; margin-bottom: 6px;">Payment details</div>
+                <div>Name: Billy Sheppard</div>
+                <div>Account no: 05574495</div>
+                <div>Sort code: 04-00-03</div>
+            </div>
         </div>
     </body>
 </html>
