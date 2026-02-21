@@ -116,6 +116,37 @@ class PortalController extends Controller
         );
     }
 
+    public function updateInvoicePayment(Request $request, Invoice $invoice)
+    {
+        $customerId = $this->resolveCustomerId($request);
+
+        if ($invoice->customer_id !== $customerId) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'payment_status' => ['required', 'in:paid,unpaid'],
+        ]);
+
+        if ($validated['payment_status'] === 'paid') {
+            $invoice->forceFill([
+                'status' => 'paid',
+                'paid_at' => $invoice->paid_at ?? now(),
+            ])->save();
+        } else {
+            $fallbackStatus = $invoice->due_date && $invoice->due_date->isPast()
+                ? 'overdue'
+                : 'sent';
+
+            $invoice->forceFill([
+                'status' => $fallbackStatus,
+                'paid_at' => null,
+            ])->save();
+        }
+
+        return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
+    }
+
     private function resolveCustomerId(Request $request): int
     {
         $customer = $request->user()?->customerProfile;

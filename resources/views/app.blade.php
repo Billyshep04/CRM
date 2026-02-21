@@ -69,6 +69,7 @@
                     <a href="#" class="nav-item" data-view="invoices">Invoices</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
                 </nav>
                 <div class="sidebar-footer">
@@ -926,14 +927,16 @@
                                 <button class="btn btn-outline" id="portal-download-latest">Download latest PDF</button>
                             </div>
                             <div class="table" id="portal-invoices">
-                                <div class="table-row table-header">
+                                <div class="table-row table-header portal-invoices">
                                     <span>Invoice</span>
                                     <span>Status</span>
                                     <span>Amount</span>
                                     <span>Due</span>
+                                    <span>Actions</span>
                                 </div>
-                                <div class="table-row table-empty">
+                                <div class="table-row table-empty portal-invoices">
                                     <span>Loading invoices...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -968,13 +971,13 @@
                                 </div>
                             </div>
                             <div class="table" id="portal-jobs">
-                                <div class="table-row table-header jobs-detail">
+                                <div class="table-row table-header portal-jobs">
                                     <span>Description</span>
                                     <span>Cost</span>
                                     <span>Status</span>
                                     <span>Completed</span>
                                 </div>
-                                <div class="table-row table-empty jobs-detail">
+                                <div class="table-row table-empty portal-jobs">
                                     <span>Loading jobs...</span>
                                     <span></span>
                                     <span></span>
@@ -991,16 +994,14 @@
                                 </div>
                             </div>
                             <div class="table" id="portal-subscriptions">
-                                <div class="table-row table-header subscriptions-detail">
-                                    <span>Billable ID</span>
+                                <div class="table-row table-header portal-subscriptions">
                                     <span>Description</span>
                                     <span>Monthly</span>
                                     <span>Status</span>
                                     <span>Next invoice</span>
                                 </div>
-                                <div class="table-row table-empty subscriptions-detail">
+                                <div class="table-row table-empty portal-subscriptions">
                                     <span>Loading subscriptions...</span>
-                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -1008,7 +1009,9 @@
                             </div>
                         </div>
                     </section>
+                </section>
 
+                <section class="view portal-view" data-view="portal-admin">
                     <section class="content-grid">
                         <div class="card wide">
                             <div class="card-header">

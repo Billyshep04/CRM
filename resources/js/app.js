@@ -228,6 +228,10 @@ const viewMeta = {
         title: 'Customer Portal',
         subtitle: 'Review invoices and quick-login links.',
     },
+    'portal-admin': {
+        title: 'Admin',
+        subtitle: 'Manage your account details and password.',
+    },
 };
 
 function setAuthState(isAuthenticated) {
@@ -349,6 +353,9 @@ function setActiveView(view) {
         loadPortalJobs();
         loadPortalSubscriptions();
         loadPortalWebsites();
+    }
+    if (view === 'portal-admin') {
+        populatePortalProfileForm(state.user);
     }
     if (view === 'admin' && state.role === 'admin') {
         loadStaffUsers();
@@ -716,10 +723,47 @@ async function loadPortalInvoices() {
         const invoices = await api.get('/api/portal/invoices?per_page=6');
         const items = invoices?.data?.data ?? [];
         state.portalInvoices = items;
-        renderInvoiceRows(invoiceTables.portal, items, 'No invoices available.');
+        renderPortalInvoices(items, 'No invoices available.');
     } catch (error) {
-        renderInvoiceRows(invoiceTables.portal, [], 'Unable to load invoices.');
+        renderPortalInvoices([], 'Unable to load invoices.');
     }
+}
+
+function renderPortalInvoices(invoices = [], emptyMessage = 'No invoices available.') {
+    if (!invoiceTables.portal) return;
+    resetTable(invoiceTables.portal);
+
+    if (!invoices.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty portal-invoices';
+        emptyRow.innerHTML = `<span>${emptyMessage}</span><span></span><span></span><span></span><span></span>`;
+        invoiceTables.portal.appendChild(emptyRow);
+        return;
+    }
+
+    invoices.forEach((invoice) => {
+        const row = document.createElement('div');
+        row.className = 'table-row portal-invoices';
+
+        const isPaid = invoice.status === 'paid';
+        const statusLabel = isPaid ? 'paid' : 'unpaid';
+        const nextStatus = isPaid ? 'unpaid' : 'paid';
+        const actionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
+        const pillClass = isPaid ? 'pill success' : 'pill outline';
+
+        row.innerHTML = `
+            <span>#${escapeHtml(invoice.invoice_number)}</span>
+            <span class="${pillClass}">${escapeHtml(statusLabel)}</span>
+            <span>${formatCurrency(Number(invoice.total))}</span>
+            <span>${formatDate(invoice.due_date)}</span>
+            <div class="row-actions">
+                <button type="button" class="btn btn-outline btn-small" data-action="portal-toggle-payment" data-id="${invoice.id}" data-next-status="${nextStatus}">${actionLabel}</button>
+                <button type="button" class="btn btn-outline btn-small" data-action="portal-download-invoice" data-id="${invoice.id}">Download</button>
+            </div>
+        `;
+
+        invoiceTables.portal.appendChild(row);
+    });
 }
 
 function renderPortalJobs(jobs = []) {
@@ -728,7 +772,7 @@ function renderPortalJobs(jobs = []) {
 
     if (!jobs.length) {
         const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty jobs-detail';
+        emptyRow.className = 'table-row table-empty portal-jobs';
         emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span>';
         dom.portalJobs.appendChild(emptyRow);
         return;
@@ -736,7 +780,7 @@ function renderPortalJobs(jobs = []) {
 
     jobs.forEach((job) => {
         const row = document.createElement('div');
-        row.className = 'table-row jobs-detail';
+        row.className = 'table-row portal-jobs';
         row.innerHTML = `
             <span>${escapeHtml(truncate(job.description, 56))}</span>
             <span>${formatCurrency(Number(job.cost))}</span>
@@ -758,7 +802,7 @@ async function loadPortalJobs() {
         if (dom.portalJobs) {
             resetTable(dom.portalJobs);
             const emptyRow = document.createElement('div');
-            emptyRow.className = 'table-row table-empty jobs-detail';
+            emptyRow.className = 'table-row table-empty portal-jobs';
             emptyRow.innerHTML = '<span>Unable to load jobs.</span><span></span><span></span><span></span>';
             dom.portalJobs.appendChild(emptyRow);
         }
@@ -771,17 +815,16 @@ function renderPortalSubscriptions(subscriptions = []) {
 
     if (!subscriptions.length) {
         const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty subscriptions-detail';
-        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.className = 'table-row table-empty portal-subscriptions';
+        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span>';
         dom.portalSubscriptions.appendChild(emptyRow);
         return;
     }
 
     subscriptions.forEach((subscription) => {
         const row = document.createElement('div');
-        row.className = 'table-row subscriptions-detail';
+        row.className = 'table-row portal-subscriptions';
         row.innerHTML = `
-            <span>#${subscription.id}</span>
             <span>${escapeHtml(truncate(subscription.description, 42))}</span>
             <span>${formatCurrency(Number(subscription.monthly_cost))}</span>
             <span>${escapeHtml(subscription.status)}</span>
@@ -802,8 +845,8 @@ async function loadPortalSubscriptions() {
         if (dom.portalSubscriptions) {
             resetTable(dom.portalSubscriptions);
             const emptyRow = document.createElement('div');
-            emptyRow.className = 'table-row table-empty subscriptions-detail';
-            emptyRow.innerHTML = '<span>Unable to load subscriptions.</span><span></span><span></span><span></span><span></span>';
+            emptyRow.className = 'table-row table-empty portal-subscriptions';
+            emptyRow.innerHTML = '<span>Unable to load subscriptions.</span><span></span><span></span><span></span>';
             dom.portalSubscriptions.appendChild(emptyRow);
         }
     }
@@ -2564,11 +2607,52 @@ function handlePortalDownloadLatest() {
     downloadInvoice(latest.id, `Invoice-${latest.invoice_number}.pdf`, true);
 }
 
+async function handlePortalInvoiceAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const invoiceId = Number(actionButton.dataset.id);
+    const action = actionButton.dataset.action;
+    const nextStatus = actionButton.dataset.nextStatus;
+    const invoice = state.portalInvoices.find((item) => item.id === invoiceId);
+
+    if (!invoiceId || !action) {
+        return;
+    }
+
+    if (action === 'portal-download-invoice' && invoice) {
+        await downloadInvoice(invoice.id, `Invoice-${invoice.invoice_number}.pdf`, true);
+        return;
+    }
+
+    if (action !== 'portal-toggle-payment') {
+        return;
+    }
+
+    if (nextStatus !== 'paid' && nextStatus !== 'unpaid') {
+        return;
+    }
+
+    actionButton.disabled = true;
+
+    try {
+        await api.patch(`/api/portal/invoices/${invoiceId}/payment`, {
+            payment_status: nextStatus,
+        });
+        showToast(nextStatus === 'paid' ? 'Invoice marked paid' : 'Invoice marked unpaid');
+        await loadPortalInvoices();
+    } catch (error) {
+        showToast('Unable to update invoice status', true);
+    } finally {
+        actionButton.disabled = false;
+    }
+}
+
 function initializeNavigation() {
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
-            if (state.role === 'customer' && item.dataset.view !== 'portal') return;
+            if (state.role === 'customer' && !['portal', 'portal-admin'].includes(item.dataset.view)) return;
             setActiveView(item.dataset.view);
             setNavOpen(false);
         });
@@ -2578,6 +2662,9 @@ function initializeNavigation() {
         button.addEventListener('click', () => {
             if (button.dataset.goView) {
                 if (button.dataset.goView === 'admin' && state.role === 'customer') {
+                    return;
+                }
+                if (state.role === 'customer' && !['portal', 'portal-admin'].includes(button.dataset.goView)) {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -2868,6 +2955,10 @@ if (dom.invoicesClear) {
 
 if (dom.portalDownloadLatest) {
     dom.portalDownloadLatest.addEventListener('click', handlePortalDownloadLatest);
+}
+
+if (invoiceTables.portal) {
+    invoiceTables.portal.addEventListener('click', handlePortalInvoiceAction);
 }
 
 initializeInvoiceForm();

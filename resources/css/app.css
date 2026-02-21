@@ -682,12 +682,24 @@ body[data-role="staff"] .view.admin-view.active {
     grid-template-columns: 0.55fr 1.5fr 0.7fr 0.7fr 0.9fr;
 }
 
+.table-row.portal-jobs {
+    grid-template-columns: 1.7fr 0.7fr 0.7fr 0.9fr;
+}
+
+.table-row.portal-subscriptions {
+    grid-template-columns: 1.5fr 0.7fr 0.7fr 0.9fr;
+}
+
 .table-row.staff-users {
     grid-template-columns: 1fr 1.4fr 0.7fr;
 }
 
 .table-row.invoices {
     grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr 0.7fr 1fr;
+}
+
+.table-row.portal-invoices {
+    grid-template-columns: 1.2fr 0.8fr 0.7fr 0.7fr 1fr;
 }
 
 .table-row.costs {
