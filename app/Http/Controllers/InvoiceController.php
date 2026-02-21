@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class InvoiceController extends Controller
 {
@@ -85,8 +86,8 @@ class InvoiceController extends Controller
         });
 
         if ($invoice->status === 'sent' && !$invoice->sent_at) {
+            $this->sendInvoiceEmailNow($invoice);
             $invoice->forceFill(['sent_at' => now()])->save();
-            SendInvoiceEmail::dispatch($invoice->id);
         }
 
         return new InvoiceResource($invoice);
@@ -149,8 +150,8 @@ class InvoiceController extends Controller
         });
 
         if (($validated['status'] ?? null) === 'sent' && !$invoice->sent_at) {
+            $this->sendInvoiceEmailNow($invoice);
             $invoice->forceFill(['sent_at' => now()])->save();
-            SendInvoiceEmail::dispatch($invoice->id);
         }
 
         return new InvoiceResource($invoice);
@@ -163,12 +164,12 @@ class InvoiceController extends Controller
             $invoice->forceFill(['pdf_file_id' => $storedFile->id])->save();
         }
 
+        $this->sendInvoiceEmailNow($invoice);
+
         $invoice->forceFill([
             'status' => 'sent',
             'sent_at' => $invoice->sent_at ?? now(),
         ])->save();
-
-        SendInvoiceEmail::dispatch($invoice->id);
 
         return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
     }
@@ -249,6 +250,19 @@ class InvoiceController extends Controller
             'subscription' => Subscription::class,
             default => null,
         };
+    }
+
+    private function sendInvoiceEmailNow(Invoice $invoice): void
+    {
+        try {
+            SendInvoiceEmail::dispatchSync($invoice->id);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'send' => ['Invoice email could not be sent. Check mail settings in .env (MAIL_*).'],
+            ]);
+        }
     }
 
 }

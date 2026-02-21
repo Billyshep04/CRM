@@ -2249,7 +2249,7 @@ async function handleInvoiceAction(event) {
             await api.post(`/api/invoices/${id}/send`);
             await loadInvoices();
         } catch (error) {
-            setFormStatus(dom.invoiceFormStatus, 'Unable to send invoice.', true);
+            setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, 'Unable to send invoice.'), true);
         }
     }
 
