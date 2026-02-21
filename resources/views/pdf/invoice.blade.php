@@ -74,13 +74,32 @@
         </style>
     </head>
     <body>
+        @php
+            $hasSubscriptionLine = $invoice->lineItems->contains(function ($item) {
+                return $item->billable_type === \App\Models\Subscription::class;
+            });
+            $hasJobLine = $invoice->lineItems->contains(function ($item) {
+                return $item->billable_type === \App\Models\Job::class;
+            });
+
+            if ($hasSubscriptionLine && !$hasJobLine) {
+                $invoiceTypeLabel = 'subscription';
+            } elseif ($hasJobLine && !$hasSubscriptionLine) {
+                $invoiceTypeLabel = 'job';
+            } elseif ($hasJobLine && $hasSubscriptionLine) {
+                $invoiceTypeLabel = 'mixed';
+            } else {
+                $invoiceTypeLabel = 'invoice';
+            }
+        @endphp
+
         <div class="header">
             <div>
                 <h1 style="margin: 0 0 6px 0;">Invoice</h1>
                 <div class="muted">Invoice #{{ $invoice->invoice_number }}</div>
             </div>
             <div style="text-align: right;">
-                <div class="badge">{{ $invoice->status }}</div>
+                <div class="badge">{{ $invoiceTypeLabel }}</div>
                 <div class="muted" style="margin-top: 6px;">Issued {{ $invoice->issue_date->format('M j, Y') }}</div>
                 <div class="muted">Due {{ $invoice->due_date->format('M j, Y') }}</div>
             </div>
