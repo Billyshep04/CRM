@@ -12,6 +12,7 @@ use App\Services\InvoiceNumberGenerator;
 use App\Services\InvoicePdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -257,6 +258,12 @@ class InvoiceController extends Controller
         try {
             SendInvoiceEmail::dispatchSync($invoice->id);
         } catch (Throwable $exception) {
+            Log::error('Invoice email send failed', [
+                'invoice_id' => $invoice->id,
+                'invoice_number' => $invoice->invoice_number,
+                'customer_id' => $invoice->customer_id,
+                'error' => $exception->getMessage(),
+            ]);
             report($exception);
 
             throw ValidationException::withMessages([
