@@ -1228,7 +1228,7 @@ function renderCustomerJobs(jobs = []) {
     if (!jobs.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty jobs-detail';
-        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span><span></span>';
         dom.customerJobsTable.appendChild(emptyRow);
         return;
     }
@@ -1237,6 +1237,7 @@ function renderCustomerJobs(jobs = []) {
         const row = document.createElement('div');
         row.className = 'table-row jobs-detail';
         row.innerHTML = `
+            <span>#${job.id}</span>
             <span>${escapeHtml(truncate(job.description, 50))}</span>
             <span>${formatCurrency(Number(job.cost))}</span>
             <span>${escapeHtml(job.status)}</span>
@@ -1253,7 +1254,7 @@ function renderCustomerSubscriptions(subscriptions = []) {
     if (!subscriptions.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty subscriptions-detail';
-        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span><span></span>';
         dom.customerSubscriptionsTable.appendChild(emptyRow);
         return;
     }
@@ -1262,6 +1263,7 @@ function renderCustomerSubscriptions(subscriptions = []) {
         const row = document.createElement('div');
         row.className = 'table-row subscriptions-detail';
         row.innerHTML = `
+            <span>#${subscription.id}</span>
             <span>${escapeHtml(truncate(subscription.description, 45))}</span>
             <span>${formatCurrency(Number(subscription.monthly_cost))}</span>
             <span>${escapeHtml(subscription.status)}</span>
@@ -1529,7 +1531,7 @@ async function loadJobs(append = false) {
         resetTable(dom.jobsTable);
         const loadingRow = document.createElement('div');
         loadingRow.className = 'table-row table-empty jobs';
-        loadingRow.innerHTML = '<span>Loading jobs...</span><span></span><span></span><span></span><span></span>';
+        loadingRow.innerHTML = '<span>Loading jobs...</span><span></span><span></span><span></span><span></span><span></span>';
         dom.jobsTable.appendChild(loadingRow);
     }
 
@@ -1550,7 +1552,7 @@ async function loadJobs(append = false) {
         resetTable(dom.jobsTable);
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty jobs';
-        emptyRow.innerHTML = '<span>Unable to load jobs.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>Unable to load jobs.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.jobsTable.appendChild(emptyRow);
     } finally {
         setLoadMoreLoading('jobs', false);
@@ -1564,7 +1566,7 @@ function renderJobs() {
     if (!state.jobs.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty jobs';
-        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.jobsTable.appendChild(emptyRow);
         return;
     }
@@ -1573,6 +1575,7 @@ function renderJobs() {
         const row = document.createElement('div');
         row.className = 'table-row jobs';
         row.innerHTML = `
+            <span>#${job.id}</span>
             <span>${escapeHtml(truncate(job.description, 40))}</span>
             <span>${escapeHtml(job.customer?.name || getCustomerName(job.customer_id))}</span>
             <span>${formatCurrency(Number(job.cost))}</span>
@@ -1810,7 +1813,7 @@ async function loadSubscriptions(append = false) {
         resetTable(dom.subscriptionsTable);
         const loadingRow = document.createElement('div');
         loadingRow.className = 'table-row table-empty subscriptions';
-        loadingRow.innerHTML = '<span>Loading subscriptions...</span><span></span><span></span><span></span><span></span><span></span>';
+        loadingRow.innerHTML = '<span>Loading subscriptions...</span><span></span><span></span><span></span><span></span><span></span><span></span>';
         dom.subscriptionsTable.appendChild(loadingRow);
     }
 
@@ -1831,7 +1834,7 @@ async function loadSubscriptions(append = false) {
         resetTable(dom.subscriptionsTable);
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty subscriptions';
-        emptyRow.innerHTML = '<span>Unable to load subscriptions.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>Unable to load subscriptions.</span><span></span><span></span><span></span><span></span><span></span><span></span>';
         dom.subscriptionsTable.appendChild(emptyRow);
     } finally {
         setLoadMoreLoading('subscriptions', false);
@@ -1845,7 +1848,7 @@ function renderSubscriptions() {
     if (!state.subscriptions.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty subscriptions';
-        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No subscriptions yet.</span><span></span><span></span><span></span><span></span><span></span><span></span>';
         dom.subscriptionsTable.appendChild(emptyRow);
         return;
     }
@@ -1854,6 +1857,7 @@ function renderSubscriptions() {
         const row = document.createElement('div');
         row.className = 'table-row subscriptions';
         row.innerHTML = `
+            <span>#${subscription.id}</span>
             <span>${escapeHtml(truncate(subscription.description, 36))}</span>
             <span>${escapeHtml(subscription.customer?.name || getCustomerName(subscription.customer_id))}</span>
             <span>${formatCurrency(Number(subscription.monthly_cost))}</span>

@@ -314,20 +314,22 @@
                                         <div class="card-subtitle">Work history for this customer.</div>
                                     </div>
                                 </div>
-                                <div class="table" id="customer-jobs-table">
-                                    <div class="table-row table-header jobs-detail">
-                                        <span>Description</span>
-                                        <span>Cost</span>
-                                        <span>Status</span>
-                                        <span>Completed</span>
-                                    </div>
-                                    <div class="table-row table-empty jobs-detail">
-                                        <span>Loading jobs...</span>
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
-                                    </div>
+                            <div class="table" id="customer-jobs-table">
+                                <div class="table-row table-header jobs-detail">
+                                    <span>Billable ID</span>
+                                    <span>Description</span>
+                                    <span>Cost</span>
+                                    <span>Status</span>
+                                    <span>Completed</span>
                                 </div>
+                                <div class="table-row table-empty jobs-detail">
+                                    <span>Loading jobs...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
                             </div>
 
                             <div class="card">
@@ -337,20 +339,22 @@
                                         <div class="card-subtitle">Recurring services.</div>
                                     </div>
                                 </div>
-                                <div class="table" id="customer-subscriptions-table">
-                                    <div class="table-row table-header subscriptions-detail">
-                                        <span>Description</span>
-                                        <span>Monthly</span>
-                                        <span>Status</span>
-                                        <span>Next invoice</span>
-                                    </div>
-                                    <div class="table-row table-empty subscriptions-detail">
-                                        <span>Loading subscriptions...</span>
-                                        <span></span>
-                                        <span></span>
-                                        <span></span>
-                                    </div>
+                            <div class="table" id="customer-subscriptions-table">
+                                <div class="table-row table-header subscriptions-detail">
+                                    <span>Billable ID</span>
+                                    <span>Description</span>
+                                    <span>Monthly</span>
+                                    <span>Status</span>
+                                    <span>Next invoice</span>
                                 </div>
+                                <div class="table-row table-empty subscriptions-detail">
+                                    <span>Loading subscriptions...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
                             </div>
                         </div>
 
@@ -432,6 +436,7 @@
                             </div>
                             <div class="table" id="jobs-table">
                                 <div class="table-row table-header jobs">
+                                    <span>Billable ID</span>
                                     <span>Description</span>
                                     <span>Customer</span>
                                     <span>Cost</span>
@@ -440,6 +445,7 @@
                                 </div>
                                 <div class="table-row table-empty jobs">
                                     <span>Loading jobs...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -517,6 +523,7 @@
                             </div>
                             <div class="table" id="subscriptions-table">
                                 <div class="table-row table-header subscriptions">
+                                    <span>Billable ID</span>
                                     <span>Description</span>
                                     <span>Customer</span>
                                     <span>Monthly</span>
@@ -526,6 +533,7 @@
                                 </div>
                                 <div class="table-row table-empty subscriptions">
                                     <span>Loading subscriptions...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -716,6 +724,7 @@
                                         <button type="button" class="btn btn-ghost" id="invoice-add-line-item">Add line item</button>
                                     </div>
                                     <div id="invoice-line-items"></div>
+                                    <div class="form-hint">Use the Billable ID shown in the Jobs and Subscriptions tables.</div>
                                 </div>
 
                                 <div id="invoice-form-status" class="form-hint"></div>

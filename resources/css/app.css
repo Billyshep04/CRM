@@ -654,15 +654,15 @@ body[data-role="staff"] .view.admin-view.active {
 }
 
 .table-row.jobs {
-    grid-template-columns: 1.6fr 1fr 0.6fr 0.7fr 0.8fr;
+    grid-template-columns: 0.55fr 1.55fr 1fr 0.6fr 0.7fr 0.8fr;
 }
 
 .table-row.jobs-detail {
-    grid-template-columns: 1.8fr 0.6fr 0.6fr 0.8fr;
+    grid-template-columns: 0.55fr 1.7fr 0.6fr 0.6fr 0.8fr;
 }
 
 .table-row.subscriptions {
-    grid-template-columns: 1.4fr 1fr 0.6fr 0.7fr 0.9fr 0.8fr;
+    grid-template-columns: 0.55fr 1.3fr 1fr 0.6fr 0.7fr 0.9fr 0.8fr;
 }
 
 .table-row.subscription-months {
@@ -679,7 +679,7 @@ body[data-role="staff"] .view.admin-view.active {
 }
 
 .table-row.subscriptions-detail {
-    grid-template-columns: 1.6fr 0.7fr 0.7fr 0.9fr;
+    grid-template-columns: 0.55fr 1.5fr 0.7fr 0.7fr 0.9fr;
 }
 
 .table-row.staff-users {
