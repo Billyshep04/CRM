@@ -2636,9 +2636,21 @@ async function handlePortalInvoiceAction(event) {
     actionButton.disabled = true;
 
     try {
-        await api.patch(`/api/portal/invoices/${invoiceId}/payment`, {
-            payment_status: nextStatus,
-        });
+        const payload = { payment_status: nextStatus };
+
+        try {
+            await api.patch(`/api/portal/invoices/${invoiceId}/payment`, payload);
+        } catch (error) {
+            const statusCode = Number(error?.response?.status || 0);
+
+            // Fallback for shared-host setups that do not pass PATCH requests cleanly.
+            if (statusCode !== 404 && statusCode !== 405) {
+                throw error;
+            }
+
+            await api.post(`/api/portal/invoices/${invoiceId}/payment`, payload);
+        }
+
         showToast(nextStatus === 'paid' ? 'Invoice marked paid' : 'Invoice marked unpaid');
         await loadPortalInvoices();
     } catch (error) {

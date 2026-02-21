@@ -749,6 +749,7 @@ body[data-role="staff"] .view.admin-view.active {
 .btn-small {
     padding: 6px 10px;
     font-size: 12px;
+    white-space: nowrap;
 }
 
 .table-header {
@@ -1048,6 +1049,58 @@ body[data-role="staff"] .staff-only {
     .site-actions {
         width: 100%;
         justify-content: flex-start;
+    }
+
+    .table {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: 4px;
+    }
+
+    .table-row.jobs {
+        min-width: 760px;
+        grid-template-columns: 0.55fr 1.55fr 1fr 0.6fr 0.7fr 0.8fr;
+    }
+
+    .table-row.subscriptions {
+        min-width: 820px;
+        grid-template-columns: 0.55fr 1.3fr 1fr 0.6fr 0.7fr 0.9fr 0.8fr;
+    }
+
+    .table-row.invoices {
+        min-width: 820px;
+        grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr 0.7fr 1fr;
+    }
+
+    .table-row.portal-invoices {
+        min-width: 760px;
+        grid-template-columns: 1.2fr 0.8fr 0.7fr 0.7fr 1fr;
+    }
+
+    .table-row.jobs-detail,
+    .table-row.portal-jobs {
+        min-width: 620px;
+        grid-template-columns: 1.7fr 0.7fr 0.7fr 0.9fr;
+    }
+
+    .table-row.subscriptions-detail,
+    .table-row.portal-subscriptions {
+        min-width: 620px;
+        grid-template-columns: 1.5fr 0.7fr 0.7fr 0.9fr;
+    }
+
+    .table-row.subscription-months {
+        min-width: 520px;
+        grid-template-columns: minmax(84px, 1fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr) minmax(110px, auto);
+    }
+
+    .table-row > span {
+        white-space: nowrap;
+    }
+
+    .table-row.portal-invoices .row-actions {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
     }
 }
 

@@ -62,6 +62,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('invoices', [PortalController::class, 'invoices']);
         Route::get('invoices/{invoice}', [PortalController::class, 'invoice']);
         Route::patch('invoices/{invoice}/payment', [PortalController::class, 'updateInvoicePayment']);
+        Route::post('invoices/{invoice}/payment', [PortalController::class, 'updateInvoicePayment']);
         Route::get('invoices/{invoice}/download', [PortalController::class, 'downloadInvoice']);
         Route::get('websites', [PortalController::class, 'websites']);
     });
