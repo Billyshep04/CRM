@@ -33,11 +33,12 @@ class SendInvoiceEmail implements ShouldQueue
             return;
         }
 
-        if (!$invoice->pdfFile) {
-            $storedFile = $pdfService->generate($invoice);
+        $storedFile = $pdfService->generate($invoice);
+
+        if ($invoice->pdf_file_id !== $storedFile->id) {
             $invoice->forceFill(['pdf_file_id' => $storedFile->id])->save();
-            $invoice->setRelation('pdfFile', $storedFile);
         }
+        $invoice->setRelation('pdfFile', $storedFile);
 
         Mail::to($invoice->customer->email)
             ->send(new InvoiceMailable($invoice));

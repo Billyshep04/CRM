@@ -49,6 +49,14 @@ class InvoicePdfService
 
     private function fileExists(StoredFile $file): bool
     {
+        if (!is_string($file->disk) || $file->disk === '') {
+            return false;
+        }
+
+        if (!is_string($file->path) || $file->path === '') {
+            return false;
+        }
+
         return Storage::disk($file->disk)->exists($file->path);
     }
 }

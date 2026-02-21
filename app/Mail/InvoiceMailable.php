@@ -25,14 +25,18 @@ class InvoiceMailable extends Mailable
                 'customer' => $this->invoice->customer,
             ]);
 
-        if ($this->invoice->pdfFile) {
+        if (
+            $this->invoice->pdfFile
+            && is_string($this->invoice->pdfFile->disk)
+            && is_string($this->invoice->pdfFile->path)
+            && $this->invoice->pdfFile->disk !== ''
+            && $this->invoice->pdfFile->path !== ''
+        ) {
             $mail->attachFromStorageDisk(
                 $this->invoice->pdfFile->disk,
                 $this->invoice->pdfFile->path,
-                [
-                    'as' => "Invoice-{$this->invoice->invoice_number}.pdf",
-                    'mime' => 'application/pdf',
-                ]
+                "Invoice-{$this->invoice->invoice_number}.pdf",
+                ['mime' => 'application/pdf']
             );
         }
 
