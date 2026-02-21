@@ -6,6 +6,7 @@ use App\Http\Resources\InvoiceResource;
 use App\Http\Resources\JobResource;
 use App\Http\Resources\SubscriptionResource;
 use App\Http\Resources\WebsiteResource;
+use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Subscription;
@@ -17,10 +18,10 @@ class PortalController extends Controller
 {
     public function jobs(Request $request)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
         $query = Job::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $customerIds)
             ->latest();
 
         $perPage = $request->integer('per_page', 15);
@@ -32,10 +33,10 @@ class PortalController extends Controller
 
     public function subscriptions(Request $request)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
         $query = Subscription::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $customerIds)
             ->latest();
 
         $status = $request->query('status', 'active');
@@ -52,10 +53,10 @@ class PortalController extends Controller
 
     public function invoices(Request $request)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
         $query = Invoice::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $customerIds)
             ->with(['lineItems', 'pdfFile'])
             ->latest();
 
@@ -72,10 +73,10 @@ class PortalController extends Controller
 
     public function websites(Request $request)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
         $query = Website::query()
-            ->where('customer_id', $customerId)
+            ->whereIn('customer_id', $customerIds)
             ->latest();
 
         $perPage = $request->integer('per_page', 25);
@@ -87,9 +88,9 @@ class PortalController extends Controller
 
     public function invoice(Request $request, Invoice $invoice)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
-        if ($invoice->customer_id !== $customerId) {
+        if (!in_array((int) $invoice->customer_id, $customerIds, true)) {
             abort(404);
         }
 
@@ -98,9 +99,9 @@ class PortalController extends Controller
 
     public function downloadInvoice(Request $request, Invoice $invoice)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
-        if ($invoice->customer_id !== $customerId) {
+        if (!in_array((int) $invoice->customer_id, $customerIds, true)) {
             abort(404);
         }
 
@@ -118,9 +119,9 @@ class PortalController extends Controller
 
     public function updateInvoicePayment(Request $request, Invoice $invoice)
     {
-        $customerId = $this->resolveCustomerId($request);
+        $customerIds = $this->resolveCustomerIds($request);
 
-        if ($invoice->customer_id !== $customerId) {
+        if (!in_array((int) $invoice->customer_id, $customerIds, true)) {
             abort(404);
         }
 
@@ -147,13 +148,35 @@ class PortalController extends Controller
         return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
     }
 
-    private function resolveCustomerId(Request $request): int
+    /**
+     * @return array<int>
+     */
+    private function resolveCustomerIds(Request $request): array
     {
-        $customer = $request->user()?->customerProfile;
-        if (!$customer) {
+        $user = $request->user();
+        if (!$user) {
             abort(404, 'Customer profile not found.');
         }
 
-        return $customer->id;
+        $customerIds = Customer::query()
+            ->where('user_id', $user->id)
+            ->pluck('id')
+            ->map(static fn ($id): int => (int) $id)
+            ->all();
+
+        // Fallback for legacy records that may not yet be linked by user_id.
+        if ($customerIds === [] && $user->email) {
+            $customerIds = Customer::query()
+                ->where('email', $user->email)
+                ->pluck('id')
+                ->map(static fn ($id): int => (int) $id)
+                ->all();
+        }
+
+        if ($customerIds === []) {
+            abort(404, 'Customer profile not found.');
+        }
+
+        return $customerIds;
     }
 }

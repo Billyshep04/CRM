@@ -1100,7 +1100,23 @@ body[data-role="staff"] .staff-only {
 
     .table-row.portal-invoices .row-actions {
         justify-content: flex-start;
-        flex-wrap: nowrap;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .table-row.portal-invoices .row-actions .btn {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .view[data-view="portal"] .card-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .view[data-view="portal"] .card-header .btn {
+        width: 100%;
+        justify-content: center;
     }
 }
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Customer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +14,18 @@ class AccountController extends Controller
     public function updateProfile(Request $request): JsonResponse
     {
         $user = $request->user();
-        $customerProfile = $user?->customerProfile;
+        $customerProfiles = collect();
+        if ($user) {
+            $customerProfiles = Customer::query()
+                ->where('user_id', $user->id)
+                ->get();
+
+            if ($customerProfiles->isEmpty() && $user->email) {
+                $customerProfiles = Customer::query()
+                    ->where('email', $user->email)
+                    ->get();
+            }
+        }
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
@@ -23,12 +35,12 @@ class AccountController extends Controller
                 'max:255',
                 Rule::unique('users', 'email')->ignore($user?->id),
             ],
-            'billing_address' => $customerProfile
+            'billing_address' => $customerProfiles->isNotEmpty()
                 ? ['required', 'string']
                 : ['nullable', 'string'],
         ]);
 
-        DB::transaction(function () use ($user, $customerProfile, $validated): void {
+        DB::transaction(function () use ($user, $customerProfiles, $validated): void {
             if ($user) {
                 $user->update([
                     'name' => $validated['name'],
@@ -36,12 +48,15 @@ class AccountController extends Controller
                 ]);
             }
 
-            if ($customerProfile) {
-                $customerProfile->update([
-                    'name' => $validated['name'],
-                    'email' => $validated['email'],
-                    'billing_address' => $validated['billing_address'],
-                ]);
+            if ($customerProfiles->isNotEmpty()) {
+                foreach ($customerProfiles as $customerProfile) {
+                    $customerProfile->update([
+                        'user_id' => $user?->id,
+                        'name' => $validated['name'],
+                        'email' => $validated['email'],
+                        'billing_address' => $validated['billing_address'],
+                    ]);
+                }
             }
         });
 
