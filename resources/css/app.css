@@ -1029,10 +1029,6 @@ body[data-role="staff"] .staff-only {
         justify-content: space-between;
     }
 
-    .table-row {
-        grid-template-columns: 1fr;
-    }
-
     .line-item {
         grid-template-columns: 1fr;
     }
@@ -1052,66 +1048,214 @@ body[data-role="staff"] .staff-only {
     }
 
     .table {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-        padding-bottom: 4px;
+        overflow: visible;
+        padding-bottom: 0;
     }
 
-    .table-row.jobs {
-        min-width: 760px;
-        grid-template-columns: 0.55fr 1.55fr 1fr 0.6fr 0.7fr 0.8fr;
+    .table .table-header {
+        display: none;
     }
 
-    .table-row.subscriptions {
-        min-width: 820px;
-        grid-template-columns: 0.55fr 1.3fr 1fr 0.6fr 0.7fr 0.9fr 0.8fr;
+    .table .table-row {
+        min-width: 0 !important;
+        grid-template-columns: 1fr !important;
+        gap: 10px;
+        padding: 12px;
     }
 
-    .table-row.invoices {
-        min-width: 820px;
-        grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr 0.7fr 1fr;
+    .table .table-row.table-empty {
+        display: block;
     }
 
-    .table-row.costs {
-        min-width: 840px;
-        grid-template-columns: 0.8fr 1.6fr 0.7fr 0.9fr 0.8fr 0.7fr;
+    .table .table-row.table-empty > span:not(:first-child) {
+        display: none;
     }
 
-    .table-row.portal-invoices {
-        min-width: 760px;
-        grid-template-columns: 1.2fr 0.8fr 0.7fr 0.7fr 1fr;
+    .table .table-row.table-empty > span:first-child {
+        display: block;
     }
 
-    .table-row.jobs-detail,
-    .table-row.portal-jobs {
-        min-width: 620px;
-        grid-template-columns: 1.7fr 0.7fr 0.7fr 0.9fr;
+    .table .table-row > span:empty {
+        display: none;
     }
 
-    .table-row.subscriptions-detail,
-    .table-row.portal-subscriptions {
-        min-width: 620px;
-        grid-template-columns: 1.5fr 0.7fr 0.7fr 0.9fr;
+    .table .table-row:not(.table-empty) > span {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+        white-space: normal;
+        overflow-wrap: anywhere;
     }
 
-    .table-row.subscription-months {
-        min-width: 520px;
-        grid-template-columns: minmax(84px, 1fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr) minmax(110px, auto);
+    .table .table-row:not(.table-empty) > span::before {
+        content: var(--cell-label, 'Field');
+        display: inline-block;
+        flex: 0 0 98px;
+        max-width: 98px;
+        font-size: 11px;
+        line-height: 1.4;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
     }
 
-    .table-row > span {
-        white-space: nowrap;
+    .table .table-row:not(.table-empty) > span.pill {
+        background: transparent;
+        border: none;
+        border-radius: 0;
+        padding: 0;
+        justify-content: space-between;
+        font-size: inherit;
     }
 
-    .table-row.portal-invoices .row-actions {
-        justify-content: flex-start;
+    .table .table-row:not(.table-empty) > span.payment-status {
+        justify-content: space-between;
+        white-space: normal;
+    }
+
+    .table .table-row:not(.table-empty) .row-actions {
+        display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: 8px;
     }
 
-    .table-row.portal-invoices .row-actions .btn {
+    .table .table-row:not(.table-empty) .row-actions::before {
+        content: var(--cell-label, 'Actions');
+        display: inline-block;
+        font-size: 11px;
+        line-height: 1.4;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .table .table-row:not(.table-empty) .row-actions .btn {
         width: 100%;
         justify-content: center;
+    }
+
+    #recent-invoices .table-row:not(.table-empty) > span:nth-child(1),
+    #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(1),
+    #portal-invoices .table-row.portal-invoices:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Invoice";
+    }
+
+    #recent-invoices .table-row:not(.table-empty) > span:nth-child(2),
+    #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(4),
+    #portal-invoices .table-row.portal-invoices:not(.table-empty) > span:nth-child(2),
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(5),
+    #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(4),
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(5),
+    #customer-subscriptions-table .table-row.subscriptions-detail:not(.table-empty) > span:nth-child(4),
+    #subscription-months-table .table-row.subscription-months:not(.table-empty) > span:nth-child(2),
+    #portal-jobs .table-row.portal-jobs:not(.table-empty) > span:nth-child(3),
+    #portal-subscriptions .table-row.portal-subscriptions:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Status";
+    }
+
+    #recent-invoices .table-row:not(.table-empty) > span:nth-child(3),
+    #portal-invoices .table-row.portal-invoices:not(.table-empty) > span:nth-child(3),
+    #portal-jobs .table-row.portal-jobs:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Amount";
+    }
+
+    #recent-invoices .table-row:not(.table-empty) > span:nth-child(4),
+    #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(5),
+    #portal-invoices .table-row.portal-invoices:not(.table-empty) > span:nth-child(4),
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(6),
+    #customer-subscriptions-table .table-row.subscriptions-detail:not(.table-empty) > span:nth-child(5) {
+        --cell-label: "Due";
+    }
+
+    #portal-subscriptions .table-row.portal-subscriptions:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Next invoice";
+    }
+
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(1),
+    #staff-users-table .table-row.staff-users:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Name";
+    }
+
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(2),
+    #staff-users-table .table-row.staff-users:not(.table-empty) > span:nth-child(2),
+    #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(2),
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(3),
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Customer";
+    }
+
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Billing";
+    }
+
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Totals";
+    }
+
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(1),
+    #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(1),
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(1),
+    #customer-subscriptions-table .table-row.subscriptions-detail:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Billable ID";
+    }
+
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(2),
+    #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(2),
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(2),
+    #customer-subscriptions-table .table-row.subscriptions-detail:not(.table-empty) > span:nth-child(2),
+    #portal-jobs .table-row.portal-jobs:not(.table-empty) > span:nth-child(1),
+    #portal-subscriptions .table-row.portal-subscriptions:not(.table-empty) > span:nth-child(1),
+    #costs-table .table-row.costs:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Description";
+    }
+
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(4),
+    #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(3),
+    #costs-table .table-row.costs:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Cost";
+    }
+
+    #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(5),
+    #portal-jobs .table-row.portal-jobs:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Completed";
+    }
+
+    #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(4),
+    #customer-subscriptions-table .table-row.subscriptions-detail:not(.table-empty) > span:nth-child(3),
+    #portal-subscriptions .table-row.portal-subscriptions:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Monthly";
+    }
+
+    #subscription-months-table .table-row.subscription-months:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Month";
+    }
+
+    #subscription-months-table .table-row.subscription-months:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Payment";
+    }
+
+    #costs-table .table-row.costs:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Date";
+    }
+
+    #costs-table .table-row.costs:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Type";
+    }
+
+    #costs-table .table-row.costs:not(.table-empty) > span:nth-child(5) {
+        --cell-label: "Receipt";
+    }
+
+    #staff-users-table .table-row.staff-users:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Created";
+    }
+
+    #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Total";
     }
 
     .view[data-view="portal"] .card-header {
@@ -1126,17 +1270,9 @@ body[data-role="staff"] .staff-only {
 }
 
 @media (max-width: 725px) {
-    .table-row.customers {
-        grid-template-columns: 1.4fr 1fr 0.8fr;
-    }
-
-    .table-row.customers > span:nth-child(2),
-    .table-row.customers > span:nth-child(3) {
-        display: none;
-    }
-
-    .table-row.customers .row-actions {
-        justify-content: flex-end;
+    .table .table-row.customers > span:nth-child(2),
+    .table .table-row.customers > span:nth-child(3) {
+        display: flex;
     }
 }
 
