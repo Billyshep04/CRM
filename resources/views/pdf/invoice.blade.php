@@ -152,6 +152,7 @@
 
         <div class="footer">
             <div>Thank you for your business. If you have any questions, please contact support.</div>
+            <div style="margin-top: 10px;">To login and see all your invoices and mark as 'paid' please login to your portal here: crm.web-stamp.co.uk</div>
             <div style="margin-top: 14px; color: #111827;">
                 <div style="font-weight: 600; margin-bottom: 6px;">Payment details</div>
                 <div>Name: Billy Sheppard</div>

@@ -30,6 +30,11 @@
                             </td>
                         </tr>
                         <tr>
+                            <td style="font-size:13px;color:#6b7280;padding-top:10px;">
+                                To login and see all your invoices and mark as 'paid' please login to your portal here: crm.web-stamp.co.uk
+                            </td>
+                        </tr>
+                        <tr>
                             <td style="font-size:11px;color:#9ca3af;padding-top:20px;">
                                 Please do not share this invoice with anyone who is not authorized.
                             </td>
