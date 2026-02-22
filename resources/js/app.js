@@ -1029,6 +1029,7 @@ async function handleProfileSubmit(event) {
             populateProfileForm(user);
         }
         setFormStatus(dom.profileFormStatus, 'Profile updated.');
+        showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.profileFormStatus, 'Unable to update profile.', true);
     }
@@ -1060,6 +1061,7 @@ async function handlePortalProfileSubmit(event) {
             populateProfileForm(user);
         }
         setFormStatus(dom.portalProfileStatus, 'Details updated.');
+        showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.portalProfileStatus, getErrorMessage(error, 'Unable to update details.'), true);
     }
@@ -1089,6 +1091,7 @@ async function handlePasswordSubmit(event) {
         await api.put('/api/account/password', payload);
         setFormStatus(dom.passwordFormStatus, 'Password updated.');
         dom.passwordForm.reset();
+        showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.passwordFormStatus, 'Unable to update password.', true);
     }
@@ -1118,6 +1121,7 @@ async function handlePortalPasswordSubmit(event) {
         await api.put('/api/account/password', payload);
         setFormStatus(dom.portalPasswordStatus, 'Password updated.');
         dom.portalPasswordForm.reset();
+        showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.portalPasswordStatus, getErrorMessage(error, 'Unable to update password.'), true);
     }
@@ -1156,6 +1160,7 @@ async function handleLogoUpload(event) {
         }
         dom.logoUploadForm.reset();
         await loadBrand();
+        showToast('Settings saved');
     } catch (error) {
         if (dom.logoUploadStatus) {
             dom.logoUploadStatus.textContent = 'Upload failed. Please try again.';
@@ -1217,6 +1222,7 @@ async function handleSmtp2goSettingsSubmit(event) {
         state.mailSettings = response?.data?.data ?? null;
         applyAdminMailSettings(state.mailSettings);
         setFormStatus(dom.smtp2goSettingsStatus, 'Mail settings updated.');
+        showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.smtp2goSettingsStatus, getErrorMessage(error, 'Unable to update mail settings.'), true);
     }
@@ -2445,6 +2451,9 @@ function renderInvoices() {
     state.invoices.forEach((invoice) => {
         const row = document.createElement('div');
         row.className = 'table-row invoices';
+        const isPaid = invoice.status === 'paid';
+        const nextStatus = isPaid ? 'unpaid' : 'paid';
+        const paymentActionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
         row.innerHTML = `
             <span>#${escapeHtml(invoice.invoice_number)}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
@@ -2452,6 +2461,7 @@ function renderInvoices() {
             <span>${escapeHtml(invoice.status)}</span>
             <span>${formatDate(invoice.due_date)}</span>
             <div class="row-actions">
+                <button class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${invoice.id}" data-next-status="${nextStatus}">${paymentActionLabel}</button>
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${invoice.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="send" data-id="${invoice.id}">Send</button>
                 <button class="btn btn-outline btn-small" data-action="download" data-id="${invoice.id}">Download</button>
@@ -2578,6 +2588,41 @@ async function handleInvoiceAction(event) {
         } catch (error) {
             showToast('Unable to send invoice', true);
             setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, 'Unable to send invoice.'), true);
+        }
+    }
+
+    if (action === 'toggle-payment' && id) {
+        const nextStatus = actionButton.dataset.nextStatus;
+
+        if (nextStatus !== 'paid' && nextStatus !== 'unpaid') {
+            return;
+        }
+
+        actionButton.disabled = true;
+
+        try {
+            const payload = { payment_status: nextStatus };
+
+            try {
+                await api.patch(`/api/invoices/${id}/payment`, payload);
+            } catch (error) {
+                const statusCode = Number(error?.response?.status || 0);
+
+                // Fallback for shared-host setups that do not pass PATCH requests cleanly.
+                if (statusCode !== 404 && statusCode !== 405) {
+                    throw error;
+                }
+
+                await api.post(`/api/invoices/${id}/payment`, payload);
+            }
+
+            showToast(nextStatus === 'paid' ? 'Invoice marked paid' : 'Invoice marked unpaid');
+            await loadInvoices();
+        } catch (error) {
+            showToast('Unable to update invoice status', true);
+            setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, 'Unable to update invoice status.'), true);
+        } finally {
+            actionButton.disabled = false;
         }
     }
 

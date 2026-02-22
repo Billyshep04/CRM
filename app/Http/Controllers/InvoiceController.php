@@ -189,6 +189,31 @@ class InvoiceController extends Controller
         );
     }
 
+    public function updatePaymentStatus(Request $request, Invoice $invoice)
+    {
+        $validated = $request->validate([
+            'payment_status' => ['required', Rule::in(['paid', 'unpaid'])],
+        ]);
+
+        if ($validated['payment_status'] === 'paid') {
+            $invoice->forceFill([
+                'status' => 'paid',
+                'paid_at' => $invoice->paid_at ?? now(),
+            ])->save();
+        } else {
+            $fallbackStatus = $invoice->due_date && $invoice->due_date->isPast()
+                ? 'overdue'
+                : 'sent';
+
+            $invoice->forceFill([
+                'status' => $fallbackStatus,
+                'paid_at' => null,
+            ])->save();
+        }
+
+        return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
+    }
+
     public function destroy(Invoice $invoice)
     {
         $invoice->delete();

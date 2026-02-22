@@ -41,6 +41,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('subscriptions/{subscription}/months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPayment']);
         Route::apiResource('subscriptions', SubscriptionController::class);
         Route::apiResource('invoices', InvoiceController::class);
+        Route::patch('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
+        Route::post('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
         Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
         Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
         Route::apiResource('websites', WebsiteController::class);
