@@ -296,7 +296,7 @@ body[data-role="customer"] .customer-only {
     display: block;
 }
 
-body[data-role="customer"] .nav-item:not(.customer-only) {
+body[data-role="customer"] .nav-item:not(.customer-only):not(.nav-logout) {
     display: none;
 }
 
@@ -999,6 +999,11 @@ body[data-role="staff"] .staff-only {
         width: 100%;
         gap: 12px;
         margin-top: 20px;
+    }
+
+    body[data-role="customer"] .nav-logout {
+        display: block;
+        width: 100%;
     }
 
     .sidebar-footer {
