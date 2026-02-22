@@ -69,6 +69,7 @@
                     <a href="#" class="nav-item" data-view="invoices">Invoices</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
                 </nav>
@@ -627,11 +628,13 @@
                                     <span>Date</span>
                                     <span>Description</span>
                                     <span>Amount</span>
+                                    <span>Type</span>
                                     <span>Receipt</span>
                                     <span>Actions</span>
                                 </div>
                                 <div class="table-row table-empty costs">
                                     <span>Loading costs...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -663,6 +666,20 @@
                                 <label class="field">
                                     <span>Incurred on</span>
                                     <input type="date" name="incurred_on" required>
+                                </label>
+                                <label class="field">
+                                    <span>Recurring cost</span>
+                                    <select name="is_recurring" id="cost-is-recurring">
+                                        <option value="0">One-off</option>
+                                        <option value="1">Recurring</option>
+                                    </select>
+                                </label>
+                                <label class="field" id="cost-frequency-field">
+                                    <span>Recurring frequency</span>
+                                    <select name="recurring_frequency" id="cost-recurring-frequency">
+                                        <option value="monthly">Monthly</option>
+                                        <option value="annual">Annual</option>
+                                    </select>
                                 </label>
                                 <label class="field">
                                     <span>Notes</span>
@@ -1007,6 +1024,35 @@
                                     <span></span>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view portal-view" data-view="portal-support">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Support</div>
+                                    <div class="card-subtitle">Send us details so we can troubleshoot quickly.</div>
+                                </div>
+                            </div>
+                            <form id="portal-support-form" class="form-stack" enctype="multipart/form-data">
+                                <label class="field">
+                                    <span>What's the problem?</span>
+                                    <input type="text" name="problem" id="portal-support-problem" required>
+                                </label>
+                                <label class="field">
+                                    <span>Tell us about this issue</span>
+                                    <textarea name="message" id="portal-support-message" rows="6" required></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Upload a screenshot of the issue to help us troubleshoot</span>
+                                    <input type="file" name="screenshot" id="portal-support-screenshot" accept="image/*,application/pdf">
+                                </label>
+                                <div id="portal-support-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Send support request</button>
+                            </form>
                         </div>
                     </section>
                 </section>

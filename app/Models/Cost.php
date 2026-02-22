@@ -19,6 +19,8 @@ class Cost extends Model
         'description',
         'amount',
         'incurred_on',
+        'is_recurring',
+        'recurring_frequency',
         'notes',
         'receipt_file_id',
         'created_by_user_id',
@@ -26,6 +28,7 @@ class Cost extends Model
 
     protected $casts = [
         'incurred_on' => 'date',
+        'is_recurring' => 'boolean',
     ];
 
     public function receiptFile(): BelongsTo

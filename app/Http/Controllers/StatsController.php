@@ -44,11 +44,7 @@ class StatsController extends Controller
         }
 
         $monthlyCostsTotal = 0.0;
-        if (Schema::hasTable('costs')) {
-            $monthlyCostsTotal = (float) Cost::query()
-                ->whereBetween('incurred_on', [$startOfMonth->toDateString(), $endOfMonth->toDateString()])
-                ->sum('amount');
-        }
+        $monthlyCostsTotal = $this->calculateCostsTotalForRange($startOfMonth, $endOfMonth);
 
         $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
         $profitTotal = $revenueTotal - $monthlyCostsTotal;
@@ -123,25 +119,21 @@ class StatsController extends Controller
         }
 
         if (Schema::hasTable('costs')) {
+            $hasRecurringColumns = Schema::hasColumn('costs', 'is_recurring')
+                && Schema::hasColumn('costs', 'recurring_frequency');
+
+            $selectColumns = ['amount', 'incurred_on'];
+            if ($hasRecurringColumns) {
+                $selectColumns[] = 'is_recurring';
+                $selectColumns[] = 'recurring_frequency';
+            }
+
             $costs = Cost::query()
-                ->whereBetween('incurred_on', [$startOfYear->toDateString(), $endOfYear->toDateString()])
-                ->get(['amount', 'incurred_on']);
+                ->whereDate('incurred_on', '<=', $endOfYear->toDateString())
+                ->get($selectColumns);
 
             foreach ($costs as $cost) {
-                if (!$cost->incurred_on) {
-                    continue;
-                }
-
-                $bucketKey = $this->resolveWeekBucketKey(
-                    $startOfYear,
-                    $endOfYear,
-                    Carbon::parse($cost->incurred_on)
-                );
-                if (!$bucketKey) {
-                    continue;
-                }
-
-                $weeks[$bucketKey]['costs'] += (float) $cost->amount;
+                $this->addCostToWeeklyBuckets($weeks, $startOfYear, $endOfYear, $cost, $hasRecurringColumns);
             }
         }
 
@@ -207,5 +199,121 @@ class StatsController extends Controller
         $bucketOffset = intdiv($daysFromStart, 7) * 7;
 
         return $startOfYear->copy()->addDays($bucketOffset)->toDateString();
+    }
+
+    private function calculateCostsTotalForRange(Carbon $startDate, Carbon $endDate): float
+    {
+        if (!Schema::hasTable('costs')) {
+            return 0.0;
+        }
+
+        $hasRecurringColumns = Schema::hasColumn('costs', 'is_recurring')
+            && Schema::hasColumn('costs', 'recurring_frequency');
+
+        if (!$hasRecurringColumns) {
+            return (float) Cost::query()
+                ->whereBetween('incurred_on', [$startDate->toDateString(), $endDate->toDateString()])
+                ->sum('amount');
+        }
+
+        $costs = Cost::query()
+            ->whereDate('incurred_on', '<=', $endDate->toDateString())
+            ->get(['amount', 'incurred_on', 'is_recurring', 'recurring_frequency']);
+
+        $total = 0.0;
+        foreach ($costs as $cost) {
+            $total += $this->calculateCostAmountForRange($cost, $startDate, $endDate, true);
+        }
+
+        return $total;
+    }
+
+    private function addCostToWeeklyBuckets(
+        array &$weeks,
+        Carbon $startOfYear,
+        Carbon $endOfYear,
+        Cost $cost,
+        bool $hasRecurringColumns
+    ): void {
+        if (!$cost->incurred_on) {
+            return;
+        }
+
+        $incurredOn = Carbon::parse($cost->incurred_on)->startOfDay();
+        $amount = (float) $cost->amount;
+        $frequency = $hasRecurringColumns ? (string) ($cost->recurring_frequency ?? '') : '';
+        $isRecurring = $hasRecurringColumns
+            && (bool) ($cost->is_recurring ?? false)
+            && in_array($frequency, ['monthly', 'annual'], true);
+
+        if (!$isRecurring) {
+            $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, $incurredOn);
+            if ($bucketKey) {
+                $weeks[$bucketKey]['costs'] += $amount;
+            }
+
+            return;
+        }
+
+        $occurrence = $incurredOn->copy();
+        $guard = 0;
+
+        while ($occurrence->lte($endOfYear) && $guard < 5000) {
+            if ($occurrence->gte($startOfYear)) {
+                $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, $occurrence);
+                if ($bucketKey) {
+                    $weeks[$bucketKey]['costs'] += $amount;
+                }
+            }
+
+            $occurrence = $this->nextRecurringDate($occurrence, $frequency);
+            $guard++;
+        }
+    }
+
+    private function calculateCostAmountForRange(
+        Cost $cost,
+        Carbon $startDate,
+        Carbon $endDate,
+        bool $hasRecurringColumns
+    ): float {
+        if (!$cost->incurred_on) {
+            return 0.0;
+        }
+
+        $incurredOn = Carbon::parse($cost->incurred_on)->startOfDay();
+        $amount = (float) $cost->amount;
+        $frequency = $hasRecurringColumns ? (string) ($cost->recurring_frequency ?? '') : '';
+        $isRecurring = $hasRecurringColumns
+            && (bool) ($cost->is_recurring ?? false)
+            && in_array($frequency, ['monthly', 'annual'], true);
+
+        if (!$isRecurring) {
+            return $incurredOn->between($startDate->copy()->startOfDay(), $endDate->copy()->endOfDay())
+                ? $amount
+                : 0.0;
+        }
+
+        $total = 0.0;
+        $occurrence = $incurredOn->copy();
+        $guard = 0;
+
+        while ($occurrence->lte($endDate) && $guard < 5000) {
+            if ($occurrence->gte($startDate)) {
+                $total += $amount;
+            }
+
+            $occurrence = $this->nextRecurringDate($occurrence, $frequency);
+            $guard++;
+        }
+
+        return $total;
+    }
+
+    private function nextRecurringDate(Carbon $date, string $frequency): Carbon
+    {
+        return $frequency === 'annual'
+            ? $date->copy()->addYearNoOverflow()->startOfDay()
+            : $date->copy()->addMonthNoOverflow()->startOfDay();
     }
 }

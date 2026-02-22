@@ -10,6 +10,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CostController extends Controller
 {
@@ -37,9 +39,20 @@ class CostController extends Controller
             'description' => ['required', 'string'],
             'amount' => ['required', 'numeric', 'min:0'],
             'incurred_on' => ['required', 'date'],
+            'is_recurring' => ['nullable', 'boolean'],
+            'recurring_frequency' => ['nullable', Rule::in(['monthly', 'annual'])],
             'notes' => ['nullable', 'string'],
             'receipt' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp,pdf', 'max:5120'],
         ]);
+
+        $isRecurring = (bool) ($validated['is_recurring'] ?? false);
+        $recurringFrequency = $isRecurring ? ($validated['recurring_frequency'] ?? null) : null;
+
+        if ($isRecurring && !$recurringFrequency) {
+            throw ValidationException::withMessages([
+                'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
+            ]);
+        }
 
         $receiptFileId = $this->storeReceipt($request);
 
@@ -47,6 +60,8 @@ class CostController extends Controller
             'description' => $validated['description'],
             'amount' => $validated['amount'],
             'incurred_on' => $validated['incurred_on'],
+            'is_recurring' => $isRecurring,
+            'recurring_frequency' => $recurringFrequency,
             'notes' => $validated['notes'] ?? null,
             'receipt_file_id' => $receiptFileId,
             'created_by_user_id' => $request->user()?->id,
@@ -76,6 +91,8 @@ class CostController extends Controller
             'description' => ['sometimes', 'string'],
             'amount' => ['sometimes', 'numeric', 'min:0'],
             'incurred_on' => ['sometimes', 'date'],
+            'is_recurring' => ['sometimes', 'boolean'],
+            'recurring_frequency' => ['nullable', Rule::in(['monthly', 'annual'])],
             'notes' => ['nullable', 'string'],
             'receipt' => ['nullable', 'file', 'mimes:png,jpg,jpeg,webp,pdf', 'max:5120'],
         ]);
@@ -87,6 +104,31 @@ class CostController extends Controller
                 $cost->receiptFile->delete();
             }
             $validated['receipt_file_id'] = $receiptFileId;
+        }
+
+        if (array_key_exists('is_recurring', $validated)) {
+            $isRecurring = (bool) $validated['is_recurring'];
+            if (!$isRecurring) {
+                $validated['recurring_frequency'] = null;
+            } else {
+                $effectiveFrequency = $validated['recurring_frequency'] ?? $cost->recurring_frequency;
+                if (!$effectiveFrequency) {
+                    throw ValidationException::withMessages([
+                        'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
+                    ]);
+                }
+                $validated['recurring_frequency'] = $effectiveFrequency;
+            }
+        } elseif (array_key_exists('recurring_frequency', $validated)) {
+            if ($cost->is_recurring) {
+                if (!$validated['recurring_frequency']) {
+                    throw ValidationException::withMessages([
+                        'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
+                    ]);
+                }
+            } else {
+                $validated['recurring_frequency'] = null;
+            }
         }
 
         $cost->update($validated);
@@ -168,6 +210,7 @@ class CostController extends Controller
     private function ensureCostsTableExists(): void
     {
         if (Schema::hasTable('costs')) {
+            $this->ensureRecurringColumnsExist();
             return;
         }
 
@@ -179,6 +222,8 @@ class CostController extends Controller
             $table->text('description');
             $table->decimal('amount', 12, 2);
             $table->date('incurred_on');
+            $table->boolean('is_recurring')->default(false);
+            $table->string('recurring_frequency', 20)->nullable();
             $table->text('notes')->nullable();
 
             if ($hasFilesTable) {
@@ -195,6 +240,31 @@ class CostController extends Controller
 
             $table->timestamps();
             $table->softDeletes();
+        });
+
+        $this->ensureRecurringColumnsExist();
+    }
+
+    private function ensureRecurringColumnsExist(): void
+    {
+        if (!Schema::hasTable('costs')) {
+            return;
+        }
+
+        $missingIsRecurring = !Schema::hasColumn('costs', 'is_recurring');
+        $missingRecurringFrequency = !Schema::hasColumn('costs', 'recurring_frequency');
+
+        if (!$missingIsRecurring && !$missingRecurringFrequency) {
+            return;
+        }
+
+        Schema::table('costs', function (Blueprint $table) use ($missingIsRecurring, $missingRecurringFrequency): void {
+            if ($missingIsRecurring) {
+                $table->boolean('is_recurring')->default(false)->after('incurred_on');
+            }
+            if ($missingRecurringFrequency) {
+                $table->string('recurring_frequency', 20)->nullable()->after('is_recurring');
+            }
         });
     }
 }

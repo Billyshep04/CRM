@@ -52,6 +52,8 @@ const dom = {
     portalProfileName: document.getElementById('portal-profile-name'),
     portalProfileEmail: document.getElementById('portal-profile-email'),
     portalProfileBillingAddress: document.getElementById('portal-profile-billing-address'),
+    portalSupportForm: document.getElementById('portal-support-form'),
+    portalSupportStatus: document.getElementById('portal-support-status'),
     portalPasswordForm: document.getElementById('portal-password-form'),
     portalPasswordStatus: document.getElementById('portal-password-status'),
     toast: document.getElementById('app-toast'),
@@ -98,6 +100,9 @@ const dom = {
     costFormTitle: document.getElementById('cost-form-title'),
     costFormStatus: document.getElementById('cost-form-status'),
     costFormCancel: document.getElementById('cost-form-cancel'),
+    costRecurringSelect: document.getElementById('cost-is-recurring'),
+    costRecurringFrequencyField: document.getElementById('cost-frequency-field'),
+    costRecurringFrequencySelect: document.getElementById('cost-recurring-frequency'),
     costsRefresh: document.getElementById('costs-refresh'),
     jobForm: document.getElementById('job-form'),
     jobFormTitle: document.getElementById('job-form-title'),
@@ -228,6 +233,10 @@ const viewMeta = {
         title: 'Customer Portal',
         subtitle: 'Review invoices and quick-login links.',
     },
+    'portal-support': {
+        title: 'Support',
+        subtitle: 'Contact support about an issue in your portal.',
+    },
     'portal-admin': {
         title: 'Admin',
         subtitle: 'Manage your account details and password.',
@@ -356,6 +365,9 @@ function setActiveView(view) {
     }
     if (view === 'portal-admin') {
         populatePortalProfileForm(state.user);
+    }
+    if (view === 'portal-support') {
+        setFormStatus(dom.portalSupportStatus, '');
     }
     if (view === 'admin' && state.role === 'admin') {
         loadStaffUsers();
@@ -1124,6 +1136,34 @@ async function handlePortalPasswordSubmit(event) {
         showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.portalPasswordStatus, getErrorMessage(error, 'Unable to update password.'), true);
+    }
+}
+
+async function handlePortalSupportSubmit(event) {
+    event.preventDefault();
+    if (!dom.portalSupportForm) return;
+
+    const formData = new FormData(dom.portalSupportForm);
+    const problem = String(formData.get('problem') || '').trim();
+    const message = String(formData.get('message') || '').trim();
+
+    if (!problem || !message) {
+        setFormStatus(dom.portalSupportStatus, 'Please fill in both support fields.', true);
+        return;
+    }
+
+    try {
+        await api.post('/api/portal/support', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+
+        setFormStatus(dom.portalSupportStatus, 'Support request sent.');
+        showToast('Support request sent');
+        dom.portalSupportForm.reset();
+    } catch (error) {
+        const messageText = getErrorMessage(error, 'Unable to send support request.');
+        setFormStatus(dom.portalSupportStatus, messageText, true);
+        showToast('Unable to send support request', true);
     }
 }
 
@@ -1901,7 +1941,7 @@ async function loadCosts(append = false) {
         resetTable(dom.costsTable);
         const loadingRow = document.createElement('div');
         loadingRow.className = 'table-row table-empty costs';
-        loadingRow.innerHTML = '<span>Loading costs...</span><span></span><span></span><span></span><span></span>';
+        loadingRow.innerHTML = '<span>Loading costs...</span><span></span><span></span><span></span><span></span><span></span>';
         dom.costsTable.appendChild(loadingRow);
     }
 
@@ -1916,11 +1956,33 @@ async function loadCosts(append = false) {
         resetTable(dom.costsTable);
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty costs';
-        emptyRow.innerHTML = '<span>Unable to load costs.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>Unable to load costs.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.costsTable.appendChild(emptyRow);
     } finally {
         setLoadMoreLoading('costs', false);
     }
+}
+
+function toggleCostRecurringFields() {
+    if (!dom.costRecurringSelect || !dom.costRecurringFrequencyField || !dom.costRecurringFrequencySelect) {
+        return;
+    }
+
+    const isRecurring = dom.costRecurringSelect.value === '1';
+    dom.costRecurringFrequencyField.style.display = isRecurring ? '' : 'none';
+
+    if (!isRecurring) {
+        dom.costRecurringFrequencySelect.value = 'monthly';
+    }
+}
+
+function getCostTypeLabel(cost) {
+    const frequency = String(cost.recurring_frequency || '').toLowerCase();
+    if (cost.is_recurring && (frequency === 'monthly' || frequency === 'annual')) {
+        return frequency === 'annual' ? 'Recurring (Annual)' : 'Recurring (Monthly)';
+    }
+
+    return 'One-off';
 }
 
 function renderCosts() {
@@ -1930,7 +1992,7 @@ function renderCosts() {
     if (!state.costs.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty costs';
-        emptyRow.innerHTML = '<span>No costs yet.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No costs yet.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.costsTable.appendChild(emptyRow);
         return;
     }
@@ -1941,11 +2003,13 @@ function renderCosts() {
         const receiptButton = cost.receipt_file_id
             ? `<button class="btn btn-outline btn-small" data-action="receipt" data-id="${cost.id}">Download</button>`
             : '<span class="muted">—</span>';
+        const costType = getCostTypeLabel(cost);
 
         row.innerHTML = `
             <span>${formatDate(cost.incurred_on)}</span>
             <span>${escapeHtml(truncate(cost.description, 42))}</span>
             <span>${formatCurrency(Number(cost.amount))}</span>
+            <span>${escapeHtml(costType)}</span>
             <span>${receiptButton}</span>
             <div class="row-actions">
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${cost.id}">Edit</button>
@@ -1960,6 +2024,9 @@ function resetCostForm() {
     if (!dom.costForm) return;
     dom.costForm.reset();
     dom.costForm.querySelector('input[name="id"]').value = '';
+    if (dom.costRecurringSelect) dom.costRecurringSelect.value = '0';
+    if (dom.costRecurringFrequencySelect) dom.costRecurringFrequencySelect.value = 'monthly';
+    toggleCostRecurringFields();
     state.editing.cost = null;
     if (dom.costFormTitle) dom.costFormTitle.textContent = 'New cost';
     setFormStatus(dom.costFormStatus, '');
@@ -1970,6 +2037,14 @@ async function handleCostSubmit(event) {
     if (!dom.costForm) return;
 
     const formData = new FormData(dom.costForm);
+    const isRecurring = String(formData.get('is_recurring') || '0') === '1';
+
+    if (!isRecurring) {
+        formData.set('recurring_frequency', '');
+    } else if (!String(formData.get('recurring_frequency') || '').trim()) {
+        setFormStatus(dom.costFormStatus, 'Choose monthly or annual for recurring costs.', true);
+        return;
+    }
 
     try {
         if (state.editing.cost) {
@@ -2020,7 +2095,15 @@ async function handleCostAction(event) {
         dom.costForm.querySelector('input[name="id"]').value = cost.id;
         dom.costForm.querySelector('textarea[name="description"]').value = cost.description || '';
         dom.costForm.querySelector('input[name="amount"]').value = cost.amount || '';
-        dom.costForm.querySelector('input[name="incurred_on"]').value = cost.incurred_on || '';
+        dom.costForm.querySelector('input[name="incurred_on"]').value = formatDateInput(cost.incurred_on) || '';
+        if (dom.costRecurringSelect) {
+            dom.costRecurringSelect.value = cost.is_recurring ? '1' : '0';
+        }
+        if (dom.costRecurringFrequencySelect) {
+            dom.costRecurringFrequencySelect.value =
+                cost.recurring_frequency === 'annual' ? 'annual' : 'monthly';
+        }
+        toggleCostRecurringFields();
         dom.costForm.querySelector('textarea[name="notes"]').value = cost.notes || '';
         dom.costForm.querySelector('input[name="receipt"]').value = '';
         setFormStatus(dom.costFormStatus, 'Editing cost.');
@@ -2709,7 +2792,7 @@ function initializeNavigation() {
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
-            if (state.role === 'customer' && !['portal', 'portal-admin'].includes(item.dataset.view)) return;
+            if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
             setActiveView(item.dataset.view);
             setNavOpen(false);
         });
@@ -2721,7 +2804,7 @@ function initializeNavigation() {
                 if (button.dataset.goView === 'admin' && state.role === 'customer') {
                     return;
                 }
-                if (state.role === 'customer' && !['portal', 'portal-admin'].includes(button.dataset.goView)) {
+                if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -2784,6 +2867,10 @@ if (dom.passwordForm) {
 
 if (dom.portalPasswordForm) {
     dom.portalPasswordForm.addEventListener('submit', handlePortalPasswordSubmit);
+}
+
+if (dom.portalSupportForm) {
+    dom.portalSupportForm.addEventListener('submit', handlePortalSupportSubmit);
 }
 
 if (dom.staffUserForm) {
@@ -2868,6 +2955,11 @@ if (dom.jobsLoadMore) {
 
 if (dom.costForm) {
     dom.costForm.addEventListener('submit', handleCostSubmit);
+    toggleCostRecurringFields();
+}
+
+if (dom.costRecurringSelect) {
+    dom.costRecurringSelect.addEventListener('change', toggleCostRecurringFields);
 }
 
 if (dom.costFormCancel) {

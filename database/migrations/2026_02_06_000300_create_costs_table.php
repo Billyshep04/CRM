@@ -14,6 +14,8 @@ return new class extends Migration
                 $table->text('description');
                 $table->decimal('amount', 12, 2);
                 $table->date('incurred_on');
+                $table->boolean('is_recurring')->default(false);
+                $table->string('recurring_frequency', 20)->nullable();
                 $table->text('notes')->nullable();
                 $table->foreignId('receipt_file_id')->nullable()->constrained('files')->nullOnDelete();
                 $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();

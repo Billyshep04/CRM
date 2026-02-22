@@ -20,6 +20,8 @@ class CostResource extends JsonResource
             'description' => $this->description,
             'amount' => $this->amount,
             'incurred_on' => $this->incurred_on,
+            'is_recurring' => (bool) $this->is_recurring,
+            'recurring_frequency' => $this->recurring_frequency,
             'notes' => $this->notes,
             'receipt_file_id' => $this->receipt_file_id,
             'created_by_user_id' => $this->created_by_user_id,
