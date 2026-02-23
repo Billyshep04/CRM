@@ -19,6 +19,13 @@
                 align-items: flex-start;
                 margin-bottom: 24px;
             }
+            .brand-logo {
+                display: block;
+                width: 52px;
+                height: 52px;
+                object-fit: contain;
+                margin: 0 0 8px auto;
+            }
             .badge {
                 background: #2fb8f0;
                 color: #ffffff;
@@ -75,6 +82,16 @@
     </head>
     <body>
         @php
+            $logoDataUri = null;
+            $logoPath = public_path('favicon.png');
+            if (is_file($logoPath)) {
+                $logoContents = file_get_contents($logoPath);
+                if ($logoContents !== false) {
+                    $logoMime = mime_content_type($logoPath) ?: 'image/png';
+                    $logoDataUri = 'data:' . $logoMime . ';base64,' . base64_encode($logoContents);
+                }
+            }
+
             $hasSubscriptionLine = $invoice->lineItems->contains(function ($item) {
                 return $item->billable_type === \App\Models\Subscription::class;
             });
@@ -99,6 +116,9 @@
                 <div class="muted">Invoice #{{ $invoice->invoice_number }}</div>
             </div>
             <div style="text-align: right;">
+                @if ($logoDataUri)
+                    <img src="{{ $logoDataUri }}" alt="WebStamp logo" class="brand-logo">
+                @endif
                 <div class="badge">{{ $invoiceTypeLabel }}</div>
                 <div class="muted" style="margin-top: 6px;">Issued {{ $invoice->issue_date->format('M j, Y') }}</div>
                 <div class="muted">Due {{ $invoice->due_date->format('M j, Y') }}</div>
