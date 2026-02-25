@@ -12,6 +12,7 @@ use App\Models\Job;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
+use App\Services\InvoiceSubscriptionMonthSyncService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -125,7 +126,11 @@ class PortalController extends Controller
         );
     }
 
-    public function updateInvoicePayment(Request $request, Invoice $invoice)
+    public function updateInvoicePayment(
+        Request $request,
+        Invoice $invoice,
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync
+    )
     {
         $customerIds = $this->resolveCustomerIds($request);
 
@@ -152,6 +157,8 @@ class PortalController extends Controller
                 'paid_at' => null,
             ])->save();
         }
+
+        $subscriptionMonthSync->syncFromInvoice($invoice->loadMissing('lineItems'), $validated['payment_status']);
 
         return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
     }

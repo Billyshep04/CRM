@@ -10,6 +10,7 @@ use App\Models\Job;
 use App\Models\Subscription;
 use App\Services\InvoiceNumberGenerator;
 use App\Services\InvoicePdfService;
+use App\Services\InvoiceSubscriptionMonthSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -189,7 +190,11 @@ class InvoiceController extends Controller
         );
     }
 
-    public function updatePaymentStatus(Request $request, Invoice $invoice)
+    public function updatePaymentStatus(
+        Request $request,
+        Invoice $invoice,
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync
+    )
     {
         $validated = $request->validate([
             'payment_status' => ['required', Rule::in(['paid', 'unpaid'])],
@@ -210,6 +215,8 @@ class InvoiceController extends Controller
                 'paid_at' => null,
             ])->save();
         }
+
+        $subscriptionMonthSync->syncFromInvoice($invoice->loadMissing('lineItems'), $validated['payment_status']);
 
         return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
     }
