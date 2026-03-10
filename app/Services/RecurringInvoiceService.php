@@ -62,15 +62,7 @@ class RecurringInvoiceService
     {
         $today = now()->startOfDay();
 
-        $query = Subscription::query()
-            ->where('status', 'active')
-            ->where(function ($query) use ($today): void {
-                $query->whereDate('next_invoice_date', '<=', $today->toDateString())
-                    ->orWhere(function ($subQuery) use ($today): void {
-                        $subQuery->whereNull('next_invoice_date')
-                            ->whereDate('start_date', '<=', $today->toDateString());
-                    });
-            });
+        $query = Subscription::query()->where('status', 'active');
 
         if ($subscriptionId !== null) {
             $query->whereKey($subscriptionId);
@@ -78,6 +70,16 @@ class RecurringInvoiceService
 
         if ($customerIds !== null) {
             $query->whereIn('customer_id', $customerIds);
+        }
+
+        if ($this->shouldFilterToDueSubscriptions($subscriptionId, $customerIds)) {
+            $query->where(function ($query) use ($today): void {
+                $query->whereDate('next_invoice_date', '<=', $today->toDateString())
+                    ->orWhere(function ($subQuery) use ($today): void {
+                        $subQuery->whereNull('next_invoice_date')
+                            ->whereDate('start_date', '<=', $today->toDateString());
+                    });
+            });
         }
 
         $subscriptions = $query->get();
@@ -92,7 +94,7 @@ class RecurringInvoiceService
             }
 
             $billingDayOfMonth = (int) $subscription->start_date->day;
-            $nextInvoiceDate = $this->resolveInitialNextInvoiceDate($subscription);
+            $nextInvoiceDate = $this->resolveInitialNextInvoiceDate($subscription, $billingDayOfMonth);
             $createdInvoices = [];
 
             while ($nextInvoiceDate->lte($today)) {
@@ -133,9 +135,12 @@ class RecurringInvoiceService
                 $nextInvoiceDate = $this->nextBillingDate($nextInvoiceDate, $billingDayOfMonth);
             }
 
-            $subscription->update([
-                'next_invoice_date' => $nextInvoiceDate->toDateString(),
-            ]);
+            $resolvedNextInvoiceDate = $nextInvoiceDate->toDateString();
+            if ($subscription->next_invoice_date?->toDateString() !== $resolvedNextInvoiceDate) {
+                $subscription->update([
+                    'next_invoice_date' => $resolvedNextInvoiceDate,
+                ]);
+            }
 
             if (!$autoSend) {
                 continue;
@@ -163,6 +168,17 @@ class RecurringInvoiceService
         ];
     }
 
+    /**
+     * If a specific subscription/customer scope is supplied, process all active subscriptions
+     * in that scope so stale future next_invoice_date values can still be corrected.
+     *
+     * @param  array<int>|null  $customerIds
+     */
+    private function shouldFilterToDueSubscriptions(?int $subscriptionId, ?array $customerIds): bool
+    {
+        return $subscriptionId === null && $customerIds === null;
+    }
+
     private function emptyResult(): array
     {
         return [
@@ -188,13 +204,42 @@ class RecurringInvoiceService
         )));
     }
 
-    private function resolveInitialNextInvoiceDate(Subscription $subscription): Carbon
+    private function resolveInitialNextInvoiceDate(Subscription $subscription, int $billingDayOfMonth): Carbon
     {
-        if ($subscription->next_invoice_date) {
-            return $subscription->next_invoice_date->copy()->startOfDay();
+        $nextDateFromField = $subscription->next_invoice_date?->copy()->startOfDay();
+        $latestIssuedInvoiceDate = $this->resolveLatestIssuedSubscriptionInvoiceDate($subscription);
+
+        if ($latestIssuedInvoiceDate) {
+            $nextDateFromInvoiceHistory = $this->nextBillingDate($latestIssuedInvoiceDate, $billingDayOfMonth);
+
+            if (!$nextDateFromField) {
+                return $nextDateFromInvoiceHistory;
+            }
+
+            return $nextDateFromField->lt($nextDateFromInvoiceHistory)
+                ? $nextDateFromField
+                : $nextDateFromInvoiceHistory;
+        }
+
+        if ($nextDateFromField) {
+            return $nextDateFromField;
         }
 
         return $subscription->start_date->copy()->startOfDay();
+    }
+
+    private function resolveLatestIssuedSubscriptionInvoiceDate(Subscription $subscription): ?Carbon
+    {
+        $latestInvoice = Invoice::query()
+            ->where('customer_id', $subscription->customer_id)
+            ->whereHas('lineItems', function ($query) use ($subscription): void {
+                $query->where('billable_type', Subscription::class)
+                    ->where('billable_id', $subscription->id);
+            })
+            ->orderByDesc('issue_date')
+            ->first(['issue_date']);
+
+        return $latestInvoice?->issue_date?->copy()->startOfDay();
     }
 
     private function nextBillingDate(Carbon $currentBillingDate, int $billingDayOfMonth): Carbon
