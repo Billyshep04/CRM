@@ -13,6 +13,7 @@ use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
 use App\Services\InvoiceSubscriptionMonthSyncService;
+use App\Services\RecurringInvoiceService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -40,9 +41,10 @@ class PortalController extends Controller
         );
     }
 
-    public function subscriptions(Request $request)
+    public function subscriptions(Request $request, RecurringInvoiceService $recurringInvoiceService)
     {
         $customerIds = $this->resolveCustomerIds($request);
+        $this->processRecurringInvoices($recurringInvoiceService, $customerIds);
 
         $query = Subscription::query()
             ->whereIn('customer_id', $customerIds)
@@ -60,9 +62,10 @@ class PortalController extends Controller
         );
     }
 
-    public function invoices(Request $request)
+    public function invoices(Request $request, RecurringInvoiceService $recurringInvoiceService)
     {
         $customerIds = $this->resolveCustomerIds($request);
+        $this->processRecurringInvoices($recurringInvoiceService, $customerIds);
 
         $query = Invoice::query()
             ->whereIn('customer_id', $customerIds)
@@ -263,6 +266,17 @@ class PortalController extends Controller
         }
 
         return $customerIds;
+    }
+
+    /**
+     * @param  array<int>  $customerIds
+     */
+    private function processRecurringInvoices(
+        RecurringInvoiceService $recurringInvoiceService,
+        array $customerIds
+    ): void {
+        $autoSend = (bool) config('invoices.auto_send_recurring', true);
+        $recurringInvoiceService->processDueSubscriptions(null, $autoSend, $customerIds);
     }
 
     private function sendSupportViaDefaultMailer(

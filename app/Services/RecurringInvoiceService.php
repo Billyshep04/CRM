@@ -7,11 +7,17 @@ use App\Models\Invoice;
 use App\Models\InvoiceLineItem;
 use App\Models\Subscription;
 use Carbon\Carbon;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Throwable;
 
 class RecurringInvoiceService
 {
+    private const DUE_PROCESS_LOCK_KEY = 'recurring-invoices:process-due';
+    private const DUE_PROCESS_LOCK_SECONDS = 120;
+    private const DUE_PROCESS_WAIT_SECONDS = 5;
+
     public function __construct(private readonly InvoiceNumberGenerator $numberGenerator)
     {
     }
@@ -19,7 +25,40 @@ class RecurringInvoiceService
     /**
      * @return array{created:int,sent:int,failed:int}
      */
-    public function processDueSubscriptions(?int $subscriptionId = null, bool $autoSend = true): array
+    public function processDueSubscriptions(
+        ?int $subscriptionId = null,
+        bool $autoSend = true,
+        ?array $customerIds = null
+    ): array {
+        $normalizedCustomerIds = $this->normalizeCustomerIds($customerIds);
+        if ($customerIds !== null && $normalizedCustomerIds === []) {
+            return $this->emptyResult();
+        }
+
+        try {
+            return Cache::lock(self::DUE_PROCESS_LOCK_KEY, self::DUE_PROCESS_LOCK_SECONDS)
+                ->block(
+                    self::DUE_PROCESS_WAIT_SECONDS,
+                    fn (): array => $this->processDueSubscriptionsWithoutLock(
+                        $subscriptionId,
+                        $autoSend,
+                        $normalizedCustomerIds
+                    )
+                );
+        } catch (LockTimeoutException) {
+            return $this->emptyResult();
+        }
+    }
+
+    /**
+     * @param  array<int>|null  $customerIds
+     * @return array{created:int,sent:int,failed:int}
+     */
+    private function processDueSubscriptionsWithoutLock(
+        ?int $subscriptionId = null,
+        bool $autoSend = true,
+        ?array $customerIds = null
+    ): array
     {
         $today = now()->startOfDay();
 
@@ -35,6 +74,10 @@ class RecurringInvoiceService
 
         if ($subscriptionId !== null) {
             $query->whereKey($subscriptionId);
+        }
+
+        if ($customerIds !== null) {
+            $query->whereIn('customer_id', $customerIds);
         }
 
         $subscriptions = $query->get();
@@ -118,6 +161,31 @@ class RecurringInvoiceService
             'sent' => $sentCount,
             'failed' => $failedCount,
         ];
+    }
+
+    private function emptyResult(): array
+    {
+        return [
+            'created' => 0,
+            'sent' => 0,
+            'failed' => 0,
+        ];
+    }
+
+    /**
+     * @param  array<mixed>|null  $customerIds
+     * @return array<int>|null
+     */
+    private function normalizeCustomerIds(?array $customerIds): ?array
+    {
+        if ($customerIds === null) {
+            return null;
+        }
+
+        return array_values(array_unique(array_filter(
+            array_map(static fn ($id): int => (int) $id, $customerIds),
+            static fn (int $id): bool => $id > 0
+        )));
     }
 
     private function resolveInitialNextInvoiceDate(Subscription $subscription): Carbon

@@ -10,6 +10,7 @@ use App\Models\Job;
 use App\Models\Subscription;
 use App\Services\InvoiceNumberGenerator;
 use App\Services\InvoicePdfService;
+use App\Services\RecurringInvoiceService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,11 +22,17 @@ use Throwable;
 
 class InvoiceController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, RecurringInvoiceService $recurringInvoiceService)
     {
+        $customerId = $request->query('customer_id');
+        $this->processRecurringInvoices(
+            $recurringInvoiceService,
+            $customerId ? [(int) $customerId] : null
+        );
+
         $query = Invoice::query()->with(['customer', 'lineItems', 'pdfFile'])->latest();
 
-        if ($customerId = $request->query('customer_id')) {
+        if ($customerId) {
             $query->where('customer_id', $customerId);
         }
 
@@ -283,6 +290,17 @@ class InvoiceController extends Controller
             'subscription' => Subscription::class,
             default => null,
         };
+    }
+
+    /**
+     * @param  array<int>|null  $customerIds
+     */
+    private function processRecurringInvoices(
+        RecurringInvoiceService $recurringInvoiceService,
+        ?array $customerIds = null
+    ): void {
+        $autoSend = (bool) config('invoices.auto_send_recurring', true);
+        $recurringInvoiceService->processDueSubscriptions(null, $autoSend, $customerIds);
     }
 
     private function sendInvoiceEmailNow(Invoice $invoice): void

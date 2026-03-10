@@ -14,11 +14,17 @@ use Illuminate\Validation\Rule;
 
 class SubscriptionController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, RecurringInvoiceService $recurringInvoiceService)
     {
+        $customerId = $request->query('customer_id');
+        $this->processRecurringInvoicesForCustomers(
+            $recurringInvoiceService,
+            $customerId ? [(int) $customerId] : null
+        );
+
         $query = Subscription::query()->with('customer')->latest();
 
-        if ($customerId = $request->query('customer_id')) {
+        if ($customerId) {
             $query->where('customer_id', $customerId);
         }
 
@@ -235,7 +241,22 @@ class SubscriptionController extends Controller
             return;
         }
 
+        $this->processRecurringInvoicesForCustomers(
+            $recurringInvoiceService,
+            [(int) $subscription->customer_id],
+            $subscription->id
+        );
+    }
+
+    /**
+     * @param  array<int>|null  $customerIds
+     */
+    private function processRecurringInvoicesForCustomers(
+        RecurringInvoiceService $recurringInvoiceService,
+        ?array $customerIds = null,
+        ?int $subscriptionId = null
+    ): void {
         $autoSend = (bool) config('invoices.auto_send_recurring', true);
-        $recurringInvoiceService->processDueSubscriptions($subscription->id, $autoSend);
+        $recurringInvoiceService->processDueSubscriptions($subscriptionId, $autoSend, $customerIds);
     }
 }
