@@ -852,6 +852,31 @@
                         <div class="card admin-only">
                             <div class="card-header">
                                 <div>
+                                    <div class="card-title">Invoice payment details</div>
+                                    <div class="card-subtitle">Shown on generated invoice PDFs.</div>
+                                </div>
+                            </div>
+                            <form id="invoice-settings-form" class="form-stack">
+                                <label class="field">
+                                    <span>Account Name</span>
+                                    <input type="text" name="account_name" id="invoice-account-name" required>
+                                </label>
+                                <label class="field">
+                                    <span>Sort Code</span>
+                                    <input type="text" name="sort_code" id="invoice-sort-code" required>
+                                </label>
+                                <label class="field">
+                                    <span>Account Number</span>
+                                    <input type="text" name="account_number" id="invoice-account-number" required>
+                                </label>
+                                <div id="invoice-settings-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Save payment settings</button>
+                            </form>
+                        </div>
+
+                        <div class="card admin-only">
+                            <div class="card-header">
+                                <div>
                                     <div class="card-title">Profile</div>
                                     <div class="card-subtitle">Update your admin contact details.</div>
                                 </div>

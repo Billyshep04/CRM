@@ -10,6 +10,10 @@ use Illuminate\Support\Str;
 
 class InvoicePdfService
 {
+    public function __construct(private readonly AdminInvoiceSettings $invoiceSettings)
+    {
+    }
+
     public function generate(Invoice $invoice): StoredFile
     {
         $invoice->loadMissing(['customer', 'lineItems']);
@@ -25,6 +29,7 @@ class InvoicePdfService
         $pdf = Pdf::loadView('pdf.invoice', [
             'invoice' => $invoice,
             'customer' => $invoice->customer,
+            'payment_details' => $this->invoiceSettings->paymentDetails(),
         ]);
 
         $contents = $pdf->output();

@@ -108,6 +108,10 @@
             } else {
                 $invoiceTypeLabel = 'invoice';
             }
+
+            $paymentAccountName = trim((string) ($payment_details['account_name'] ?? 'Billy Sheppard'));
+            $paymentSortCode = trim((string) ($payment_details['sort_code'] ?? '04-00-03'));
+            $paymentAccountNumber = trim((string) ($payment_details['account_number'] ?? '05574495'));
         @endphp
 
         <div class="header">
@@ -175,9 +179,9 @@
             <div style="margin-top: 10px;">To login and see all your invoices and mark as 'paid' please login to your portal here: crm.web-stamp.co.uk</div>
             <div style="margin-top: 14px; color: #111827;">
                 <div style="font-weight: 600; margin-bottom: 6px;">Payment details</div>
-                <div>Name: Billy Sheppard</div>
-                <div>Account no: 05574495</div>
-                <div>Sort code: 04-00-03</div>
+                <div>Name: {{ $paymentAccountName }}</div>
+                <div>Account no: {{ $paymentAccountNumber }}</div>
+                <div>Sort code: {{ $paymentSortCode }}</div>
             </div>
         </div>
     </body>

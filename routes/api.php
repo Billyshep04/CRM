@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AdminInvoiceSettingController;
 use App\Http\Controllers\AdminMailSettingController;
 use App\Http\Controllers\AdminStaffUserController;
 use App\Http\Controllers\AccountController;
@@ -54,6 +55,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
+        Route::get('admin/invoice-settings', [AdminInvoiceSettingController::class, 'show']);
+        Route::put('admin/invoice-settings', [AdminInvoiceSettingController::class, 'update']);
         Route::get('admin/mail-settings', [AdminMailSettingController::class, 'show']);
         Route::put('admin/mail-settings', [AdminMailSettingController::class, 'update']);
     });

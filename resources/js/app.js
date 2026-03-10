@@ -33,6 +33,11 @@ const dom = {
     smtp2goEnabled: document.getElementById('smtp2go-enabled'),
     smtp2goApiKey: document.getElementById('smtp2go-api-key'),
     smtp2goApiKeyMask: document.getElementById('smtp2go-api-key-mask'),
+    invoiceSettingsForm: document.getElementById('invoice-settings-form'),
+    invoiceSettingsStatus: document.getElementById('invoice-settings-status'),
+    invoiceAccountName: document.getElementById('invoice-account-name'),
+    invoiceSortCode: document.getElementById('invoice-sort-code'),
+    invoiceAccountNumber: document.getElementById('invoice-account-number'),
     staffUserForm: document.getElementById('staff-user-form'),
     staffUserFormStatus: document.getElementById('staff-user-form-status'),
     staffUsersTable: document.getElementById('staff-users-table'),
@@ -158,6 +163,7 @@ const state = {
     invoices: [],
     staffUsers: [],
     mailSettings: null,
+    invoiceSettings: null,
     portalInvoices: [],
     portalJobs: [],
     portalSubscriptions: [],
@@ -372,6 +378,7 @@ function setActiveView(view) {
     if (view === 'admin' && state.role === 'admin') {
         loadStaffUsers();
         loadAdminMailSettings();
+        loadAdminInvoiceSettings();
     }
 }
 
@@ -1223,6 +1230,27 @@ function applyAdminMailSettings(payload) {
     }
 }
 
+function applyAdminInvoiceSettings(payload) {
+    if (!dom.invoiceAccountName || !dom.invoiceSortCode || !dom.invoiceAccountNumber) return;
+
+    dom.invoiceAccountName.value = payload?.account_name || '';
+    dom.invoiceSortCode.value = payload?.sort_code || '';
+    dom.invoiceAccountNumber.value = payload?.account_number || '';
+}
+
+async function loadAdminInvoiceSettings() {
+    if (!dom.invoiceSettingsForm || state.role !== 'admin') return;
+    setFormStatus(dom.invoiceSettingsStatus, '');
+
+    try {
+        const response = await api.get('/api/admin/invoice-settings');
+        state.invoiceSettings = response?.data?.data ?? null;
+        applyAdminInvoiceSettings(state.invoiceSettings);
+    } catch (error) {
+        setFormStatus(dom.invoiceSettingsStatus, 'Unable to load invoice settings.', true);
+    }
+}
+
 async function loadAdminMailSettings() {
     if (!dom.smtp2goSettingsForm || state.role !== 'admin') return;
     setFormStatus(dom.smtp2goSettingsStatus, '');
@@ -1265,6 +1293,35 @@ async function handleSmtp2goSettingsSubmit(event) {
         showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.smtp2goSettingsStatus, getErrorMessage(error, 'Unable to update mail settings.'), true);
+    }
+}
+
+async function handleInvoiceSettingsSubmit(event) {
+    event.preventDefault();
+    if (!dom.invoiceSettingsForm || state.role !== 'admin') return;
+
+    const formData = new FormData(dom.invoiceSettingsForm);
+    const accountName = String(formData.get('account_name') || '').trim();
+    const sortCode = String(formData.get('sort_code') || '').trim();
+    const accountNumber = String(formData.get('account_number') || '').trim();
+
+    if (!accountName || !sortCode || !accountNumber) {
+        setFormStatus(dom.invoiceSettingsStatus, 'All payment details are required.', true);
+        return;
+    }
+
+    try {
+        const response = await api.put('/api/admin/invoice-settings', {
+            account_name: accountName,
+            sort_code: sortCode,
+            account_number: accountNumber,
+        });
+        state.invoiceSettings = response?.data?.data ?? null;
+        applyAdminInvoiceSettings(state.invoiceSettings);
+        setFormStatus(dom.invoiceSettingsStatus, 'Invoice settings updated.');
+        showToast('Settings saved');
+    } catch (error) {
+        setFormStatus(dom.invoiceSettingsStatus, getErrorMessage(error, 'Unable to update invoice settings.'), true);
     }
 }
 
@@ -2851,6 +2908,10 @@ if (dom.logoUploadForm) {
 
 if (dom.smtp2goSettingsForm) {
     dom.smtp2goSettingsForm.addEventListener('submit', handleSmtp2goSettingsSubmit);
+}
+
+if (dom.invoiceSettingsForm) {
+    dom.invoiceSettingsForm.addEventListener('submit', handleInvoiceSettingsSubmit);
 }
 
 if (dom.profileForm) {
