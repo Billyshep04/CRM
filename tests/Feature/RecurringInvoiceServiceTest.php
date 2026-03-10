@@ -200,6 +200,64 @@ class RecurringInvoiceServiceTest extends TestCase
         $this->assertSame('2026-05-21', $subscription->next_invoice_date?->toDateString());
     }
 
+    public function test_it_can_reconcile_all_subscriptions_without_scope(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-04-25 09:00:00'));
+
+        $customer = $this->createCustomer('global-reconcile@example.test');
+
+        $subscription = Subscription::query()->create([
+            'customer_id' => $customer->id,
+            'description' => 'Hosting',
+            'monthly_cost' => 7.50,
+            'billing_frequency' => 'monthly',
+            'start_date' => '2026-01-21',
+            'next_invoice_date' => '2026-12-21',
+            'status' => 'active',
+        ]);
+
+        $existingInvoice = Invoice::query()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-20260223-GLOBAL',
+            'issue_date' => '2026-02-21',
+            'due_date' => '2026-03-07',
+            'status' => 'paid',
+            'subtotal' => 7.50,
+            'tax_amount' => 0,
+            'total' => 7.50,
+        ]);
+
+        InvoiceLineItem::query()->create([
+            'invoice_id' => $existingInvoice->id,
+            'billable_type' => Subscription::class,
+            'billable_id' => $subscription->id,
+            'description' => 'Hosting',
+            'quantity' => 1,
+            'unit_price' => 7.50,
+            'total' => 7.50,
+        ]);
+
+        $result = app(RecurringInvoiceService::class)
+            ->processDueSubscriptions(null, false, null, true);
+
+        $this->assertSame(2, $result['created']);
+        $this->assertTrue(
+            Invoice::query()
+                ->where('customer_id', $customer->id)
+                ->whereDate('issue_date', '2026-03-21')
+                ->exists()
+        );
+        $this->assertTrue(
+            Invoice::query()
+                ->where('customer_id', $customer->id)
+                ->whereDate('issue_date', '2026-04-21')
+                ->exists()
+        );
+
+        $subscription->refresh();
+        $this->assertSame('2026-05-21', $subscription->next_invoice_date?->toDateString());
+    }
+
     private function createCustomer(string $email): Customer
     {
         return Customer::query()->create([

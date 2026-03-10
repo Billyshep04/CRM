@@ -28,7 +28,8 @@ class RecurringInvoiceService
     public function processDueSubscriptions(
         ?int $subscriptionId = null,
         bool $autoSend = true,
-        ?array $customerIds = null
+        ?array $customerIds = null,
+        bool $reconcileAll = false
     ): array {
         $normalizedCustomerIds = $this->normalizeCustomerIds($customerIds);
         if ($customerIds !== null && $normalizedCustomerIds === []) {
@@ -42,7 +43,8 @@ class RecurringInvoiceService
                     fn (): array => $this->processDueSubscriptionsWithoutLock(
                         $subscriptionId,
                         $autoSend,
-                        $normalizedCustomerIds
+                        $normalizedCustomerIds,
+                        $reconcileAll
                     )
                 );
         } catch (LockTimeoutException) {
@@ -57,7 +59,8 @@ class RecurringInvoiceService
     private function processDueSubscriptionsWithoutLock(
         ?int $subscriptionId = null,
         bool $autoSend = true,
-        ?array $customerIds = null
+        ?array $customerIds = null,
+        bool $reconcileAll = false
     ): array
     {
         $today = now()->startOfDay();
@@ -72,7 +75,7 @@ class RecurringInvoiceService
             $query->whereIn('customer_id', $customerIds);
         }
 
-        if ($this->shouldFilterToDueSubscriptions($subscriptionId, $customerIds)) {
+        if ($this->shouldFilterToDueSubscriptions($subscriptionId, $customerIds, $reconcileAll)) {
             $query->where(function ($query) use ($today): void {
                 $query->whereDate('next_invoice_date', '<=', $today->toDateString())
                     ->orWhere(function ($subQuery) use ($today): void {
@@ -174,9 +177,13 @@ class RecurringInvoiceService
      *
      * @param  array<int>|null  $customerIds
      */
-    private function shouldFilterToDueSubscriptions(?int $subscriptionId, ?array $customerIds): bool
+    private function shouldFilterToDueSubscriptions(
+        ?int $subscriptionId,
+        ?array $customerIds,
+        bool $reconcileAll
+    ): bool
     {
-        return $subscriptionId === null && $customerIds === null;
+        return !$reconcileAll && $subscriptionId === null && $customerIds === null;
     }
 
     private function emptyResult(): array
