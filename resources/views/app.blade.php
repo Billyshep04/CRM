@@ -1139,7 +1139,7 @@
         <template id="invoice-line-item-template">
             <div class="line-item">
                 <input type="text" name="description" placeholder="Description" required>
-                <input type="number" name="quantity" min="1" step="1" value="1" required>
+                <input type="number" name="quantity" min="0.5" step="0.5" value="1" required>
                 <input type="number" name="unit_price" min="0" step="0.01" placeholder="Unit price" required>
                 <select name="billable_type">
                     <option value="">Manual</option>

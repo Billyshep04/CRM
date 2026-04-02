@@ -114,7 +114,7 @@ return new class extends Migration
                 $table->foreignId('invoice_id')->constrained('invoices')->cascadeOnDelete();
                 $table->nullableMorphs('billable');
                 $table->text('description');
-                $table->unsignedInteger('quantity')->default(1);
+                $table->decimal('quantity', 8, 2)->default(1);
                 $table->decimal('unit_price', 12, 2);
                 $table->decimal('total', 12, 2);
                 $table->timestamps();

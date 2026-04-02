@@ -58,7 +58,7 @@ class InvoiceController extends Controller
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string'],
-            'line_items.*.quantity' => ['required', 'integer', 'min:1'],
+            'line_items.*.quantity' => $this->quantityRules('required'),
             'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
             'line_items.*.billable_type' => ['nullable', Rule::in(['job', 'subscription'])],
             'line_items.*.billable_id' => ['nullable', 'integer'],
@@ -118,7 +118,7 @@ class InvoiceController extends Controller
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
             'line_items' => ['sometimes', 'array', 'min:1'],
             'line_items.*.description' => ['required_with:line_items', 'string'],
-            'line_items.*.quantity' => ['required_with:line_items', 'integer', 'min:1'],
+            'line_items.*.quantity' => $this->quantityRules('required_with:line_items'),
             'line_items.*.unit_price' => ['required_with:line_items', 'numeric', 'min:0'],
             'line_items.*.billable_type' => ['nullable', Rule::in(['job', 'subscription'])],
             'line_items.*.billable_id' => ['nullable', 'integer'],
@@ -290,6 +290,27 @@ class InvoiceController extends Controller
             'subscription' => Subscription::class,
             default => null,
         };
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function quantityRules(string $requiredRule): array
+    {
+        return [
+            $requiredRule,
+            'numeric',
+            'min:0.5',
+            static function (string $attribute, mixed $value, \Closure $fail): void {
+                $quantity = (float) $value;
+                $scaled = $quantity * 2;
+                $isHalfStep = abs($scaled - round($scaled)) < 0.00001;
+
+                if (!$isHalfStep) {
+                    $fail("The {$attribute} field must be a whole number or end in .5.");
+                }
+            },
+        ];
     }
 
     /**

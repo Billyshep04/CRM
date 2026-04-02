@@ -265,7 +265,7 @@ CREATE TABLE `invoice_line_items` (
   `billable_type` VARCHAR(255) NULL DEFAULT NULL,
   `billable_id` BIGINT UNSIGNED NULL DEFAULT NULL,
   `description` TEXT NOT NULL,
-  `quantity` INT UNSIGNED NOT NULL DEFAULT 1,
+  `quantity` DECIMAL(8, 2) NOT NULL DEFAULT 1.00,
   `unit_price` DECIMAL(12, 2) NOT NULL,
   `total` DECIMAL(12, 2) NOT NULL,
   `created_at` TIMESTAMP NULL DEFAULT NULL,

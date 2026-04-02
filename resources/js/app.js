@@ -2517,8 +2517,10 @@ function collectInvoiceLineItems() {
         if (!description) {
             continue;
         }
-        if (!quantity || quantity < 1 || Number.isNaN(quantity)) {
-            throw new Error('Line item quantity is invalid.');
+        const scaledQuantity = quantity * 2;
+        const isHalfStepQuantity = Math.abs(scaledQuantity - Math.round(scaledQuantity)) < 0.00001;
+        if (!quantity || quantity < 0.5 || Number.isNaN(quantity) || !isHalfStepQuantity) {
+            throw new Error('Line item quantity must be a whole number or end in .5.');
         }
         if (Number.isNaN(unitPrice) || unitPrice < 0) {
             throw new Error('Line item unit price is invalid.');
