@@ -150,7 +150,7 @@
                     @foreach ($invoice->lineItems as $item)
                         <tr>
                             <td>{{ $item->description }}</td>
-                            <td style="text-align:right;">{{ $item->quantity }}</td>
+                            <td style="text-align:right;">{{ rtrim(rtrim(number_format((float) $item->quantity, 2, '.', ''), '0'), '.') }}</td>
                             <td style="text-align:right;">£{{ number_format($item->unit_price, 2) }}</td>
                             <td style="text-align:right;">£{{ number_format($item->total, 2) }}</td>
                         </tr>

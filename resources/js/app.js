@@ -2467,7 +2467,7 @@ function addInvoiceLineItem(item = {}) {
     if (!row) return;
 
     row.querySelector('input[name="description"]').value = item.description || '';
-    row.querySelector('input[name="quantity"]').value = item.quantity || 1;
+    row.querySelector('input[name="quantity"]').value = normalizeQuantityDisplay(item.quantity || 1);
     row.querySelector('input[name="unit_price"]').value = item.unit_price || '';
     const billableTypeInput = row.querySelector('select[name="billable_type"]');
     const billableIdInput = row.querySelector('input[name="billable_id"]');
@@ -2492,6 +2492,17 @@ function addInvoiceLineItem(item = {}) {
     });
 
     dom.invoiceLineItems.appendChild(clone);
+}
+
+function normalizeQuantityDisplay(value) {
+    const quantity = Number(value);
+    if (Number.isNaN(quantity)) return '';
+
+    if (Math.abs(quantity - Math.round(quantity)) < 0.00001) {
+        return String(Math.round(quantity));
+    }
+
+    return quantity.toFixed(2).replace(/\.?0+$/, '');
 }
 
 function mapBillableType(type) {
