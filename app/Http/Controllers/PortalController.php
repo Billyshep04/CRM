@@ -72,9 +72,7 @@ class PortalController extends Controller
             ->with(['lineItems', 'pdfFile'])
             ->latest();
 
-        if ($status = $request->query('status')) {
-            $query->where('status', $status);
-        }
+        $query->filterByStatus($request->query('status'));
 
         $perPage = $request->integer('per_page', 15);
 

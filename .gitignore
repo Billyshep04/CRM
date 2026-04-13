@@ -27,3 +27,4 @@ Thumbs.db
 /bootstrap/cache/
 .env
 CRM.zip
+/.composer-home/

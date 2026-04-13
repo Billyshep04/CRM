@@ -23,6 +23,7 @@ class InvoiceResource extends JsonResource
             'issue_date' => $this->issue_date,
             'due_date' => $this->due_date,
             'status' => $this->status,
+            'effective_status' => $this->effectiveStatus(),
             'subtotal' => $this->subtotal,
             'tax_amount' => $this->tax_amount,
             'total' => $this->total,

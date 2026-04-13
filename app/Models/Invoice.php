@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -56,5 +57,41 @@ class Invoice extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(InvoiceLineItem::class);
+    }
+
+    public function scopeFilterByStatus(Builder $query, ?string $status): Builder
+    {
+        $normalized = strtolower(trim((string) $status));
+
+        if ($normalized === '' || $normalized === 'all') {
+            return $query;
+        }
+
+        if ($normalized === 'overdue') {
+            return $query
+                ->where('status', '!=', 'paid')
+                ->whereDate('due_date', '<', today());
+        }
+
+        if ($normalized === 'sent') {
+            return $query
+                ->where('status', 'sent')
+                ->whereDate('due_date', '>=', today());
+        }
+
+        return $query->where('status', $normalized);
+    }
+
+    public function effectiveStatus(): string
+    {
+        if ($this->status === 'paid') {
+            return 'paid';
+        }
+
+        if ($this->due_date && $this->due_date->lt(today())) {
+            return 'overdue';
+        }
+
+        return $this->status;
     }
 }

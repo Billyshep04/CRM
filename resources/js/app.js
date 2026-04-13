@@ -669,7 +669,7 @@ function renderInvoiceRows(container, invoices, emptyMessage) {
         const row = document.createElement('div');
         row.className = 'table-row';
 
-        const status = invoice.status || 'draft';
+        const status = invoice.effective_status || invoice.status || 'draft';
         let pillClass = 'pill';
         if (status === 'paid') {
             pillClass = 'pill success';
@@ -2605,13 +2605,14 @@ function renderInvoices() {
         const row = document.createElement('div');
         row.className = 'table-row invoices';
         const isPaid = invoice.status === 'paid';
+        const displayStatus = invoice.effective_status || invoice.status || 'draft';
         const nextStatus = isPaid ? 'unpaid' : 'paid';
         const paymentActionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
         row.innerHTML = `
             <span>#${escapeHtml(invoice.invoice_number)}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
             <span>${formatCurrency(Number(invoice.total))}</span>
-            <span>${escapeHtml(invoice.status)}</span>
+            <span>${escapeHtml(displayStatus)}</span>
             <span>${formatDate(invoice.due_date)}</span>
             <div class="row-actions">
                 <button class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${invoice.id}" data-next-status="${nextStatus}">${paymentActionLabel}</button>
