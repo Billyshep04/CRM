@@ -64,12 +64,12 @@
                 </div>
                 <nav class="nav-stack">
                     <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
-                    <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
                     <a href="#" class="nav-item" data-view="customers">Customers</a>
                     <a href="#" class="nav-item" data-view="jobs">Jobs</a>
                     <a href="#" class="nav-item" data-view="subscriptions">Subscriptions</a>
                     <a href="#" class="nav-item" data-view="costs">Costs</a>
                     <a href="#" class="nav-item" data-view="invoices">Invoices</a>
+                    <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
@@ -204,8 +204,30 @@
                                 <div>
                                     <div class="card-title">Months</div>
                                     <div class="card-subtitle">From February to the current month.</div>
+                                    <div class="monthly-finance-selected-month" id="monthly-finance-selected-month">--</div>
                                 </div>
                                 <button class="btn btn-outline" id="monthly-finance-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="monthly-finance-total" id="monthly-finance-total">
+                                <div class="monthly-finance-total-title">Total</div>
+                                <div class="monthly-finance-total-grid">
+                                    <div class="monthly-finance-total-item">
+                                        <span>Revenue</span>
+                                        <strong id="monthly-finance-total-revenue">--</strong>
+                                    </div>
+                                    <div class="monthly-finance-total-item">
+                                        <span>Costs</span>
+                                        <strong id="monthly-finance-total-costs">--</strong>
+                                    </div>
+                                    <div class="monthly-finance-total-item">
+                                        <span>Profit</span>
+                                        <strong id="monthly-finance-total-profit">--</strong>
+                                    </div>
+                                    <div class="monthly-finance-total-item">
+                                        <span>Tax</span>
+                                        <strong id="monthly-finance-total-tax">--</strong>
+                                    </div>
+                                </div>
                             </div>
                             <div id="monthly-finance-months" class="monthly-finance-months">
                                 <div class="monthly-finance-empty">Loading months...</div>
@@ -213,7 +235,6 @@
                         </div>
 
                         <div class="monthly-finance-right">
-                            <div class="monthly-finance-selected-month" id="monthly-finance-selected-month">--</div>
                             <div class="monthly-finance-metrics">
                                 <div class="card">
                                     <div class="card-label">Revenue</div>
@@ -233,7 +254,7 @@
                                 <div class="card">
                                     <div class="card-label">Tax</div>
                                     <div class="card-value" id="monthly-finance-tax">--</div>
-                                    <div class="card-meta">Profit × 20%</div>
+                                    <div class="card-meta">20% of Profit</div>
                                 </div>
                             </div>
                         </div>

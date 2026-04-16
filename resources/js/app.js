@@ -25,6 +25,11 @@ const dom = {
     monthlyFinanceMonths: document.getElementById('monthly-finance-months'),
     monthlyFinanceRefresh: document.getElementById('monthly-finance-refresh'),
     monthlyFinanceSelectedMonth: document.getElementById('monthly-finance-selected-month'),
+    monthlyFinanceTotal: document.getElementById('monthly-finance-total'),
+    monthlyFinanceTotalRevenue: document.getElementById('monthly-finance-total-revenue'),
+    monthlyFinanceTotalCosts: document.getElementById('monthly-finance-total-costs'),
+    monthlyFinanceTotalProfit: document.getElementById('monthly-finance-total-profit'),
+    monthlyFinanceTotalTax: document.getElementById('monthly-finance-total-tax'),
     monthlyFinanceRevenue: document.getElementById('monthly-finance-revenue'),
     monthlyFinanceCosts: document.getElementById('monthly-finance-costs'),
     monthlyFinanceProfit: document.getElementById('monthly-finance-profit'),
@@ -758,11 +763,15 @@ async function loadStaffStats() {
 }
 
 function resetMonthlyFinanceCards() {
-    if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = '--';
+    if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = 'Selected: --';
     if (dom.monthlyFinanceRevenue) dom.monthlyFinanceRevenue.textContent = '--';
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+    if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
+    if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
+    if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
+    if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
 }
 
 function findSelectedMonthlyFinance() {
@@ -787,7 +796,7 @@ function renderMonthlyFinanceCards() {
     state.monthlyFinanceSelectedMonth = selectedMonth.month_start;
 
     if (dom.monthlyFinanceSelectedMonth) {
-        dom.monthlyFinanceSelectedMonth.textContent = selectedMonth.label || formatMonth(selectedMonth.month_start);
+        dom.monthlyFinanceSelectedMonth.textContent = `Selected: ${selectedMonth.label || formatMonth(selectedMonth.month_start)}`;
     }
     if (dom.monthlyFinanceRevenue) {
         dom.monthlyFinanceRevenue.textContent = formatCurrency(Number(selectedMonth.revenue_total || 0));
@@ -800,6 +809,41 @@ function renderMonthlyFinanceCards() {
     }
     if (dom.monthlyFinanceTax) {
         dom.monthlyFinanceTax.textContent = formatCurrency(Number(selectedMonth.tax_total || 0));
+    }
+}
+
+function renderMonthlyFinanceTotals() {
+    if (!state.monthlyFinance.length) {
+        if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
+        if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
+        if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
+        if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
+        return;
+    }
+
+    const totals = state.monthlyFinance.reduce(
+        (accumulator, month) => {
+            accumulator.revenue += Number(month.revenue_total || 0);
+            accumulator.costs += Number(month.costs_total || 0);
+            return accumulator;
+        },
+        { revenue: 0, costs: 0 }
+    );
+
+    const profit = totals.revenue - totals.costs;
+    const tax = profit * 0.2;
+
+    if (dom.monthlyFinanceTotalRevenue) {
+        dom.monthlyFinanceTotalRevenue.textContent = formatCurrency(totals.revenue);
+    }
+    if (dom.monthlyFinanceTotalCosts) {
+        dom.monthlyFinanceTotalCosts.textContent = formatCurrency(totals.costs);
+    }
+    if (dom.monthlyFinanceTotalProfit) {
+        dom.monthlyFinanceTotalProfit.textContent = formatCurrency(profit);
+    }
+    if (dom.monthlyFinanceTotalTax) {
+        dom.monthlyFinanceTotalTax.textContent = formatCurrency(tax);
     }
 }
 
@@ -834,12 +878,16 @@ async function loadMonthlyFinance() {
 
     dom.monthlyFinanceMonths.innerHTML = '<div class="monthly-finance-empty">Loading months...</div>';
     if (dom.monthlyFinanceSelectedMonth) {
-        dom.monthlyFinanceSelectedMonth.textContent = 'Loading...';
+        dom.monthlyFinanceSelectedMonth.textContent = 'Selected: Loading...';
     }
     if (dom.monthlyFinanceRevenue) dom.monthlyFinanceRevenue.textContent = '--';
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+    if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
+    if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
+    if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
+    if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
 
     try {
         const response = await api.get('/api/admin/stats/monthly-finance');
@@ -860,6 +908,7 @@ async function loadMonthlyFinance() {
         }
 
         renderMonthlyFinanceMonths();
+        renderMonthlyFinanceTotals();
         renderMonthlyFinanceCards();
     } catch (error) {
         state.monthlyFinance = [];
