@@ -347,6 +347,14 @@ body[data-role="staff"] .view.admin-view.active {
     display: block;
 }
 
+.view.admin-only-view {
+    display: none;
+}
+
+body[data-role="admin"] .view.admin-only-view.active {
+    display: block;
+}
+
 .detail-grid {
     display: grid;
     gap: 20px;
@@ -516,12 +524,65 @@ body[data-role="staff"] .view.admin-view.active {
     grid-template-columns: 1fr;
 }
 
+.content-grid.monthly-finance-layout {
+    grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+    align-items: start;
+}
+
 .view[data-view="invoices"] .content-grid {
     grid-template-columns: 1fr;
 }
 
 .admin-panel {
     grid-template-columns: 1fr;
+}
+
+.monthly-finance-right {
+    display: grid;
+    gap: 12px;
+    min-width: 0;
+}
+
+.monthly-finance-selected-month {
+    font-size: 14px;
+    color: var(--text-muted);
+    font-weight: 600;
+    padding: 4px 2px;
+}
+
+.monthly-finance-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.monthly-finance-months {
+    display: grid;
+    gap: 8px;
+}
+
+.monthly-finance-month {
+    text-align: left;
+    border-radius: 12px;
+    border: 1px solid transparent;
+    background: var(--bg-muted);
+    color: var(--text);
+    padding: 10px 12px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 600;
+}
+
+.monthly-finance-month:hover,
+.monthly-finance-month.active {
+    border-color: var(--border);
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.monthly-finance-empty {
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 .card.wide {
@@ -966,6 +1027,10 @@ body[data-role="staff"] .staff-only {
         grid-template-columns: 1fr;
     }
 
+    .content-grid.monthly-finance-layout {
+        grid-template-columns: 1fr;
+    }
+
     .filters {
         grid-template-columns: 1fr 1fr;
     }
@@ -1039,6 +1104,10 @@ body[data-role="staff"] .staff-only {
     }
 
     .filters {
+        grid-template-columns: 1fr;
+    }
+
+    .monthly-finance-metrics {
         grid-template-columns: 1fr;
     }
 

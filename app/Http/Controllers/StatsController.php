@@ -17,30 +17,11 @@ class StatsController extends Controller
         $startOfMonth = now()->startOfMonth();
         $endOfMonth = now()->endOfMonth();
 
-        $completedJobsTotal = (float) Job::query()
-            ->where('status', 'completed')
-            ->where(function ($query) use ($startOfMonth, $endOfMonth): void {
-                $query
-                    ->whereBetween('completed_at', [$startOfMonth, $endOfMonth])
-                    ->orWhere(function ($fallback) use ($startOfMonth, $endOfMonth): void {
-                        $fallback
-                            ->whereNull('completed_at')
-                            ->whereBetween('created_at', [$startOfMonth, $endOfMonth]);
-                    });
-            })
-            ->sum('cost');
+        $completedJobsTotal = $this->calculateCompletedJobsTotalForRange($startOfMonth, $endOfMonth);
 
         $paidSubscriptionsTotal = 0.0;
         if (Schema::hasTable('subscription_months')) {
-            $paidSubscriptionMonths = SubscriptionMonth::query()
-                ->with('subscription:id,monthly_cost')
-                ->where('payment_status', 'paid')
-                ->whereDate('month_start', $startOfMonth->toDateString())
-                ->get(['subscription_id']);
-
-            $paidSubscriptionsTotal = (float) $paidSubscriptionMonths->sum(
-                static fn (SubscriptionMonth $month): float => (float) ($month->subscription?->monthly_cost ?? 0)
-            );
+            $paidSubscriptionsTotal = $this->calculatePaidSubscriptionsTotalForMonth($startOfMonth);
         }
 
         $monthlyCostsTotal = 0.0;
@@ -56,6 +37,64 @@ class StatsController extends Controller
             'costs_total' => $monthlyCostsTotal,
             'profit_total' => $profitTotal,
             'total' => $revenueTotal,
+        ]);
+    }
+
+    public function monthlyFinance(): JsonResponse
+    {
+        $now = now();
+        $startMonth = Carbon::create(
+            $now->year,
+            2,
+            1,
+            0,
+            0,
+            0,
+            config('app.timezone')
+        )->startOfMonth();
+
+        if ($now->month < 2) {
+            $startMonth->subYearNoOverflow();
+        }
+
+        $endMonth = $now->copy()->startOfMonth();
+        $months = [];
+        $cursor = $startMonth->copy();
+        $hasSubscriptionMonths = Schema::hasTable('subscription_months');
+
+        while ($cursor->lte($endMonth)) {
+            $monthStart = $cursor->copy()->startOfMonth();
+            $monthEnd = $cursor->copy()->endOfMonth();
+
+            $completedJobsTotal = $this->calculateCompletedJobsTotalForRange($monthStart, $monthEnd);
+            $paidSubscriptionsTotal = $hasSubscriptionMonths
+                ? $this->calculatePaidSubscriptionsTotalForMonth($monthStart)
+                : 0.0;
+            $costsTotal = $this->calculateCostsTotalForRange($monthStart, $monthEnd);
+            $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
+            $profitTotal = $revenueTotal - $costsTotal;
+            $taxTotal = $profitTotal * 0.2;
+
+            $months[] = [
+                'month_start' => $monthStart->toDateString(),
+                'month_end' => $monthEnd->toDateString(),
+                'label' => $monthStart->format('F Y'),
+                'completed_jobs_total' => round($completedJobsTotal, 2),
+                'paid_subscriptions_total' => round($paidSubscriptionsTotal, 2),
+                'revenue_total' => round($revenueTotal, 2),
+                'costs_total' => round($costsTotal, 2),
+                'profit_total' => round($profitTotal, 2),
+                'tax_total' => round($taxTotal, 2),
+            ];
+
+            $cursor->addMonthNoOverflow()->startOfMonth();
+        }
+
+        return response()->json([
+            'start_month' => $startMonth->toDateString(),
+            'end_month' => $endMonth->toDateString(),
+            'selected_month' => $endMonth->toDateString(),
+            'months' => $months,
         ]);
     }
 
@@ -226,6 +265,35 @@ class StatsController extends Controller
         }
 
         return $total;
+    }
+
+    private function calculateCompletedJobsTotalForRange(Carbon $startDate, Carbon $endDate): float
+    {
+        return (float) Job::query()
+            ->where('status', 'completed')
+            ->where(function ($query) use ($startDate, $endDate): void {
+                $query
+                    ->whereBetween('completed_at', [$startDate, $endDate])
+                    ->orWhere(function ($fallback) use ($startDate, $endDate): void {
+                        $fallback
+                            ->whereNull('completed_at')
+                            ->whereBetween('created_at', [$startDate, $endDate]);
+                    });
+            })
+            ->sum('cost');
+    }
+
+    private function calculatePaidSubscriptionsTotalForMonth(Carbon $monthStart): float
+    {
+        $paidSubscriptionMonths = SubscriptionMonth::query()
+            ->with('subscription:id,monthly_cost')
+            ->where('payment_status', 'paid')
+            ->whereDate('month_start', $monthStart->toDateString())
+            ->get(['subscription_id']);
+
+        return (float) $paidSubscriptionMonths->sum(
+            static fn (SubscriptionMonth $month): float => (float) ($month->subscription?->monthly_cost ?? 0)
+        );
     }
 
     private function addCostToWeeklyBuckets(

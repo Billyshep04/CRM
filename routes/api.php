@@ -55,6 +55,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
+        Route::get('admin/stats/monthly-finance', [StatsController::class, 'monthlyFinance']);
         Route::get('admin/invoice-settings', [AdminInvoiceSettingController::class, 'show']);
         Route::put('admin/invoice-settings', [AdminInvoiceSettingController::class, 'update']);
         Route::get('admin/mail-settings', [AdminMailSettingController::class, 'show']);

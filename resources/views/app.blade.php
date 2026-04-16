@@ -64,6 +64,7 @@
                 </div>
                 <nav class="nav-stack">
                     <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
+                    <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
                     <a href="#" class="nav-item" data-view="customers">Customers</a>
                     <a href="#" class="nav-item" data-view="jobs">Jobs</a>
                     <a href="#" class="nav-item" data-view="subscriptions">Subscriptions</a>
@@ -191,6 +192,49 @@
                                 <button class="btn btn-primary" data-go-view="customers">Add customer</button>
                                 <button class="btn btn-outline" data-go-view="jobs">Create job</button>
                                 <button class="btn btn-outline" data-go-view="subscriptions">Start subscription</button>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="monthly-finance">
+                    <section class="content-grid monthly-finance-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Months</div>
+                                    <div class="card-subtitle">From February to the current month.</div>
+                                </div>
+                                <button class="btn btn-outline" id="monthly-finance-refresh" type="button">Refresh</button>
+                            </div>
+                            <div id="monthly-finance-months" class="monthly-finance-months">
+                                <div class="monthly-finance-empty">Loading months...</div>
+                            </div>
+                        </div>
+
+                        <div class="monthly-finance-right">
+                            <div class="monthly-finance-selected-month" id="monthly-finance-selected-month">--</div>
+                            <div class="monthly-finance-metrics">
+                                <div class="card">
+                                    <div class="card-label">Revenue</div>
+                                    <div class="card-value" id="monthly-finance-revenue">--</div>
+                                    <div class="card-meta">Completed jobs + paid subscriptions</div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-label">Costs</div>
+                                    <div class="card-value" id="monthly-finance-costs">--</div>
+                                    <div class="card-meta">Incurred and recurring costs</div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-label">Profit</div>
+                                    <div class="card-value" id="monthly-finance-profit">--</div>
+                                    <div class="card-meta">Revenue minus costs</div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-label">Tax</div>
+                                    <div class="card-value" id="monthly-finance-tax">--</div>
+                                    <div class="card-meta">Profit × 20%</div>
+                                </div>
                             </div>
                         </div>
                     </section>

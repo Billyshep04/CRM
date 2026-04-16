@@ -22,6 +22,13 @@ const dom = {
     dashboardProfit: document.getElementById('dashboard-profit'),
     dashboardProfitChart: document.getElementById('dashboard-profit-chart'),
     dashboardProfitChartRange: document.getElementById('dashboard-profit-chart-range'),
+    monthlyFinanceMonths: document.getElementById('monthly-finance-months'),
+    monthlyFinanceRefresh: document.getElementById('monthly-finance-refresh'),
+    monthlyFinanceSelectedMonth: document.getElementById('monthly-finance-selected-month'),
+    monthlyFinanceRevenue: document.getElementById('monthly-finance-revenue'),
+    monthlyFinanceCosts: document.getElementById('monthly-finance-costs'),
+    monthlyFinanceProfit: document.getElementById('monthly-finance-profit'),
+    monthlyFinanceTax: document.getElementById('monthly-finance-tax'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -162,6 +169,8 @@ const state = {
     subscriptionMonths: [],
     invoices: [],
     staffUsers: [],
+    monthlyFinance: [],
+    monthlyFinanceSelectedMonth: null,
     mailSettings: null,
     invoiceSettings: null,
     portalInvoices: [],
@@ -222,6 +231,10 @@ const viewMeta = {
     costs: {
         title: 'Costs',
         subtitle: 'Track expenses and receipt uploads.',
+    },
+    'monthly-finance': {
+        title: 'Monthly Finance',
+        subtitle: 'Revenue, costs, profits, and tax by month.',
     },
     invoices: {
         title: 'Invoices',
@@ -330,6 +343,10 @@ function updateSyncStatus(status) {
 }
 
 function setActiveView(view) {
+    if (view === 'monthly-finance' && state.role !== 'admin') {
+        return;
+    }
+
     const meta = viewMeta[view] || viewMeta.dashboard;
     state.view = view;
     const navView = view === 'customer-detail' ? 'customers' : view;
@@ -356,6 +373,9 @@ function setActiveView(view) {
     }
     if (view === 'costs') {
         loadCosts();
+    }
+    if (view === 'monthly-finance' && state.role === 'admin') {
+        loadMonthlyFinance();
     }
     if (view === 'invoices') {
         ensureCustomersLoaded().then(loadInvoices);
@@ -735,6 +755,118 @@ async function loadStaffStats() {
 
     const failures = results.filter((result) => result.status === 'rejected').length;
     updateSyncStatus(failures === results.length ? 'Offline' : failures ? 'Partial' : 'Connected');
+}
+
+function resetMonthlyFinanceCards() {
+    if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = '--';
+    if (dom.monthlyFinanceRevenue) dom.monthlyFinanceRevenue.textContent = '--';
+    if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
+    if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
+    if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+}
+
+function findSelectedMonthlyFinance() {
+    const selected = state.monthlyFinance.find(
+        (item) => item.month_start === state.monthlyFinanceSelectedMonth
+    );
+
+    if (selected) {
+        return selected;
+    }
+
+    return state.monthlyFinance[state.monthlyFinance.length - 1] || null;
+}
+
+function renderMonthlyFinanceCards() {
+    const selectedMonth = findSelectedMonthlyFinance();
+    if (!selectedMonth) {
+        resetMonthlyFinanceCards();
+        return;
+    }
+
+    state.monthlyFinanceSelectedMonth = selectedMonth.month_start;
+
+    if (dom.monthlyFinanceSelectedMonth) {
+        dom.monthlyFinanceSelectedMonth.textContent = selectedMonth.label || formatMonth(selectedMonth.month_start);
+    }
+    if (dom.monthlyFinanceRevenue) {
+        dom.monthlyFinanceRevenue.textContent = formatCurrency(Number(selectedMonth.revenue_total || 0));
+    }
+    if (dom.monthlyFinanceCosts) {
+        dom.monthlyFinanceCosts.textContent = formatCurrency(Number(selectedMonth.costs_total || 0));
+    }
+    if (dom.monthlyFinanceProfit) {
+        dom.monthlyFinanceProfit.textContent = formatCurrency(Number(selectedMonth.profit_total || 0));
+    }
+    if (dom.monthlyFinanceTax) {
+        dom.monthlyFinanceTax.textContent = formatCurrency(Number(selectedMonth.tax_total || 0));
+    }
+}
+
+function renderMonthlyFinanceMonths() {
+    if (!dom.monthlyFinanceMonths) return;
+
+    dom.monthlyFinanceMonths.innerHTML = '';
+
+    if (!state.monthlyFinance.length) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'monthly-finance-empty';
+        emptyState.textContent = 'No monthly data yet.';
+        dom.monthlyFinanceMonths.appendChild(emptyState);
+        return;
+    }
+
+    state.monthlyFinance.forEach((month) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'monthly-finance-month';
+        button.dataset.monthStart = month.month_start;
+        button.textContent = month.label || formatMonth(month.month_start);
+        if (month.month_start === state.monthlyFinanceSelectedMonth) {
+            button.classList.add('active');
+        }
+        dom.monthlyFinanceMonths.appendChild(button);
+    });
+}
+
+async function loadMonthlyFinance() {
+    if (state.role !== 'admin' || !dom.monthlyFinanceMonths) return;
+
+    dom.monthlyFinanceMonths.innerHTML = '<div class="monthly-finance-empty">Loading months...</div>';
+    if (dom.monthlyFinanceSelectedMonth) {
+        dom.monthlyFinanceSelectedMonth.textContent = 'Loading...';
+    }
+    if (dom.monthlyFinanceRevenue) dom.monthlyFinanceRevenue.textContent = '--';
+    if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
+    if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
+    if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+
+    try {
+        const response = await api.get('/api/admin/stats/monthly-finance');
+        const months = Array.isArray(response?.data?.months) ? response.data.months : [];
+        const apiSelectedMonth = String(response?.data?.selected_month || '');
+
+        state.monthlyFinance = months;
+
+        const hasCurrentSelection = months.some(
+            (item) => item.month_start === state.monthlyFinanceSelectedMonth
+        );
+
+        if (!hasCurrentSelection) {
+            const hasApiSelection = months.some((item) => item.month_start === apiSelectedMonth);
+            state.monthlyFinanceSelectedMonth = hasApiSelection
+                ? apiSelectedMonth
+                : (months[months.length - 1]?.month_start || null);
+        }
+
+        renderMonthlyFinanceMonths();
+        renderMonthlyFinanceCards();
+    } catch (error) {
+        state.monthlyFinance = [];
+        state.monthlyFinanceSelectedMonth = null;
+        renderMonthlyFinanceMonths();
+        resetMonthlyFinanceCards();
+    }
 }
 
 async function loadPortalInvoices() {
@@ -2860,10 +2992,13 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
+    const adminOnlyViews = ['monthly-finance'];
+
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
             if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
+            if (adminOnlyViews.includes(item.dataset.view) && state.role !== 'admin') return;
             setActiveView(item.dataset.view);
             setNavOpen(false);
         });
@@ -2873,6 +3008,9 @@ function initializeNavigation() {
         button.addEventListener('click', () => {
             if (button.dataset.goView) {
                 if (button.dataset.goView === 'admin' && state.role === 'customer') {
+                    return;
+                }
+                if (adminOnlyViews.includes(button.dataset.goView) && state.role !== 'admin') {
                     return;
                 }
                 if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
@@ -3175,6 +3313,21 @@ if (dom.invoicesClear) {
         state.filters.invoices.customer = 'all';
         loadInvoices();
     });
+}
+
+if (dom.monthlyFinanceMonths) {
+    dom.monthlyFinanceMonths.addEventListener('click', (event) => {
+        const monthButton = event.target.closest('[data-month-start]');
+        if (!monthButton) return;
+
+        state.monthlyFinanceSelectedMonth = monthButton.dataset.monthStart || null;
+        renderMonthlyFinanceMonths();
+        renderMonthlyFinanceCards();
+    });
+}
+
+if (dom.monthlyFinanceRefresh) {
+    dom.monthlyFinanceRefresh.addEventListener('click', loadMonthlyFinance);
 }
 
 if (dom.portalDownloadLatest) {
