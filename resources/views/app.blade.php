@@ -208,27 +208,6 @@
                                 </div>
                                 <button class="btn btn-outline" id="monthly-finance-refresh" type="button">Refresh</button>
                             </div>
-                            <div class="monthly-finance-total" id="monthly-finance-total">
-                                <div class="monthly-finance-total-title">Total</div>
-                                <div class="monthly-finance-total-grid">
-                                    <div class="monthly-finance-total-item">
-                                        <span>Revenue</span>
-                                        <strong id="monthly-finance-total-revenue">--</strong>
-                                    </div>
-                                    <div class="monthly-finance-total-item">
-                                        <span>Costs</span>
-                                        <strong id="monthly-finance-total-costs">--</strong>
-                                    </div>
-                                    <div class="monthly-finance-total-item">
-                                        <span>Profit</span>
-                                        <strong id="monthly-finance-total-profit">--</strong>
-                                    </div>
-                                    <div class="monthly-finance-total-item">
-                                        <span>Tax</span>
-                                        <strong id="monthly-finance-total-tax">--</strong>
-                                    </div>
-                                </div>
-                            </div>
                             <div id="monthly-finance-months" class="monthly-finance-months">
                                 <div class="monthly-finance-empty">Loading months...</div>
                             </div>
@@ -239,22 +218,22 @@
                                 <div class="card">
                                     <div class="card-label">Revenue</div>
                                     <div class="card-value" id="monthly-finance-revenue">--</div>
-                                    <div class="card-meta">Completed jobs + paid subscriptions</div>
+                                    <div class="card-meta" id="monthly-finance-revenue-meta">Completed jobs + paid subscriptions</div>
                                 </div>
                                 <div class="card">
                                     <div class="card-label">Costs</div>
                                     <div class="card-value" id="monthly-finance-costs">--</div>
-                                    <div class="card-meta">Incurred and recurring costs</div>
+                                    <div class="card-meta" id="monthly-finance-costs-meta">Incurred and recurring costs</div>
                                 </div>
                                 <div class="card">
                                     <div class="card-label">Profit</div>
                                     <div class="card-value" id="monthly-finance-profit">--</div>
-                                    <div class="card-meta">Revenue minus costs</div>
+                                    <div class="card-meta" id="monthly-finance-profit-meta">Revenue minus costs</div>
                                 </div>
                                 <div class="card">
                                     <div class="card-label">Tax</div>
                                     <div class="card-value" id="monthly-finance-tax">--</div>
-                                    <div class="card-meta">20% of Profit</div>
+                                    <div class="card-meta" id="monthly-finance-tax-meta">20% of Profit</div>
                                 </div>
                             </div>
                         </div>

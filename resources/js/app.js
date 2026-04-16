@@ -25,15 +25,14 @@ const dom = {
     monthlyFinanceMonths: document.getElementById('monthly-finance-months'),
     monthlyFinanceRefresh: document.getElementById('monthly-finance-refresh'),
     monthlyFinanceSelectedMonth: document.getElementById('monthly-finance-selected-month'),
-    monthlyFinanceTotal: document.getElementById('monthly-finance-total'),
-    monthlyFinanceTotalRevenue: document.getElementById('monthly-finance-total-revenue'),
-    monthlyFinanceTotalCosts: document.getElementById('monthly-finance-total-costs'),
-    monthlyFinanceTotalProfit: document.getElementById('monthly-finance-total-profit'),
-    monthlyFinanceTotalTax: document.getElementById('monthly-finance-total-tax'),
     monthlyFinanceRevenue: document.getElementById('monthly-finance-revenue'),
+    monthlyFinanceRevenueMeta: document.getElementById('monthly-finance-revenue-meta'),
     monthlyFinanceCosts: document.getElementById('monthly-finance-costs'),
+    monthlyFinanceCostsMeta: document.getElementById('monthly-finance-costs-meta'),
     monthlyFinanceProfit: document.getElementById('monthly-finance-profit'),
+    monthlyFinanceProfitMeta: document.getElementById('monthly-finance-profit-meta'),
     monthlyFinanceTax: document.getElementById('monthly-finance-tax'),
+    monthlyFinanceTaxMeta: document.getElementById('monthly-finance-tax-meta'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -763,19 +762,61 @@ async function loadStaffStats() {
 }
 
 function resetMonthlyFinanceCards() {
-    if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = 'Selected: --';
+    if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = '--';
     if (dom.monthlyFinanceRevenue) dom.monthlyFinanceRevenue.textContent = '--';
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
-    if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
-    if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
-    if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
-    if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
+    if (dom.monthlyFinanceRevenueMeta) dom.monthlyFinanceRevenueMeta.textContent = 'Completed jobs + paid subscriptions';
+    if (dom.monthlyFinanceCostsMeta) dom.monthlyFinanceCostsMeta.textContent = 'Incurred and recurring costs';
+    if (dom.monthlyFinanceProfitMeta) dom.monthlyFinanceProfitMeta.textContent = 'Revenue minus costs';
+    if (dom.monthlyFinanceTaxMeta) dom.monthlyFinanceTaxMeta.textContent = '20% of Profit';
+}
+
+function buildMonthlyFinanceTotalEntry() {
+    if (!state.monthlyFinance.length) {
+        return null;
+    }
+
+    const revenue = state.monthlyFinance.reduce(
+        (sum, month) => sum + Number(month.revenue_total || 0),
+        0
+    );
+    const costs = state.monthlyFinance.reduce(
+        (sum, month) => sum + Number(month.costs_total || 0),
+        0
+    );
+    const profit = revenue - costs;
+    const tax = profit * 0.2;
+
+    const firstMonth = state.monthlyFinance[0];
+    const lastMonth = state.monthlyFinance[state.monthlyFinance.length - 1];
+
+    return {
+        month_start: '__total__',
+        month_end: lastMonth?.month_end || lastMonth?.month_start || null,
+        range_start: firstMonth?.month_start || null,
+        range_end: lastMonth?.month_end || lastMonth?.month_start || null,
+        label: 'Total',
+        revenue_total: revenue,
+        costs_total: costs,
+        profit_total: profit,
+        tax_total: tax,
+    };
+}
+
+function getMonthlyFinanceOptions() {
+    const totalEntry = buildMonthlyFinanceTotalEntry();
+    if (!totalEntry) {
+        return [];
+    }
+
+    return [totalEntry, ...state.monthlyFinance];
 }
 
 function findSelectedMonthlyFinance() {
-    const selected = state.monthlyFinance.find(
+    const options = getMonthlyFinanceOptions();
+    const selected = options.find(
         (item) => item.month_start === state.monthlyFinanceSelectedMonth
     );
 
@@ -783,7 +824,28 @@ function findSelectedMonthlyFinance() {
         return selected;
     }
 
-    return state.monthlyFinance[state.monthlyFinance.length - 1] || null;
+    return options[options.length - 1] || null;
+}
+
+function resolveMonthlyFinancePeriod(selectedItem) {
+    if (!selectedItem) {
+        return '';
+    }
+
+    if (selectedItem.month_start === '__total__') {
+        const rangeStart = selectedItem.range_start;
+        const rangeEnd = selectedItem.range_end;
+        if (rangeStart && rangeEnd) {
+            return `${formatDateWithYear(rangeStart)} to ${formatDateWithYear(rangeEnd)}`;
+        }
+        return '';
+    }
+
+    if (selectedItem.month_start && selectedItem.month_end) {
+        return `${formatDateWithYear(selectedItem.month_start)} to ${formatDateWithYear(selectedItem.month_end)}`;
+    }
+
+    return selectedItem.label || '';
 }
 
 function renderMonthlyFinanceCards() {
@@ -794,9 +856,13 @@ function renderMonthlyFinanceCards() {
     }
 
     state.monthlyFinanceSelectedMonth = selectedMonth.month_start;
+    const periodText = resolveMonthlyFinancePeriod(selectedMonth);
 
     if (dom.monthlyFinanceSelectedMonth) {
-        dom.monthlyFinanceSelectedMonth.textContent = `Selected: ${selectedMonth.label || formatMonth(selectedMonth.month_start)}`;
+        const selectionLabel = selectedMonth.label || formatMonth(selectedMonth.month_start);
+        dom.monthlyFinanceSelectedMonth.textContent = periodText
+            ? `Selected: ${selectionLabel} (${periodText})`
+            : `Selected: ${selectionLabel}`;
     }
     if (dom.monthlyFinanceRevenue) {
         dom.monthlyFinanceRevenue.textContent = formatCurrency(Number(selectedMonth.revenue_total || 0));
@@ -810,40 +876,19 @@ function renderMonthlyFinanceCards() {
     if (dom.monthlyFinanceTax) {
         dom.monthlyFinanceTax.textContent = formatCurrency(Number(selectedMonth.tax_total || 0));
     }
-}
 
-function renderMonthlyFinanceTotals() {
-    if (!state.monthlyFinance.length) {
-        if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
-        if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
-        if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
-        if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
-        return;
+    const suffix = periodText ? ` • ${periodText}` : '';
+    if (dom.monthlyFinanceRevenueMeta) {
+        dom.monthlyFinanceRevenueMeta.textContent = `Completed jobs + paid subscriptions${suffix}`;
     }
-
-    const totals = state.monthlyFinance.reduce(
-        (accumulator, month) => {
-            accumulator.revenue += Number(month.revenue_total || 0);
-            accumulator.costs += Number(month.costs_total || 0);
-            return accumulator;
-        },
-        { revenue: 0, costs: 0 }
-    );
-
-    const profit = totals.revenue - totals.costs;
-    const tax = profit * 0.2;
-
-    if (dom.monthlyFinanceTotalRevenue) {
-        dom.monthlyFinanceTotalRevenue.textContent = formatCurrency(totals.revenue);
+    if (dom.monthlyFinanceCostsMeta) {
+        dom.monthlyFinanceCostsMeta.textContent = `Incurred and recurring costs${suffix}`;
     }
-    if (dom.monthlyFinanceTotalCosts) {
-        dom.monthlyFinanceTotalCosts.textContent = formatCurrency(totals.costs);
+    if (dom.monthlyFinanceProfitMeta) {
+        dom.monthlyFinanceProfitMeta.textContent = `Revenue minus costs${suffix}`;
     }
-    if (dom.monthlyFinanceTotalProfit) {
-        dom.monthlyFinanceTotalProfit.textContent = formatCurrency(profit);
-    }
-    if (dom.monthlyFinanceTotalTax) {
-        dom.monthlyFinanceTotalTax.textContent = formatCurrency(tax);
+    if (dom.monthlyFinanceTaxMeta) {
+        dom.monthlyFinanceTaxMeta.textContent = `20% of Profit${suffix}`;
     }
 }
 
@@ -852,7 +897,8 @@ function renderMonthlyFinanceMonths() {
 
     dom.monthlyFinanceMonths.innerHTML = '';
 
-    if (!state.monthlyFinance.length) {
+    const options = getMonthlyFinanceOptions();
+    if (!options.length) {
         const emptyState = document.createElement('div');
         emptyState.className = 'monthly-finance-empty';
         emptyState.textContent = 'No monthly data yet.';
@@ -860,7 +906,7 @@ function renderMonthlyFinanceMonths() {
         return;
     }
 
-    state.monthlyFinance.forEach((month) => {
+    options.forEach((month) => {
         const button = document.createElement('button');
         button.type = 'button';
         button.className = 'monthly-finance-month';
@@ -884,10 +930,6 @@ async function loadMonthlyFinance() {
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
-    if (dom.monthlyFinanceTotalRevenue) dom.monthlyFinanceTotalRevenue.textContent = '--';
-    if (dom.monthlyFinanceTotalCosts) dom.monthlyFinanceTotalCosts.textContent = '--';
-    if (dom.monthlyFinanceTotalProfit) dom.monthlyFinanceTotalProfit.textContent = '--';
-    if (dom.monthlyFinanceTotalTax) dom.monthlyFinanceTotalTax.textContent = '--';
 
     try {
         const response = await api.get('/api/admin/stats/monthly-finance');
@@ -896,19 +938,19 @@ async function loadMonthlyFinance() {
 
         state.monthlyFinance = months;
 
-        const hasCurrentSelection = months.some(
+        const options = getMonthlyFinanceOptions();
+        const hasCurrentSelection = options.some(
             (item) => item.month_start === state.monthlyFinanceSelectedMonth
         );
 
         if (!hasCurrentSelection) {
-            const hasApiSelection = months.some((item) => item.month_start === apiSelectedMonth);
+            const hasApiSelection = options.some((item) => item.month_start === apiSelectedMonth);
             state.monthlyFinanceSelectedMonth = hasApiSelection
                 ? apiSelectedMonth
-                : (months[months.length - 1]?.month_start || null);
+                : (options[options.length - 1]?.month_start || null);
         }
 
         renderMonthlyFinanceMonths();
-        renderMonthlyFinanceTotals();
         renderMonthlyFinanceCards();
     } catch (error) {
         state.monthlyFinance = [];
