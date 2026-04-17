@@ -126,6 +126,7 @@ CREATE TABLE `customers` (
   `email` VARCHAR(255) NOT NULL,
   `billing_address` TEXT NOT NULL,
   `notes` TEXT NULL,
+  `archived_at` TIMESTAMP NULL DEFAULT NULL,
   `user_id` BIGINT UNSIGNED NULL,
   `created_by_user_id` BIGINT UNSIGNED NULL,
   `created_at` TIMESTAMP NULL DEFAULT NULL,

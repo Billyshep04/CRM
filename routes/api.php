@@ -57,6 +57,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::middleware('role:admin')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
+        Route::patch('customers/{customer}/archive', [CustomerController::class, 'archive']);
+        Route::patch('customers/{customer}/unarchive', [CustomerController::class, 'unarchive']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
         Route::get('admin/stats/monthly-finance', [StatsController::class, 'monthlyFinance']);

@@ -88,9 +88,11 @@ const dom = {
     customerWebsiteCancel: document.getElementById('customer-website-cancel'),
     customerWebsiteTitle: document.getElementById('customer-website-title'),
     customerDetailBack: document.getElementById('customer-detail-back'),
+    customerDetailArchive: document.getElementById('customer-detail-archive'),
     customersSearch: document.getElementById('customers-search'),
     customersClear: document.getElementById('customers-clear'),
     customersLoadMore: document.getElementById('customers-load-more'),
+    customersArchivedToggle: document.getElementById('customers-archived-toggle'),
     jobsFilterStatus: document.getElementById('jobs-filter-status'),
     jobsFilterCustomer: document.getElementById('jobs-filter-customer'),
     jobsClear: document.getElementById('jobs-clear'),
@@ -192,6 +194,7 @@ const state = {
     filters: {
         customers: {
             search: '',
+            archived: false,
         },
         jobs: {
             status: 'all',
@@ -1680,6 +1683,23 @@ function getCustomerName(id) {
     return source.find((customer) => customer.id === id)?.name || 'Unknown';
 }
 
+function isViewingArchivedCustomers() {
+    return state.filters.customers.archived === true;
+}
+
+function updateCustomerArchiveControls() {
+    if (dom.customersArchivedToggle) {
+        const viewingArchived = isViewingArchivedCustomers();
+        dom.customersArchivedToggle.textContent = viewingArchived ? 'Active customers' : 'Archived customers';
+        dom.customersArchivedToggle.classList.toggle('is-active', viewingArchived);
+    }
+
+    if (dom.customerDetailArchive) {
+        const isArchived = state.currentCustomer?.is_archived === true;
+        dom.customerDetailArchive.textContent = isArchived ? 'Unarchive' : 'Archive';
+    }
+}
+
 async function loadCustomerOptions() {
     try {
         const perPage = 200;
@@ -1717,6 +1737,7 @@ async function ensureCustomersLoaded() {
 async function loadCustomers(append = false) {
     if (!dom.customersTable) return;
     setFormStatus(dom.customerFormStatus, '');
+    updateCustomerArchiveControls();
     setLoadMoreLoading('customers', true);
     if (!append) {
         resetPagination('customers');
@@ -1733,11 +1754,15 @@ async function loadCustomers(append = false) {
             per_page: 20,
             page,
             search: state.filters.customers.search || undefined,
+            archived: isViewingArchivedCustomers() ? 1 : undefined,
         });
         const response = await api.get(`/api/customers${query}`);
         const items = response?.data?.data ?? [];
         state.customers = append ? [...state.customers, ...items] : items;
-        const optionsSource = state.customerOptions.length ? state.customerOptions : state.customers;
+        let optionsSource = state.customerOptions.filter((customer) => customer?.is_archived !== true);
+        if (!optionsSource.length && !isViewingArchivedCustomers()) {
+            optionsSource = state.customers.filter((customer) => customer?.is_archived !== true);
+        }
         populateCustomerSelects(optionsSource);
         populateCustomerFilterSelects(optionsSource);
         updatePagination('customers', response, append);
@@ -1760,7 +1785,8 @@ function renderCustomers() {
     if (!state.customers.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty customers';
-        emptyRow.innerHTML = '<span>No customers yet.</span><span></span><span></span><span></span><span></span>';
+        const emptyMessage = isViewingArchivedCustomers() ? 'No archived customers yet.' : 'No customers yet.';
+        emptyRow.innerHTML = `<span>${emptyMessage}</span><span></span><span></span><span></span><span></span>`;
         dom.customersTable.appendChild(emptyRow);
         return;
     }
@@ -1885,6 +1911,7 @@ async function loadCustomerDetail(customerId) {
         if (!customer) return;
 
         state.currentCustomer = customer;
+        updateCustomerArchiveControls();
 
         if (dom.customerDetailTitle) dom.customerDetailTitle.textContent = customer.name || 'Customer';
         if (dom.customerDetailEmail) dom.customerDetailEmail.textContent = customer.email || '';
@@ -1917,8 +1944,15 @@ function openCustomerDetail(customerId) {
     if (!customerId) return;
     resetCustomerWebsiteForm();
     state.currentCustomer = { id: customerId };
+    updateCustomerArchiveControls();
     setActiveView('customer-detail');
     loadCustomerDetail(customerId);
+}
+
+function setCustomersArchivedMode(showArchived) {
+    state.filters.customers.archived = showArchived === true;
+    updateCustomerArchiveControls();
+    loadCustomers();
 }
 
 function resetCustomerForm() {
@@ -2016,6 +2050,48 @@ async function handleCustomerAction(event) {
             await loadCustomers();
         } catch (error) {
             setFormStatus(dom.customerFormStatus, 'Unable to delete customer.', true);
+        }
+    }
+}
+
+async function handleCustomerArchiveToggle() {
+    if (state.role !== 'admin' || !state.currentCustomer?.id) {
+        return;
+    }
+
+    const customerId = Number(state.currentCustomer.id);
+    if (!customerId) return;
+
+    const isArchived = state.currentCustomer?.is_archived === true;
+    const intentLabel = isArchived ? 'unarchive' : 'archive';
+    if (!window.confirm(`${isArchived ? 'Unarchive' : 'Archive'} this customer?`)) {
+        return;
+    }
+
+    if (dom.customerDetailArchive) {
+        dom.customerDetailArchive.disabled = true;
+    }
+
+    try {
+        const endpoint = isArchived ? 'unarchive' : 'archive';
+        const response = await api.patch(`/api/customers/${customerId}/${endpoint}`);
+        const savedCustomer = response?.data?.data ?? response?.data ?? null;
+        if (savedCustomer) {
+            state.currentCustomer = {
+                ...state.currentCustomer,
+                ...savedCustomer,
+            };
+        }
+        updateCustomerArchiveControls();
+        await loadCustomerOptions();
+        await loadCustomers();
+        showToast(`Customer ${intentLabel}d.`);
+        await loadCustomerDetail(customerId);
+    } catch (error) {
+        setFormStatus(dom.customerWebsiteStatus, getErrorMessage(error, `Unable to ${intentLabel} customer.`), true);
+    } finally {
+        if (dom.customerDetailArchive) {
+            dom.customerDetailArchive.disabled = false;
         }
     }
 }
@@ -3420,6 +3496,12 @@ if (dom.customersRefresh) {
     dom.customersRefresh.addEventListener('click', loadCustomers);
 }
 
+if (dom.customersArchivedToggle) {
+    dom.customersArchivedToggle.addEventListener('click', () => {
+        setCustomersArchivedMode(!isViewingArchivedCustomers());
+    });
+}
+
 if (dom.customersLoadMore) {
     dom.customersLoadMore.addEventListener('click', () => loadCustomers(true));
 }
@@ -3436,6 +3518,8 @@ if (dom.customersClear) {
     dom.customersClear.addEventListener('click', () => {
         if (dom.customersSearch) dom.customersSearch.value = '';
         state.filters.customers.search = '';
+        state.filters.customers.archived = false;
+        updateCustomerArchiveControls();
         loadCustomers();
     });
 }
@@ -3454,6 +3538,10 @@ if (dom.customerWebsitesList) {
 
 if (dom.customerDetailBack) {
     dom.customerDetailBack.addEventListener('click', () => setActiveView('customers'));
+}
+
+if (dom.customerDetailArchive) {
+    dom.customerDetailArchive.addEventListener('click', handleCustomerArchiveToggle);
 }
 
 if (dom.jobForm) {
@@ -3676,4 +3764,5 @@ initializeInvoiceForm();
 initializeNavigation();
 applyStoredTheme();
 renderSubscriptionMonths();
+updateCustomerArchiveControls();
 loadSession();

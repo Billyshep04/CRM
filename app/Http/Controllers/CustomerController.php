@@ -18,6 +18,7 @@ class CustomerController extends Controller
     public function index(Request $request)
     {
         $this->syncCustomerPortalUsersIfNeeded();
+        $archivedOnly = $request->boolean('archived');
 
         $query = Customer::query()
             ->withCount(['jobs', 'subscriptions'])
@@ -27,6 +28,11 @@ class CustomerController extends Controller
                     $builder->where('status', 'active');
                 },
             ], 'monthly_cost')
+            ->when(
+                $archivedOnly,
+                static fn ($builder) => $builder->whereNotNull('archived_at'),
+                static fn ($builder) => $builder->whereNull('archived_at')
+            )
             ->latest();
 
         if ($search = $request->query('search')) {
@@ -42,6 +48,24 @@ class CustomerController extends Controller
         return CustomerResource::collection(
             $query->paginate($perPage)
         );
+    }
+
+    public function archive(Customer $customer)
+    {
+        if ($customer->archived_at === null) {
+            $customer->forceFill(['archived_at' => now()])->save();
+        }
+
+        return new CustomerResource($customer->fresh());
+    }
+
+    public function unarchive(Customer $customer)
+    {
+        if ($customer->archived_at !== null) {
+            $customer->forceFill(['archived_at' => null])->save();
+        }
+
+        return new CustomerResource($customer->fresh());
     }
 
     public function store(Request $request)

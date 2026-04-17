@@ -248,7 +248,10 @@
                                     <div class="card-title">Customers</div>
                                     <div class="card-subtitle">Manage customer profiles and portal access.</div>
                                 </div>
-                                <button class="btn btn-outline" id="customers-refresh">Refresh</button>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="customers-archived-toggle" type="button">Archived customers</button>
+                                    <button class="btn btn-outline" id="customers-refresh" type="button">Refresh</button>
+                                </div>
                             </div>
                             <div class="filters">
                                 <label class="field">
@@ -322,7 +325,10 @@
                                     <div class="card-title" id="customer-detail-title">Customer</div>
                                     <div class="card-subtitle" id="customer-detail-email">Email</div>
                                 </div>
-                                <button class="btn btn-outline" id="customer-detail-back">Back to customers</button>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline admin-inline-only" id="customer-detail-archive" type="button">Archive</button>
+                                    <button class="btn btn-outline" id="customer-detail-back" type="button">Back to customers</button>
+                                </div>
                             </div>
                             <div class="detail-meta">
                                 <div>

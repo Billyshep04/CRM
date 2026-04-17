@@ -25,6 +25,13 @@ class Customer extends Model
         'created_by_user_id',
     ];
 
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'archived_at' => 'datetime',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

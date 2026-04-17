@@ -21,6 +21,8 @@ class CustomerResource extends JsonResource
             'email' => $this->email,
             'billing_address' => $this->billing_address,
             'notes' => $this->notes,
+            'archived_at' => $this->archived_at,
+            'is_archived' => $this->archived_at !== null,
             'user_id' => $this->user_id,
             'created_by_user_id' => $this->created_by_user_id,
             'created_at' => $this->created_at,
