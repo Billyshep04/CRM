@@ -36,6 +36,10 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
         Route::apiResource('customers', CustomerController::class);
         Route::apiResource('jobs', JobController::class);
+        Route::get('jobs/{job}/photos', [JobController::class, 'photos']);
+        Route::post('jobs/{job}/photos', [JobController::class, 'uploadPhotos']);
+        Route::get('jobs/{job}/photos/download-all', [JobController::class, 'downloadAllPhotos']);
+        Route::get('jobs/{job}/photos/{file}/download', [JobController::class, 'downloadPhoto']);
         Route::post('subscription-months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPaymentById']);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);
         Route::patch('subscriptions/{subscription}/months/{subscriptionMonth}', [SubscriptionController::class, 'updateMonth']);

@@ -11,6 +11,7 @@ use App\Models\Subscription;
 use App\Services\InvoiceNumberGenerator;
 use App\Services\InvoicePdfService;
 use App\Services\RecurringInvoiceService;
+use App\Services\InvoiceJobStatusSyncService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -198,7 +199,8 @@ class InvoiceController extends Controller
     public function updatePaymentStatus(
         Request $request,
         Invoice $invoice,
-        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync,
+        InvoiceJobStatusSyncService $invoiceJobStatusSync
     )
     {
         $validated = $request->validate([
@@ -221,7 +223,9 @@ class InvoiceController extends Controller
             ])->save();
         }
 
-        $subscriptionMonthSync->syncFromInvoice($invoice->loadMissing('lineItems'), $validated['payment_status']);
+        $loadedInvoice = $invoice->loadMissing('lineItems');
+        $subscriptionMonthSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
+        $invoiceJobStatusSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
 
         return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
     }

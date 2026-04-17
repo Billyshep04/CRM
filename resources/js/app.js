@@ -125,6 +125,13 @@ const dom = {
     jobFormStatus: document.getElementById('job-form-status'),
     jobFormCancel: document.getElementById('job-form-cancel'),
     jobCustomerSelect: document.getElementById('job-customer-select'),
+    jobPhotoUploadForm: document.getElementById('job-photo-upload-form'),
+    jobPhotoUploadStatus: document.getElementById('job-photo-upload-status'),
+    jobPhotoFilesInput: document.getElementById('job-photo-files'),
+    jobPhotoJobSelect: document.getElementById('job-photo-job-select'),
+    jobPhotosTable: document.getElementById('job-photos-table'),
+    jobPhotosRefresh: document.getElementById('job-photos-refresh'),
+    jobPhotosDownloadAll: document.getElementById('job-photos-download-all'),
     jobsRefresh: document.getElementById('jobs-refresh'),
     subscriptionsTable: document.getElementById('subscriptions-table'),
     subscriptionForm: document.getElementById('subscription-form'),
@@ -168,6 +175,7 @@ const state = {
     customers: [],
     customerOptions: [],
     jobs: [],
+    jobPhotos: [],
     costs: [],
     subscriptions: [],
     subscriptionMonths: [],
@@ -208,6 +216,7 @@ const state = {
     editing: {
         customer: null,
         job: null,
+        jobPhotoJobId: null,
         cost: null,
         subscription: null,
         invoice: null,
@@ -2080,6 +2089,210 @@ async function handleCustomerWebsiteAction(event) {
     }
 }
 
+function formatFileSize(sizeInBytes) {
+    const size = Number(sizeInBytes || 0);
+    if (!Number.isFinite(size) || size <= 0) return '0 B';
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function setJobPhotoActionsEnabled(isEnabled) {
+    if (dom.jobPhotosDownloadAll) {
+        dom.jobPhotosDownloadAll.disabled = !isEnabled;
+    }
+    if (dom.jobPhotoFilesInput) {
+        dom.jobPhotoFilesInput.disabled = !isEnabled;
+    }
+    const uploadButton = dom.jobPhotoUploadForm?.querySelector('button[type="submit"]');
+    if (uploadButton) {
+        uploadButton.disabled = !isEnabled;
+    }
+}
+
+function getSelectedJobPhotoJobId() {
+    const raw = state.editing.jobPhotoJobId ?? dom.jobPhotoJobSelect?.value ?? '';
+    const id = Number(raw);
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function renderJobPhotosPlaceholder(message) {
+    if (!dom.jobPhotosTable) return;
+    resetTable(dom.jobPhotosTable);
+    const row = document.createElement('div');
+    row.className = 'table-row table-empty job-photos';
+    row.innerHTML = `<span>${escapeHtml(message)}</span><span></span><span></span><span></span>`;
+    dom.jobPhotosTable.appendChild(row);
+}
+
+function syncJobPhotoJobOptions() {
+    if (!dom.jobPhotoJobSelect) return;
+
+    const previousId = String(state.editing.jobPhotoJobId ?? dom.jobPhotoJobSelect.value ?? '');
+    const jobs = state.jobs.filter((job) => Number(job?.id) > 0);
+
+    dom.jobPhotoJobSelect.innerHTML = '';
+
+    if (!jobs.length) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No jobs available';
+        dom.jobPhotoJobSelect.appendChild(option);
+        state.editing.jobPhotoJobId = null;
+        state.jobPhotos = [];
+        setJobPhotoActionsEnabled(false);
+        renderJobPhotosPlaceholder('No jobs available.');
+        return;
+    }
+
+    jobs.forEach((job) => {
+        const option = document.createElement('option');
+        option.value = String(job.id);
+        const customerName = job.customer?.name || getCustomerName(job.customer_id);
+        option.textContent = `#${job.id} - ${truncate(job.description, 46)} (${customerName})`;
+        dom.jobPhotoJobSelect.appendChild(option);
+    });
+
+    const selectedId = jobs.some((job) => String(job.id) === previousId)
+        ? previousId
+        : String(jobs[0].id);
+
+    dom.jobPhotoJobSelect.value = selectedId;
+    state.editing.jobPhotoJobId = Number(selectedId);
+    setJobPhotoActionsEnabled(true);
+}
+
+function renderJobPhotos() {
+    if (!dom.jobPhotosTable) return;
+    resetTable(dom.jobPhotosTable);
+
+    if (!state.jobPhotos.length) {
+        renderJobPhotosPlaceholder('No photos uploaded for this job yet.');
+        return;
+    }
+
+    state.jobPhotos.forEach((photo) => {
+        const row = document.createElement('div');
+        row.className = 'table-row job-photos';
+        row.innerHTML = `
+            <span>${formatDateWithYear(photo.created_at)}</span>
+            <span>${escapeHtml(photo.original_name || 'photo')}</span>
+            <span>${escapeHtml(formatFileSize(photo.size))}</span>
+            <div class="row-actions">
+                <button class="btn btn-outline btn-small" data-action="download-photo" data-id="${photo.id}">Download</button>
+            </div>
+        `;
+        dom.jobPhotosTable.appendChild(row);
+    });
+}
+
+async function loadJobPhotos() {
+    if (!dom.jobPhotosTable) return;
+    const jobId = getSelectedJobPhotoJobId();
+    if (!jobId) {
+        state.jobPhotos = [];
+        setJobPhotoActionsEnabled(false);
+        renderJobPhotosPlaceholder('Select a job to view uploaded photos.');
+        return;
+    }
+
+    setJobPhotoActionsEnabled(true);
+    renderJobPhotosPlaceholder('Loading photos...');
+
+    try {
+        const response = await api.get(`/api/jobs/${jobId}/photos`);
+        state.jobPhotos = response?.data?.data ?? [];
+        renderJobPhotos();
+    } catch (error) {
+        state.jobPhotos = [];
+        renderJobPhotosPlaceholder('Unable to load photos.');
+    }
+}
+
+async function downloadJobPhoto(jobId, fileId, filename) {
+    try {
+        const response = await api.get(`/api/jobs/${jobId}/photos/${fileId}/download`, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+        setFormStatus(dom.jobPhotoUploadStatus, getErrorMessage(error, 'Unable to download photo.'), true);
+    }
+}
+
+async function downloadAllJobPhotos() {
+    const jobId = getSelectedJobPhotoJobId();
+    if (!jobId) {
+        setFormStatus(dom.jobPhotoUploadStatus, 'Select a job first.', true);
+        return;
+    }
+
+    try {
+        const response = await api.get(`/api/jobs/${jobId}/photos/download-all`, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `job-${jobId}-photos.zip`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+        setFormStatus(dom.jobPhotoUploadStatus, getErrorMessage(error, 'Unable to download all photos.'), true);
+    }
+}
+
+async function handleJobPhotoUploadSubmit(event) {
+    event.preventDefault();
+    if (!dom.jobPhotoUploadForm || !dom.jobPhotoFilesInput) return;
+
+    const jobId = getSelectedJobPhotoJobId();
+    if (!jobId) {
+        setFormStatus(dom.jobPhotoUploadStatus, 'Select a job first.', true);
+        return;
+    }
+
+    const files = Array.from(dom.jobPhotoFilesInput.files || []);
+    if (!files.length) {
+        setFormStatus(dom.jobPhotoUploadStatus, 'Choose one or more images first.', true);
+        return;
+    }
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append('photos[]', file));
+
+    try {
+        await api.post(`/api/jobs/${jobId}/photos`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        setFormStatus(dom.jobPhotoUploadStatus, `${files.length} photo${files.length === 1 ? '' : 's'} uploaded.`);
+        dom.jobPhotoUploadForm.reset();
+        await loadJobPhotos();
+    } catch (error) {
+        setFormStatus(dom.jobPhotoUploadStatus, getErrorMessage(error, 'Unable to upload photos.'), true);
+    }
+}
+
+async function handleJobPhotoAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+    const action = actionButton.dataset.action;
+    const fileId = Number(actionButton.dataset.id);
+    const jobId = getSelectedJobPhotoJobId();
+    if (!jobId || !fileId) return;
+
+    if (action === 'download-photo') {
+        const photo = state.jobPhotos.find((item) => Number(item.id) === fileId);
+        const filename = photo?.original_name || `job-photo-${fileId}.jpg`;
+        await downloadJobPhoto(jobId, fileId, filename);
+    }
+}
+
 async function loadJobs(append = false) {
     if (!dom.jobsTable) return;
     setFormStatus(dom.jobFormStatus, '');
@@ -2106,12 +2319,18 @@ async function loadJobs(append = false) {
         state.jobs = append ? [...state.jobs, ...items] : items;
         updatePagination('jobs', response, append);
         renderJobs();
+        syncJobPhotoJobOptions();
+        if (state.view === 'jobs' && state.editing.jobPhotoJobId) {
+            loadJobPhotos();
+        }
     } catch (error) {
         resetTable(dom.jobsTable);
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty jobs';
         emptyRow.innerHTML = '<span>Unable to load jobs.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.jobsTable.appendChild(emptyRow);
+        state.jobs = [];
+        syncJobPhotoJobOptions();
     } finally {
         setLoadMoreLoading('jobs', false);
     }
@@ -3251,6 +3470,30 @@ if (dom.jobsTable) {
 
 if (dom.jobsRefresh) {
     dom.jobsRefresh.addEventListener('click', loadJobs);
+}
+
+if (dom.jobPhotoJobSelect) {
+    dom.jobPhotoJobSelect.addEventListener('change', () => {
+        state.editing.jobPhotoJobId = Number(dom.jobPhotoJobSelect.value || 0) || null;
+        setFormStatus(dom.jobPhotoUploadStatus, '');
+        loadJobPhotos();
+    });
+}
+
+if (dom.jobPhotoUploadForm) {
+    dom.jobPhotoUploadForm.addEventListener('submit', handleJobPhotoUploadSubmit);
+}
+
+if (dom.jobPhotosTable) {
+    dom.jobPhotosTable.addEventListener('click', handleJobPhotoAction);
+}
+
+if (dom.jobPhotosRefresh) {
+    dom.jobPhotosRefresh.addEventListener('click', loadJobPhotos);
+}
+
+if (dom.jobPhotosDownloadAll) {
+    dom.jobPhotosDownloadAll.addEventListener('click', downloadAllJobPhotos);
 }
 
 if (dom.jobsLoadMore) {

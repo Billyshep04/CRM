@@ -763,6 +763,10 @@ body[data-role="admin"] .view.admin-only-view.active {
     grid-template-columns: 1.2fr 0.8fr 0.7fr 0.7fr 1fr;
 }
 
+.table-row.job-photos {
+    grid-template-columns: 0.9fr 1.6fr 0.5fr 0.7fr;
+}
+
 .table-row.costs {
     grid-template-columns: 0.8fr 1.6fr 0.7fr 0.9fr 0.8fr 0.7fr;
 }
@@ -906,6 +910,14 @@ body[data-role="admin"] .view.admin-only-view.active {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
+}
+
+.jobs-photos-card {
+    grid-column: 1 / -1;
+}
+
+.jobs-photos-card .filters {
+    grid-template-columns: minmax(240px, 1fr);
 }
 
 .site-card {
@@ -1108,6 +1120,10 @@ body[data-role="staff"] .staff-only {
     }
 
     .monthly-finance-metrics {
+        grid-template-columns: 1fr;
+    }
+
+    .table-row.job-photos {
         grid-template-columns: 1fr;
     }
 

@@ -12,6 +12,7 @@ use App\Models\Job;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
+use App\Services\InvoiceJobStatusSyncService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
 use App\Services\RecurringInvoiceService;
 use Illuminate\Http\UploadedFile;
@@ -130,7 +131,8 @@ class PortalController extends Controller
     public function updateInvoicePayment(
         Request $request,
         Invoice $invoice,
-        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync,
+        InvoiceJobStatusSyncService $invoiceJobStatusSync
     )
     {
         $customerIds = $this->resolveCustomerIds($request);
@@ -159,7 +161,9 @@ class PortalController extends Controller
             ])->save();
         }
 
-        $subscriptionMonthSync->syncFromInvoice($invoice->loadMissing('lineItems'), $validated['payment_status']);
+        $loadedInvoice = $invoice->loadMissing('lineItems');
+        $subscriptionMonthSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
+        $invoiceJobStatusSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
 
         return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
     }

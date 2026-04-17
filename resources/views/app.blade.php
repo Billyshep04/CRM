@@ -541,6 +541,52 @@
                                 </div>
                             </form>
                         </div>
+
+                        <div class="card wide jobs-photos-card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Job photos</div>
+                                    <div class="card-subtitle">Upload and download multiple images per job.</div>
+                                </div>
+                                <div class="row-actions">
+                                    <button class="btn btn-outline" id="job-photos-refresh" type="button">Refresh</button>
+                                    <button class="btn btn-outline" id="job-photos-download-all" type="button">Download all</button>
+                                </div>
+                            </div>
+
+                            <div class="filters">
+                                <label class="field">
+                                    <span>Job</span>
+                                    <select id="job-photo-job-select"></select>
+                                </label>
+                            </div>
+
+                            <div class="table" id="job-photos-table">
+                                <div class="table-row table-header job-photos">
+                                    <span>Uploaded</span>
+                                    <span>Filename</span>
+                                    <span>Size</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty job-photos">
+                                    <span>Choose a job to load photos.</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+
+                            <form id="job-photo-upload-form" class="form-stack" style="margin-top: 16px;">
+                                <label class="field">
+                                    <span>Upload images</span>
+                                    <input type="file" name="photos[]" id="job-photo-files" accept=".png,.jpg,.jpeg,.webp,.gif,image/*" multiple required>
+                                </label>
+                                <div id="job-photo-upload-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Upload photos</button>
+                                </div>
+                            </form>
+                        </div>
                     </section>
                 </section>
 
