@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
 
 class CustomerController extends Controller
@@ -19,6 +20,7 @@ class CustomerController extends Controller
     {
         $this->syncCustomerPortalUsersIfNeeded();
         $archivedOnly = $request->boolean('archived');
+        $supportsArchiving = $this->supportsCustomerArchiving();
 
         $query = Customer::query()
             ->withCount(['jobs', 'subscriptions'])
@@ -28,12 +30,15 @@ class CustomerController extends Controller
                     $builder->where('status', 'active');
                 },
             ], 'monthly_cost')
-            ->when(
+            ->latest();
+
+        if ($supportsArchiving) {
+            $query->when(
                 $archivedOnly,
                 static fn ($builder) => $builder->whereNotNull('archived_at'),
                 static fn ($builder) => $builder->whereNull('archived_at')
-            )
-            ->latest();
+            );
+        }
 
         if ($search = $request->query('search')) {
             $query->where(function ($builder) use ($search): void {
@@ -52,6 +57,12 @@ class CustomerController extends Controller
 
     public function archive(Customer $customer)
     {
+        if (!$this->supportsCustomerArchiving()) {
+            throw ValidationException::withMessages([
+                'archive' => ['Customer archiving is unavailable until the latest migration is run.'],
+            ]);
+        }
+
         if ($customer->archived_at === null) {
             $customer->forceFill(['archived_at' => now()])->save();
         }
@@ -61,6 +72,12 @@ class CustomerController extends Controller
 
     public function unarchive(Customer $customer)
     {
+        if (!$this->supportsCustomerArchiving()) {
+            throw ValidationException::withMessages([
+                'archive' => ['Customer archiving is unavailable until the latest migration is run.'],
+            ]);
+        }
+
         if ($customer->archived_at !== null) {
             $customer->forceFill(['archived_at' => null])->save();
         }
@@ -248,5 +265,18 @@ class CustomerController extends Controller
         if ($customer->user_id !== $portalUser->id) {
             $customer->forceFill(['user_id' => $portalUser->id])->saveQuietly();
         }
+    }
+
+    private function supportsCustomerArchiving(): bool
+    {
+        static $supportsArchiving = null;
+
+        if ($supportsArchiving !== null) {
+            return $supportsArchiving;
+        }
+
+        $supportsArchiving = Schema::hasColumn('customers', 'archived_at');
+
+        return $supportsArchiving;
     }
 }
