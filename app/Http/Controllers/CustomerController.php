@@ -7,10 +7,12 @@ use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class CustomerController extends Controller
 {
@@ -20,7 +22,7 @@ class CustomerController extends Controller
     {
         $this->syncCustomerPortalUsersIfNeeded();
         $archivedOnly = $request->boolean('archived');
-        $supportsArchiving = $this->supportsCustomerArchiving();
+        $supportsArchiving = $this->supportsCustomerArchiving($archivedOnly);
 
         $query = Customer::query()
             ->withCount(['jobs', 'subscriptions'])
@@ -38,6 +40,8 @@ class CustomerController extends Controller
                 static fn ($builder) => $builder->whereNotNull('archived_at'),
                 static fn ($builder) => $builder->whereNull('archived_at')
             );
+        } elseif ($archivedOnly) {
+            $query->whereRaw('1 = 0');
         }
 
         if ($search = $request->query('search')) {
@@ -57,9 +61,9 @@ class CustomerController extends Controller
 
     public function archive(Customer $customer)
     {
-        if (!$this->supportsCustomerArchiving()) {
+        if (!$this->supportsCustomerArchiving(true)) {
             throw ValidationException::withMessages([
-                'archive' => ['Customer archiving is unavailable until the latest migration is run.'],
+                'archive' => ['Customer archiving is unavailable. Add the archived_at column on customers, then retry.'],
             ]);
         }
 
@@ -72,9 +76,9 @@ class CustomerController extends Controller
 
     public function unarchive(Customer $customer)
     {
-        if (!$this->supportsCustomerArchiving()) {
+        if (!$this->supportsCustomerArchiving(true)) {
             throw ValidationException::withMessages([
-                'archive' => ['Customer archiving is unavailable until the latest migration is run.'],
+                'archive' => ['Customer archiving is unavailable. Add the archived_at column on customers, then retry.'],
             ]);
         }
 
@@ -267,12 +271,25 @@ class CustomerController extends Controller
         }
     }
 
-    private function supportsCustomerArchiving(): bool
+    private function supportsCustomerArchiving(bool $attemptAutoCreate = false): bool
     {
         static $supportsArchiving = null;
 
         if ($supportsArchiving !== null) {
             return $supportsArchiving;
+        }
+
+        $supportsArchiving = Schema::hasColumn('customers', 'archived_at');
+        if ($supportsArchiving || !$attemptAutoCreate) {
+            return $supportsArchiving;
+        }
+
+        try {
+            Schema::table('customers', function (Blueprint $table): void {
+                $table->timestamp('archived_at')->nullable()->after('notes');
+            });
+        } catch (Throwable) {
+            // Ignore and keep returning false if the DB user cannot alter schema.
         }
 
         $supportsArchiving = Schema::hasColumn('customers', 'archived_at');

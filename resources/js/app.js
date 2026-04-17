@@ -2088,7 +2088,9 @@ async function handleCustomerArchiveToggle() {
         showToast(`Customer ${intentLabel}d.`);
         await loadCustomerDetail(customerId);
     } catch (error) {
-        setFormStatus(dom.customerWebsiteStatus, getErrorMessage(error, `Unable to ${intentLabel} customer.`), true);
+        const message = getErrorMessage(error, `Unable to ${intentLabel} customer.`);
+        setFormStatus(dom.customerWebsiteStatus, message, true);
+        showToast(message, true);
     } finally {
         if (dom.customerDetailArchive) {
             dom.customerDetailArchive.disabled = false;
