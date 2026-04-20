@@ -225,6 +225,10 @@ const state = {
         invoice: null,
         website: null,
     },
+    invoiceBillables: {
+        jobsByCustomer: {},
+        subscriptionsByCustomer: {},
+    },
 };
 
 const viewMeta = {
@@ -2473,6 +2477,7 @@ async function handleJobSubmit(event) {
             await api.post('/api/jobs', payload);
             setFormStatus(dom.jobFormStatus, 'Job created.');
         }
+        clearInvoiceBillableCache('job');
         await loadJobs();
         resetJobForm();
     } catch (error) {
@@ -2502,6 +2507,7 @@ async function handleJobAction(event) {
         if (!window.confirm('Delete this job?')) return;
         try {
             await api.delete(`/api/jobs/${id}`);
+            clearInvoiceBillableCache('job');
             await loadJobs();
         } catch (error) {
             setFormStatus(dom.jobFormStatus, 'Unable to delete job.', true);
@@ -2932,6 +2938,7 @@ async function handleSubscriptionSubmit(event) {
             await api.post('/api/subscriptions', payload);
             setFormStatus(dom.subscriptionFormStatus, 'Subscription created.');
         }
+        clearInvoiceBillableCache('subscription');
         await loadSubscriptions();
         resetSubscriptionForm();
     } catch (error) {
@@ -2963,6 +2970,7 @@ async function handleSubscriptionAction(event) {
         if (!window.confirm('Delete this subscription?')) return;
         try {
             await api.delete(`/api/subscriptions/${id}`);
+            clearInvoiceBillableCache('subscription');
             if (state.editing.subscription === id) {
                 resetSubscriptionForm();
             }
@@ -2979,6 +2987,178 @@ function clearInvoiceLineItems() {
     }
 }
 
+function getInvoiceCustomerId() {
+    const raw = dom.invoiceCustomerSelect?.value || '';
+    const id = Number(raw);
+    return Number.isFinite(id) && id > 0 ? id : null;
+}
+
+function getInvoiceBillableCache(type) {
+    return type === 'subscription'
+        ? state.invoiceBillables.subscriptionsByCustomer
+        : state.invoiceBillables.jobsByCustomer;
+}
+
+function clearInvoiceBillableCache(type = null) {
+    if (!type || type === 'job') {
+        state.invoiceBillables.jobsByCustomer = {};
+    }
+    if (!type || type === 'subscription') {
+        state.invoiceBillables.subscriptionsByCustomer = {};
+    }
+}
+
+async function loadInvoiceBillables(type, customerId) {
+    if (!customerId || !['job', 'subscription'].includes(type)) {
+        return [];
+    }
+
+    const cache = getInvoiceBillableCache(type);
+    if (cache[customerId]) {
+        return cache[customerId];
+    }
+
+    const endpoint = type === 'job' ? '/api/jobs' : '/api/subscriptions';
+    const perPage = 100;
+    let page = 1;
+    let lastPage = 1;
+    const items = [];
+
+    do {
+        const query = buildQuery({ customer_id: customerId, per_page: perPage, page });
+        const response = await api.get(`${endpoint}${query}`);
+        const pageItems = response?.data?.data ?? [];
+        items.push(...pageItems);
+        const meta = response?.data?.meta || {};
+        lastPage = meta.last_page ?? page;
+        page += 1;
+    } while (page <= lastPage);
+
+    cache[customerId] = items;
+    return items;
+}
+
+function applySelectedInvoiceBillableDetails(row, billableType, billables) {
+    const descriptionInput = row.querySelector('input[name="description"]');
+    const unitPriceInput = row.querySelector('input[name="unit_price"]');
+    const billableIdInput = row.querySelector('select[name="billable_id"]');
+    if (!descriptionInput || !unitPriceInput || !billableIdInput) return;
+
+    const selectedId = Number(billableIdInput.value);
+    const selectedBillable = billables.find((item) => Number(item.id) === selectedId);
+
+    descriptionInput.readOnly = billableType === 'job';
+
+    if (!selectedBillable) {
+        return;
+    }
+
+    if (billableType === 'job') {
+        descriptionInput.value = String(selectedBillable.description || '');
+        unitPriceInput.value = normalizeQuantityDisplay(selectedBillable.cost || 0);
+        return;
+    }
+
+    if (billableType === 'subscription') {
+        if (!descriptionInput.value.trim()) {
+            descriptionInput.value = String(selectedBillable.description || '');
+        }
+        if (!String(unitPriceInput.value || '').trim()) {
+            unitPriceInput.value = normalizeQuantityDisplay(selectedBillable.monthly_cost || 0);
+        }
+    }
+}
+
+async function syncInvoiceLineItemBillableState(row, preferredBillableId = null) {
+    if (!row) return;
+
+    const descriptionInput = row.querySelector('input[name="description"]');
+    const billableTypeInput = row.querySelector('select[name="billable_type"]');
+    const billableIdInput = row.querySelector('select[name="billable_id"]');
+
+    if (!descriptionInput || !billableTypeInput || !billableIdInput) {
+        return;
+    }
+
+    const billableType = billableTypeInput.value;
+    const currentId = String(preferredBillableId ?? billableIdInput.value ?? '');
+
+    billableIdInput.innerHTML = '';
+
+    if (billableType !== 'job' && billableType !== 'subscription') {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Manual line item';
+        billableIdInput.appendChild(option);
+        billableIdInput.disabled = true;
+        descriptionInput.readOnly = false;
+        return;
+    }
+
+    const customerId = getInvoiceCustomerId();
+    if (!customerId) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Select customer first';
+        billableIdInput.appendChild(option);
+        billableIdInput.disabled = true;
+        descriptionInput.readOnly = billableType === 'job';
+        return;
+    }
+
+    const loadingOption = document.createElement('option');
+    loadingOption.value = '';
+    loadingOption.textContent = billableType === 'job' ? 'Loading jobs...' : 'Loading subscriptions...';
+    billableIdInput.appendChild(loadingOption);
+    billableIdInput.disabled = true;
+
+    try {
+        const billables = await loadInvoiceBillables(billableType, customerId);
+        billableIdInput.innerHTML = '';
+
+        const placeholderOption = document.createElement('option');
+        placeholderOption.value = '';
+        placeholderOption.textContent = billableType === 'job' ? 'Select job' : 'Select subscription';
+        billableIdInput.appendChild(placeholderOption);
+
+        billables.forEach((billable) => {
+            const option = document.createElement('option');
+            option.value = String(billable.id);
+            const amount = billableType === 'job'
+                ? Number(billable.cost || 0)
+                : Number(billable.monthly_cost || 0);
+            option.textContent = `#${billable.id} - ${truncate(billable.description, 46)} (${formatCurrency(amount)})`;
+            billableIdInput.appendChild(option);
+        });
+
+        if (currentId && billables.some((billable) => String(billable.id) === currentId)) {
+            billableIdInput.value = currentId;
+        } else {
+            billableIdInput.value = '';
+        }
+
+        billableIdInput.disabled = false;
+        applySelectedInvoiceBillableDetails(row, billableType, billables);
+    } catch (error) {
+        billableIdInput.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = billableType === 'job' ? 'Unable to load jobs' : 'Unable to load subscriptions';
+        billableIdInput.appendChild(option);
+        billableIdInput.disabled = true;
+        descriptionInput.readOnly = billableType === 'job';
+    }
+}
+
+function refreshInvoiceLineItemBillables() {
+    if (!dom.invoiceLineItems) return;
+    const rows = Array.from(dom.invoiceLineItems.querySelectorAll('.line-item'));
+    rows.forEach((row) => {
+        const billableIdInput = row.querySelector('select[name="billable_id"]');
+        syncInvoiceLineItemBillableState(row, billableIdInput?.value ?? '');
+    });
+}
+
 function addInvoiceLineItem(item = {}) {
     const template = document.getElementById('invoice-line-item-template');
     if (!template || !dom.invoiceLineItems) return;
@@ -2990,20 +3170,25 @@ function addInvoiceLineItem(item = {}) {
     row.querySelector('input[name="quantity"]').value = normalizeQuantityDisplay(item.quantity || 1);
     row.querySelector('input[name="unit_price"]').value = item.unit_price || '';
     const billableTypeInput = row.querySelector('select[name="billable_type"]');
-    const billableIdInput = row.querySelector('input[name="billable_id"]');
+    const billableIdInput = row.querySelector('select[name="billable_id"]');
     billableTypeInput.value = item.billable_type || '';
-    billableIdInput.value = item.billable_id || '';
+    if (item.billable_id) {
+        billableIdInput.value = String(item.billable_id);
+    }
+    syncInvoiceLineItemBillableState(row, item.billable_id || '');
 
-    const syncBillableIdState = () => {
-        const requiresId = billableTypeInput.value === 'job' || billableTypeInput.value === 'subscription';
-        billableIdInput.disabled = !requiresId;
-        if (!requiresId) {
-            billableIdInput.value = '';
-        }
-    };
+    billableTypeInput.addEventListener('change', () => {
+        syncInvoiceLineItemBillableState(row, '');
+    });
 
-    syncBillableIdState();
-    billableTypeInput.addEventListener('change', syncBillableIdState);
+    billableIdInput.addEventListener('change', () => {
+        const customerId = getInvoiceCustomerId();
+        const billableType = billableTypeInput.value;
+        if (!customerId || !['job', 'subscription'].includes(billableType)) return;
+        const cache = getInvoiceBillableCache(billableType);
+        const billables = cache[customerId] || [];
+        applySelectedInvoiceBillableDetails(row, billableType, billables);
+    });
 
     row.addEventListener('click', (event) => {
         const button = event.target.closest('[data-action="remove-line-item"]');
@@ -3042,7 +3227,7 @@ function collectInvoiceLineItems() {
         const quantity = Number(row.querySelector('input[name="quantity"]').value);
         const unitPrice = Number(row.querySelector('input[name="unit_price"]').value);
         const billableType = row.querySelector('select[name="billable_type"]').value;
-        const billableIdRaw = row.querySelector('input[name="billable_id"]').value;
+        const billableIdRaw = row.querySelector('select[name="billable_id"]').value;
         const billableId = billableType ? (billableIdRaw ? Number(billableIdRaw) : null) : null;
 
         if (!description) {
@@ -3693,6 +3878,12 @@ if (dom.subscriptionsClear) {
 
 if (dom.invoiceForm) {
     dom.invoiceForm.addEventListener('submit', handleInvoiceSubmit);
+}
+
+if (dom.invoiceCustomerSelect) {
+    dom.invoiceCustomerSelect.addEventListener('change', () => {
+        refreshInvoiceLineItemBillables();
+    });
 }
 
 if (dom.invoiceFormCancel) {

@@ -1242,7 +1242,9 @@
                     <option value="job">Job</option>
                     <option value="subscription">Subscription</option>
                 </select>
-                <input type="number" name="billable_id" min="1" placeholder="Billable ID (job/subscription)">
+                <select name="billable_id" disabled>
+                    <option value="">Manual line item</option>
+                </select>
                 <button type="button" class="btn btn-outline btn-small" data-action="remove-line-item">Remove</button>
             </div>
         </template>

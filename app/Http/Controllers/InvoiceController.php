@@ -249,6 +249,7 @@ class InvoiceController extends Controller
         foreach ($lineItems as $item) {
             $billableType = $this->resolveBillableType($item['billable_type'] ?? null);
             $billableId = $item['billable_id'] ?? null;
+            $description = trim((string) ($item['description'] ?? ''));
 
             // Manual line items should not fail if a billable ID was typed accidentally.
             if (!$billableType) {
@@ -270,14 +271,25 @@ class InvoiceController extends Controller
                         'status' => 'invoiced',
                         'invoiced_at' => $billable->invoiced_at ?? now(),
                     ]);
+
+                    // Keep invoice description aligned to the source job description.
+                    $description = trim((string) $billable->description);
+                } elseif ($billable instanceof Subscription && $description === '') {
+                    $description = trim((string) $billable->description);
                 }
+            }
+
+            if ($description === '') {
+                throw ValidationException::withMessages([
+                    'line_items' => ['Line item description is required.'],
+                ]);
             }
 
             InvoiceLineItem::create([
                 'invoice_id' => $invoice->id,
                 'billable_type' => $billableType,
                 'billable_id' => $billableId,
-                'description' => $item['description'],
+                'description' => $description,
                 'quantity' => $item['quantity'],
                 'unit_price' => $item['unit_price'],
                 'total' => $item['quantity'] * $item['unit_price'],
