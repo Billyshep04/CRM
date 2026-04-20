@@ -20,10 +20,12 @@ use App\Services\InvoiceSubscriptionMonthSyncService;
 use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -89,16 +91,30 @@ class PortalController extends Controller
 
     public function proposals(Request $request)
     {
+        $perPage = $request->integer('per_page', 15);
+        if (!$this->proposalsFeatureReady()) {
+            $emptyPaginator = new LengthAwarePaginator(
+                [],
+                0,
+                $perPage,
+                1,
+                [
+                    'path' => $request->url(),
+                    'query' => $request->query(),
+                ]
+            );
+
+            return ProposalResource::collection($emptyPaginator);
+        }
+
         $customerIds = $this->resolveCustomerIds($request);
 
         $query = Proposal::query()
             ->whereIn('customer_id', $customerIds)
             ->with(['job', 'lineItems', 'pdfFile'])
-            ->latest();
+            ->latest('id');
 
         $query->filterByStatus($request->query('status'));
-
-        $perPage = $request->integer('per_page', 15);
 
         return ProposalResource::collection(
             $query->paginate($perPage)
@@ -133,6 +149,10 @@ class PortalController extends Controller
 
     public function proposal(Request $request, Proposal $proposal)
     {
+        if (!$this->proposalsFeatureReady()) {
+            abort(404);
+        }
+
         $customerIds = $this->resolveCustomerIds($request);
 
         if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
@@ -164,6 +184,10 @@ class PortalController extends Controller
 
     public function downloadProposal(Request $request, Proposal $proposal, ProposalPdfService $pdfService)
     {
+        if (!$this->proposalsFeatureReady()) {
+            abort(404);
+        }
+
         $customerIds = $this->resolveCustomerIds($request);
 
         if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
@@ -226,6 +250,12 @@ class PortalController extends Controller
 
     public function updateProposalStatus(Request $request, Proposal $proposal)
     {
+        if (!$this->proposalsFeatureReady()) {
+            throw ValidationException::withMessages([
+                'proposal' => ['Proposal database tables are missing. Run database migrations, then retry.'],
+            ]);
+        }
+
         $customerIds = $this->resolveCustomerIds($request);
 
         if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
@@ -507,5 +537,10 @@ class PortalController extends Controller
                 'status' => ['Proposal status was updated, but admin notification email could not be sent.'],
             ]);
         }
+    }
+
+    private function proposalsFeatureReady(): bool
+    {
+        return Schema::hasTable('proposals') && Schema::hasTable('proposal_line_items');
     }
 }

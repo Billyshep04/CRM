@@ -9,9 +9,12 @@ use App\Models\Proposal;
 use App\Models\ProposalLineItem;
 use App\Services\ProposalNumberGenerator;
 use App\Services\ProposalPdfService;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -21,9 +24,26 @@ class ProposalController extends Controller
 {
     public function index(Request $request)
     {
+        $perPage = $request->integer('per_page', 15);
+
+        if (!$this->ensureProposalTablesExist(true)) {
+            $emptyPaginator = new LengthAwarePaginator(
+                [],
+                0,
+                $perPage,
+                1,
+                [
+                    'path' => $request->url(),
+                    'query' => $request->query(),
+                ]
+            );
+
+            return ProposalResource::collection($emptyPaginator);
+        }
+
         $query = Proposal::query()
             ->with(['customer', 'job', 'lineItems', 'pdfFile'])
-            ->latest();
+            ->latest('id');
 
         if ($customerId = $request->query('customer_id')) {
             $query->where('customer_id', $customerId);
@@ -31,13 +51,13 @@ class ProposalController extends Controller
 
         $query->filterByStatus($request->query('status'));
 
-        $perPage = $request->integer('per_page', 15);
-
         return ProposalResource::collection($query->paginate($perPage));
     }
 
     public function store(Request $request, ProposalNumberGenerator $numberGenerator)
     {
+        $this->assertProposalTablesExist();
+
         $validated = $this->validatePayload($request);
 
         /** @var Proposal $proposal */
@@ -78,11 +98,15 @@ class ProposalController extends Controller
 
     public function show(Proposal $proposal)
     {
+        $this->assertProposalTablesExist();
+
         return new ProposalResource($proposal->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
 
     public function update(Request $request, Proposal $proposal)
     {
+        $this->assertProposalTablesExist();
+
         $validated = $this->validatePayload($request);
 
         /** @var Proposal $targetProposal */
@@ -125,6 +149,8 @@ class ProposalController extends Controller
 
     public function updateStatus(Request $request, Proposal $proposal)
     {
+        $this->assertProposalTablesExist();
+
         $validated = $request->validate([
             'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected'])],
         ]);
@@ -137,6 +163,8 @@ class ProposalController extends Controller
 
     public function send(Proposal $proposal)
     {
+        $this->assertProposalTablesExist();
+
         $proposal->forceFill(['status' => 'sent'])->save();
         $this->applyStatusTransitions($proposal, 'sent');
 
@@ -145,6 +173,8 @@ class ProposalController extends Controller
 
     public function createNewVersion(Proposal $proposal, Request $request)
     {
+        $this->assertProposalTablesExist();
+
         $newProposal = DB::transaction(function () use ($proposal, $request): Proposal {
             return $this->createDraftVersion($proposal, $request->user()?->id, true);
         });
@@ -154,6 +184,8 @@ class ProposalController extends Controller
 
     public function download(Proposal $proposal, ProposalPdfService $pdfService)
     {
+        $this->assertProposalTablesExist();
+
         if (!$proposal->pdfFile) {
             $storedFile = $pdfService->generate($proposal);
             $proposal->forceFill(['pdf_file_id' => $storedFile->id])->save();
@@ -168,6 +200,8 @@ class ProposalController extends Controller
 
     public function destroy(Proposal $proposal)
     {
+        $this->assertProposalTablesExist();
+
         $proposal->delete();
 
         return response()->json(['message' => 'Proposal deleted.']);
@@ -351,6 +385,132 @@ class ProposalController extends Controller
                 'send' => ['Proposal email could not be sent. Check mail settings in .env (MAIL_*).'],
             ]);
         }
+    }
+
+    private function assertProposalTablesExist(): void
+    {
+        if ($this->ensureProposalTablesExist(true)) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'proposal' => ['Proposal database tables are missing. Run database migrations, then retry.'],
+        ]);
+    }
+
+    private function ensureProposalTablesExist(bool $attemptAutoCreate = false): bool
+    {
+        $proposalsReady = Schema::hasTable('proposals')
+            && Schema::hasColumn('proposals', 'customer_id')
+            && Schema::hasColumn('proposals', 'job_id')
+            && Schema::hasColumn('proposals', 'proposal_number')
+            && Schema::hasColumn('proposals', 'version')
+            && Schema::hasColumn('proposals', 'title')
+            && Schema::hasColumn('proposals', 'issue_date')
+            && Schema::hasColumn('proposals', 'expiry_date')
+            && Schema::hasColumn('proposals', 'status')
+            && Schema::hasColumn('proposals', 'subtotal')
+            && Schema::hasColumn('proposals', 'total')
+            && Schema::hasColumn('proposals', 'pdf_file_id')
+            && Schema::hasColumn('proposals', 'sent_at')
+            && Schema::hasColumn('proposals', 'accepted_at')
+            && Schema::hasColumn('proposals', 'rejected_at')
+            && Schema::hasColumn('proposals', 'locked_at')
+            && Schema::hasColumn('proposals', 'created_at')
+            && Schema::hasColumn('proposals', 'updated_at')
+            && Schema::hasColumn('proposals', 'deleted_at');
+
+        $lineItemsReady = Schema::hasTable('proposal_line_items')
+            && Schema::hasColumn('proposal_line_items', 'proposal_id')
+            && Schema::hasColumn('proposal_line_items', 'description')
+            && Schema::hasColumn('proposal_line_items', 'quantity')
+            && Schema::hasColumn('proposal_line_items', 'unit_price')
+            && Schema::hasColumn('proposal_line_items', 'total')
+            && Schema::hasColumn('proposal_line_items', 'created_at')
+            && Schema::hasColumn('proposal_line_items', 'updated_at');
+
+        if ($proposalsReady && $lineItemsReady) {
+            return true;
+        }
+
+        if (!$attemptAutoCreate) {
+            return false;
+        }
+
+        try {
+            if (!Schema::hasTable('proposals')) {
+                Schema::create('proposals', function (Blueprint $table): void {
+                    $table->id();
+                    $table->foreignId('customer_id')->constrained('customers')->cascadeOnDelete();
+                    $table->foreignId('job_id')->nullable()->constrained('jobs')->nullOnDelete();
+                    $table->foreignId('created_by_user_id')->nullable()->constrained('users')->nullOnDelete();
+                    $table->foreignId('parent_proposal_id')->nullable()->constrained('proposals')->nullOnDelete();
+                    $table->string('proposal_number');
+                    $table->unsignedInteger('version')->default(1);
+                    $table->string('title');
+                    $table->date('issue_date');
+                    $table->date('expiry_date');
+                    $table->string('status')->default('draft');
+                    $table->text('notes')->nullable();
+                    $table->text('terms')->nullable();
+                    $table->decimal('subtotal', 12, 2);
+                    $table->decimal('total', 12, 2);
+                    $table->foreignId('pdf_file_id')->nullable()->constrained('files')->nullOnDelete();
+                    $table->timestamp('sent_at')->nullable();
+                    $table->timestamp('accepted_at')->nullable();
+                    $table->timestamp('rejected_at')->nullable();
+                    $table->timestamp('locked_at')->nullable();
+                    $table->timestamps();
+                    $table->softDeletes();
+                    $table->unique(['proposal_number', 'version']);
+                });
+            }
+
+            if (!Schema::hasTable('proposal_line_items')) {
+                Schema::create('proposal_line_items', function (Blueprint $table): void {
+                    $table->id();
+                    $table->foreignId('proposal_id')->constrained('proposals')->cascadeOnDelete();
+                    $table->text('description');
+                    $table->decimal('quantity', 8, 2)->default(1);
+                    $table->decimal('unit_price', 12, 2);
+                    $table->decimal('total', 12, 2);
+                    $table->timestamps();
+                });
+            }
+        } catch (Throwable) {
+            // Ignore and return false below if schema cannot be updated at runtime.
+        }
+
+        $proposalsReady = Schema::hasTable('proposals')
+            && Schema::hasColumn('proposals', 'customer_id')
+            && Schema::hasColumn('proposals', 'job_id')
+            && Schema::hasColumn('proposals', 'proposal_number')
+            && Schema::hasColumn('proposals', 'version')
+            && Schema::hasColumn('proposals', 'title')
+            && Schema::hasColumn('proposals', 'issue_date')
+            && Schema::hasColumn('proposals', 'expiry_date')
+            && Schema::hasColumn('proposals', 'status')
+            && Schema::hasColumn('proposals', 'subtotal')
+            && Schema::hasColumn('proposals', 'total')
+            && Schema::hasColumn('proposals', 'pdf_file_id')
+            && Schema::hasColumn('proposals', 'sent_at')
+            && Schema::hasColumn('proposals', 'accepted_at')
+            && Schema::hasColumn('proposals', 'rejected_at')
+            && Schema::hasColumn('proposals', 'locked_at')
+            && Schema::hasColumn('proposals', 'created_at')
+            && Schema::hasColumn('proposals', 'updated_at')
+            && Schema::hasColumn('proposals', 'deleted_at');
+
+        $lineItemsReady = Schema::hasTable('proposal_line_items')
+            && Schema::hasColumn('proposal_line_items', 'proposal_id')
+            && Schema::hasColumn('proposal_line_items', 'description')
+            && Schema::hasColumn('proposal_line_items', 'quantity')
+            && Schema::hasColumn('proposal_line_items', 'unit_price')
+            && Schema::hasColumn('proposal_line_items', 'total')
+            && Schema::hasColumn('proposal_line_items', 'created_at')
+            && Schema::hasColumn('proposal_line_items', 'updated_at');
+
+        return $proposalsReady && $lineItemsReady;
     }
 
     /**
