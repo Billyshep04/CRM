@@ -4069,7 +4069,7 @@ if (dom.monthlyFinanceRefresh) {
 if (dom.monthlyFinanceSettingsToggle) {
     dom.monthlyFinanceSettingsToggle.addEventListener('click', (event) => {
         event.preventDefault();
-        const isOpen = dom.monthlyFinanceSettingsPopover ? !dom.monthlyFinanceSettingsPopover.hidden : false;
+        const isOpen = dom.monthlyFinanceSettingsPopover ? dom.monthlyFinanceSettingsPopover.hidden : false;
         setMonthlyFinanceSettingsOpen(isOpen);
     });
 }
