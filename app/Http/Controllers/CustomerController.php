@@ -26,7 +26,11 @@ class CustomerController extends Controller
 
         $query = Customer::query()
             ->withCount(['jobs', 'subscriptions'])
-            ->withSum('jobs', 'cost')
+            ->withSum([
+                'invoices as paid_invoices_sum_total' => function ($builder): void {
+                    $builder->where('status', 'paid');
+                },
+            ], 'total')
             ->withSum([
                 'subscriptions as subscriptions_sum_monthly_cost' => function ($builder): void {
                     $builder->where('status', 'active');

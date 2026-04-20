@@ -1796,7 +1796,7 @@ function renderCustomers() {
     }
 
     state.customers.forEach((customer) => {
-        const totalSpent = Number(customer.jobs_sum_cost || 0);
+        const totalSpent = Number(customer.paid_invoices_sum_total || 0);
         const mrr = Number(customer.subscriptions_sum_monthly_cost || 0);
         const row = document.createElement('div');
         row.className = 'table-row customers clickable';
@@ -1926,9 +1926,13 @@ async function loadCustomerDetail(customerId) {
 
         const jobs = customer.jobs || [];
         const subscriptions = customer.subscriptions || [];
+        const invoices = customer.invoices || [];
         const websites = customer.websites || [];
 
-        const totalSpent = jobs.reduce((sum, job) => sum + Number(job.cost || 0), 0);
+        const totalSpent = Number(customer.paid_invoices_sum_total || 0)
+            || invoices
+                .filter((invoice) => invoice.status === 'paid')
+                .reduce((sum, invoice) => sum + Number(invoice.total || 0), 0);
         const monthlyRecurring = subscriptions.reduce((sum, sub) => sum + Number(sub.monthly_cost || 0), 0);
         const activeCount = subscriptions.filter((sub) => sub.status === 'active').length;
 

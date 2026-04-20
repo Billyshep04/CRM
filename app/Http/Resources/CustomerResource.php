@@ -29,7 +29,7 @@ class CustomerResource extends JsonResource
             'updated_at' => $this->updated_at,
             'jobs_count' => $this->jobs_count,
             'subscriptions_count' => $this->subscriptions_count,
-            'jobs_sum_cost' => $this->jobs_sum_cost,
+            'paid_invoices_sum_total' => $this->paid_invoices_sum_total,
             'subscriptions_sum_monthly_cost' => $this->subscriptions_sum_monthly_cost,
             'jobs' => JobResource::collection($this->whenLoaded('jobs')),
             'subscriptions' => SubscriptionResource::collection($this->whenLoaded('subscriptions')),

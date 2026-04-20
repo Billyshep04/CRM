@@ -346,7 +346,7 @@
                             <div class="card">
                                 <div class="card-label">Total spent</div>
                                 <div class="card-value" id="customer-total-spent">£0.00</div>
-                                <div class="card-meta">Sum of all jobs</div>
+                                <div class="card-meta">Sum of paid invoices</div>
                             </div>
                             <div class="card">
                                 <div class="card-label">Monthly recurring revenue</div>
