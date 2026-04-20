@@ -556,6 +556,52 @@ body[data-role="admin"] .view.admin-only-view.active {
     gap: 16px;
 }
 
+.monthly-finance-card.hidden {
+    display: none;
+}
+
+.monthly-finance-settings {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 40;
+}
+
+.view[data-view="monthly-finance"]:not(.active) .monthly-finance-settings {
+    display: none;
+}
+
+.monthly-finance-settings-popover {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px;
+    min-width: 220px;
+    box-shadow: var(--shadow);
+    display: grid;
+    gap: 8px;
+}
+
+.monthly-finance-settings-title {
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.monthly-finance-settings-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text);
+}
+
+.monthly-finance-settings-option input {
+    accent-color: var(--accent);
+}
+
 .monthly-finance-months {
     display: grid;
     gap: 8px;
@@ -1114,6 +1160,11 @@ body[data-role="staff"] .staff-only {
 
     body[data-nav="open"] {
         overflow: hidden;
+    }
+
+    .monthly-finance-settings {
+        right: 14px;
+        bottom: 14px;
     }
 }
 

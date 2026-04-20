@@ -33,6 +33,20 @@ const dom = {
     monthlyFinanceProfitMeta: document.getElementById('monthly-finance-profit-meta'),
     monthlyFinanceTax: document.getElementById('monthly-finance-tax'),
     monthlyFinanceTaxMeta: document.getElementById('monthly-finance-tax-meta'),
+    monthlyFinanceOwed: document.getElementById('monthly-finance-owed'),
+    monthlyFinanceOwedMeta: document.getElementById('monthly-finance-owed-meta'),
+    monthlyFinanceCardRevenue: document.getElementById('monthly-finance-card-revenue'),
+    monthlyFinanceCardCosts: document.getElementById('monthly-finance-card-costs'),
+    monthlyFinanceCardProfit: document.getElementById('monthly-finance-card-profit'),
+    monthlyFinanceCardTax: document.getElementById('monthly-finance-card-tax'),
+    monthlyFinanceCardOwed: document.getElementById('monthly-finance-card-owed'),
+    monthlyFinanceSettingsToggle: document.getElementById('monthly-finance-settings-toggle'),
+    monthlyFinanceSettingsPopover: document.getElementById('monthly-finance-settings-popover'),
+    monthlyFinanceToggleRevenue: document.getElementById('monthly-finance-toggle-revenue'),
+    monthlyFinanceToggleCosts: document.getElementById('monthly-finance-toggle-costs'),
+    monthlyFinanceToggleProfit: document.getElementById('monthly-finance-toggle-profit'),
+    monthlyFinanceToggleTax: document.getElementById('monthly-finance-toggle-tax'),
+    monthlyFinanceToggleOwed: document.getElementById('monthly-finance-toggle-owed'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -170,6 +184,14 @@ const api = window.axios;
 const dashboardProfitYear = 2026;
 let toastTimer = null;
 
+const monthlyFinanceBoxDefaults = {
+    revenue: true,
+    costs: true,
+    profit: true,
+    tax: true,
+    owed: true,
+};
+
 const state = {
     view: 'dashboard',
     role: 'guest',
@@ -185,6 +207,7 @@ const state = {
     staffUsers: [],
     monthlyFinance: [],
     monthlyFinanceSelectedMonth: null,
+    monthlyFinanceBoxVisibility: { ...monthlyFinanceBoxDefaults },
     mailSettings: null,
     invoiceSettings: null,
     portalInvoices: [],
@@ -382,6 +405,10 @@ function setActiveView(view) {
     if (dom.pageTitle) dom.pageTitle.textContent = meta.title;
     if (dom.pageSubtitle) dom.pageSubtitle.textContent = meta.subtitle;
 
+    if (view !== 'monthly-finance') {
+        setMonthlyFinanceSettingsOpen(false);
+    }
+
     if (view === 'customers') {
         loadCustomers();
     }
@@ -575,14 +602,88 @@ function getErrorMessage(error, fallback = 'Request failed.') {
     return fallback;
 }
 
+function normalizeMonthlyFinanceBoxVisibility(value) {
+    const normalized = { ...monthlyFinanceBoxDefaults };
+    if (!value || typeof value !== 'object') {
+        return normalized;
+    }
+
+    Object.keys(monthlyFinanceBoxDefaults).forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+            normalized[key] = Boolean(value[key]);
+        }
+    });
+
+    return normalized;
+}
+
+function applyMonthlyFinanceBoxVisibility() {
+    const visibility = normalizeMonthlyFinanceBoxVisibility(state.monthlyFinanceBoxVisibility);
+    state.monthlyFinanceBoxVisibility = visibility;
+
+    const cardMap = {
+        revenue: dom.monthlyFinanceCardRevenue,
+        costs: dom.monthlyFinanceCardCosts,
+        profit: dom.monthlyFinanceCardProfit,
+        tax: dom.monthlyFinanceCardTax,
+        owed: dom.monthlyFinanceCardOwed,
+    };
+
+    const toggleMap = {
+        revenue: dom.monthlyFinanceToggleRevenue,
+        costs: dom.monthlyFinanceToggleCosts,
+        profit: dom.monthlyFinanceToggleProfit,
+        tax: dom.monthlyFinanceToggleTax,
+        owed: dom.monthlyFinanceToggleOwed,
+    };
+
+    Object.keys(visibility).forEach((key) => {
+        const isVisible = visibility[key] !== false;
+        const card = cardMap[key];
+        const toggle = toggleMap[key];
+        if (card) {
+            card.classList.toggle('hidden', !isVisible);
+        }
+        if (toggle) {
+            toggle.checked = isVisible;
+        }
+    });
+}
+
+function setMonthlyFinanceSettingsOpen(isOpen) {
+    if (!dom.monthlyFinanceSettingsPopover || !dom.monthlyFinanceSettingsToggle) return;
+    dom.monthlyFinanceSettingsPopover.hidden = !isOpen;
+    dom.monthlyFinanceSettingsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+async function saveMonthlyFinanceBoxVisibility() {
+    try {
+        const response = await api.put('/api/preferences', {
+            monthly_finance_boxes: state.monthlyFinanceBoxVisibility,
+        });
+        state.monthlyFinanceBoxVisibility = normalizeMonthlyFinanceBoxVisibility(
+            response?.data?.monthly_finance_boxes
+        );
+        applyMonthlyFinanceBoxVisibility();
+    } catch (error) {
+        showToast('Unable to save monthly finance settings.', true);
+    }
+}
+
 async function loadPreferences() {
     try {
         const response = await api.get('/api/preferences');
         const theme = response.data?.theme || 'light';
+        state.monthlyFinanceBoxVisibility = normalizeMonthlyFinanceBoxVisibility(
+            response?.data?.monthly_finance_boxes
+        );
         localStorage.setItem(themeKey, theme);
         setTheme(theme);
+        applyMonthlyFinanceBoxVisibility();
     } catch (error) {
         applyStoredTheme();
+        state.monthlyFinanceBoxVisibility = { ...monthlyFinanceBoxDefaults };
+        applyMonthlyFinanceBoxVisibility();
     }
 }
 
@@ -783,10 +884,12 @@ function resetMonthlyFinanceCards() {
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+    if (dom.monthlyFinanceOwed) dom.monthlyFinanceOwed.textContent = '--';
     if (dom.monthlyFinanceRevenueMeta) dom.monthlyFinanceRevenueMeta.textContent = 'Completed jobs + paid subscriptions';
     if (dom.monthlyFinanceCostsMeta) dom.monthlyFinanceCostsMeta.textContent = 'Incurred and recurring costs';
     if (dom.monthlyFinanceProfitMeta) dom.monthlyFinanceProfitMeta.textContent = 'Revenue minus costs';
     if (dom.monthlyFinanceTaxMeta) dom.monthlyFinanceTaxMeta.textContent = '20% of Profit';
+    if (dom.monthlyFinanceOwedMeta) dom.monthlyFinanceOwedMeta.textContent = 'Overdue unpaid invoices';
 }
 
 function buildMonthlyFinanceTotalEntry() {
@@ -804,6 +907,10 @@ function buildMonthlyFinanceTotalEntry() {
     );
     const profit = revenue - costs;
     const tax = profit * 0.2;
+    const owed = state.monthlyFinance.reduce(
+        (sum, month) => sum + Number(month.owed_total || 0),
+        0
+    );
 
     const firstMonth = state.monthlyFinance[0];
     const lastMonth = state.monthlyFinance[state.monthlyFinance.length - 1];
@@ -818,6 +925,7 @@ function buildMonthlyFinanceTotalEntry() {
         costs_total: costs,
         profit_total: profit,
         tax_total: tax,
+        owed_total: owed,
     };
 }
 
@@ -892,6 +1000,9 @@ function renderMonthlyFinanceCards() {
     if (dom.monthlyFinanceTax) {
         dom.monthlyFinanceTax.textContent = formatCurrency(Number(selectedMonth.tax_total || 0));
     }
+    if (dom.monthlyFinanceOwed) {
+        dom.monthlyFinanceOwed.textContent = formatCurrency(Number(selectedMonth.owed_total || 0));
+    }
 
     const suffix = periodText ? ` • ${periodText}` : '';
     if (dom.monthlyFinanceRevenueMeta) {
@@ -905,6 +1016,9 @@ function renderMonthlyFinanceCards() {
     }
     if (dom.monthlyFinanceTaxMeta) {
         dom.monthlyFinanceTaxMeta.textContent = `20% of Profit${suffix}`;
+    }
+    if (dom.monthlyFinanceOwedMeta) {
+        dom.monthlyFinanceOwedMeta.textContent = `Overdue unpaid invoices${suffix}`;
     }
 }
 
@@ -946,6 +1060,7 @@ async function loadMonthlyFinance() {
     if (dom.monthlyFinanceCosts) dom.monthlyFinanceCosts.textContent = '--';
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
+    if (dom.monthlyFinanceOwed) dom.monthlyFinanceOwed.textContent = '--';
 
     try {
         const response = await api.get('/api/admin/stats/monthly-finance');
@@ -3951,6 +4066,45 @@ if (dom.monthlyFinanceRefresh) {
     dom.monthlyFinanceRefresh.addEventListener('click', loadMonthlyFinance);
 }
 
+if (dom.monthlyFinanceSettingsToggle) {
+    dom.monthlyFinanceSettingsToggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        const isOpen = dom.monthlyFinanceSettingsPopover ? !dom.monthlyFinanceSettingsPopover.hidden : false;
+        setMonthlyFinanceSettingsOpen(isOpen);
+    });
+}
+
+const monthlyFinanceToggleMap = {
+    revenue: dom.monthlyFinanceToggleRevenue,
+    costs: dom.monthlyFinanceToggleCosts,
+    profit: dom.monthlyFinanceToggleProfit,
+    tax: dom.monthlyFinanceToggleTax,
+    owed: dom.monthlyFinanceToggleOwed,
+};
+
+Object.entries(monthlyFinanceToggleMap).forEach(([key, input]) => {
+    if (!input) return;
+    input.addEventListener('change', () => {
+        state.monthlyFinanceBoxVisibility = {
+            ...state.monthlyFinanceBoxVisibility,
+            [key]: input.checked,
+        };
+        applyMonthlyFinanceBoxVisibility();
+        saveMonthlyFinanceBoxVisibility();
+    });
+});
+
+document.addEventListener('click', (event) => {
+    if (!dom.monthlyFinanceSettingsPopover || !dom.monthlyFinanceSettingsToggle) return;
+    if (dom.monthlyFinanceSettingsPopover.hidden) return;
+
+    const popoverClicked = dom.monthlyFinanceSettingsPopover.contains(event.target);
+    const toggleClicked = dom.monthlyFinanceSettingsToggle.contains(event.target);
+    if (!popoverClicked && !toggleClicked) {
+        setMonthlyFinanceSettingsOpen(false);
+    }
+});
+
 if (dom.portalDownloadLatest) {
     dom.portalDownloadLatest.addEventListener('click', handlePortalDownloadLatest);
 }
@@ -3962,6 +4116,7 @@ if (invoiceTables.portal) {
 initializeInvoiceForm();
 initializeNavigation();
 applyStoredTheme();
+applyMonthlyFinanceBoxVisibility();
 renderSubscriptionMonths();
 updateCustomerArchiveControls();
 loadSession();

@@ -215,25 +215,56 @@
 
                         <div class="monthly-finance-right">
                             <div class="monthly-finance-metrics">
-                                <div class="card">
+                                <div class="card monthly-finance-card" id="monthly-finance-card-revenue">
                                     <div class="card-label">Revenue</div>
                                     <div class="card-value" id="monthly-finance-revenue">--</div>
                                     <div class="card-meta" id="monthly-finance-revenue-meta">Completed jobs + paid subscriptions</div>
                                 </div>
-                                <div class="card">
+                                <div class="card monthly-finance-card" id="monthly-finance-card-costs">
                                     <div class="card-label">Costs</div>
                                     <div class="card-value" id="monthly-finance-costs">--</div>
                                     <div class="card-meta" id="monthly-finance-costs-meta">Incurred and recurring costs</div>
                                 </div>
-                                <div class="card">
+                                <div class="card monthly-finance-card" id="monthly-finance-card-profit">
                                     <div class="card-label">Profit</div>
                                     <div class="card-value" id="monthly-finance-profit">--</div>
                                     <div class="card-meta" id="monthly-finance-profit-meta">Revenue minus costs</div>
                                 </div>
-                                <div class="card">
+                                <div class="card monthly-finance-card" id="monthly-finance-card-tax">
                                     <div class="card-label">Tax</div>
                                     <div class="card-value" id="monthly-finance-tax">--</div>
                                     <div class="card-meta" id="monthly-finance-tax-meta">20% of Profit</div>
+                                </div>
+                                <div class="card monthly-finance-card" id="monthly-finance-card-owed">
+                                    <div class="card-label">Owed</div>
+                                    <div class="card-value" id="monthly-finance-owed">--</div>
+                                    <div class="card-meta" id="monthly-finance-owed-meta">Overdue unpaid invoices</div>
+                                </div>
+                            </div>
+                            <div class="monthly-finance-settings">
+                                <button class="btn btn-outline" id="monthly-finance-settings-toggle" type="button">Settings</button>
+                                <div class="monthly-finance-settings-popover" id="monthly-finance-settings-popover" hidden>
+                                    <div class="monthly-finance-settings-title">Show boxes</div>
+                                    <label class="monthly-finance-settings-option">
+                                        <input type="checkbox" id="monthly-finance-toggle-revenue" checked>
+                                        <span>Revenue</span>
+                                    </label>
+                                    <label class="monthly-finance-settings-option">
+                                        <input type="checkbox" id="monthly-finance-toggle-costs" checked>
+                                        <span>Costs</span>
+                                    </label>
+                                    <label class="monthly-finance-settings-option">
+                                        <input type="checkbox" id="monthly-finance-toggle-profit" checked>
+                                        <span>Profit</span>
+                                    </label>
+                                    <label class="monthly-finance-settings-option">
+                                        <input type="checkbox" id="monthly-finance-toggle-tax" checked>
+                                        <span>Tax</span>
+                                    </label>
+                                    <label class="monthly-finance-settings-option">
+                                        <input type="checkbox" id="monthly-finance-toggle-owed" checked>
+                                        <span>Owed</span>
+                                    </label>
                                 </div>
                             </div>
                         </div>

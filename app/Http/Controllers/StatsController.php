@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Cost;
+use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\SubscriptionMonth;
 use Carbon\Carbon;
@@ -74,6 +75,7 @@ class StatsController extends Controller
             $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
             $profitTotal = $revenueTotal - $costsTotal;
             $taxTotal = $profitTotal * 0.2;
+            $owedTotal = $this->calculateOwedTotalForRange($monthStart, $monthEnd);
 
             $months[] = [
                 'month_start' => $monthStart->toDateString(),
@@ -85,6 +87,7 @@ class StatsController extends Controller
                 'costs_total' => round($costsTotal, 2),
                 'profit_total' => round($profitTotal, 2),
                 'tax_total' => round($taxTotal, 2),
+                'owed_total' => round($owedTotal, 2),
             ];
 
             $cursor->addMonthNoOverflow()->startOfMonth();
@@ -294,6 +297,15 @@ class StatsController extends Controller
         return (float) $paidSubscriptionMonths->sum(
             static fn (SubscriptionMonth $month): float => (float) ($month->subscription?->monthly_cost ?? 0)
         );
+    }
+
+    private function calculateOwedTotalForRange(Carbon $startDate, Carbon $endDate): float
+    {
+        return (float) Invoice::query()
+            ->where('status', '!=', 'paid')
+            ->whereDate('due_date', '<', today())
+            ->whereBetween('due_date', [$startDate->toDateString(), $endDate->toDateString()])
+            ->sum('total');
     }
 
     private function addCostToWeeklyBuckets(

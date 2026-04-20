@@ -16,6 +16,14 @@ class UserPreference extends Model
     protected $fillable = [
         'user_id',
         'theme',
+        'monthly_finance_boxes',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    protected $casts = [
+        'monthly_finance_boxes' => 'array',
     ];
 
     public function user(): BelongsTo

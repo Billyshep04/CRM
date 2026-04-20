@@ -282,6 +282,7 @@ CREATE TABLE `user_preferences` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,
   `theme` VARCHAR(255) NOT NULL DEFAULT 'light',
+  `monthly_finance_boxes` JSON NULL,
   `created_at` TIMESTAMP NULL DEFAULT NULL,
   `updated_at` TIMESTAMP NULL DEFAULT NULL,
   PRIMARY KEY (`id`),

@@ -1,0 +1,33 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        if (!Schema::hasColumn('user_preferences', 'monthly_finance_boxes')) {
+            Schema::table('user_preferences', function (Blueprint $table): void {
+                $table->json('monthly_finance_boxes')->nullable()->after('theme');
+            });
+        }
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        if (Schema::hasColumn('user_preferences', 'monthly_finance_boxes')) {
+            Schema::table('user_preferences', function (Blueprint $table): void {
+                $table->dropColumn('monthly_finance_boxes');
+            });
+        }
+    }
+};
+
