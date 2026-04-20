@@ -524,12 +524,20 @@ body[data-role="admin"] .view.admin-only-view.active {
     grid-template-columns: 1fr;
 }
 
+.content-grid.proposals-layout {
+    grid-template-columns: 1fr;
+}
+
 .content-grid.monthly-finance-layout {
     grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
     align-items: start;
 }
 
 .view[data-view="invoices"] .content-grid {
+    grid-template-columns: 1fr;
+}
+
+.view[data-view="proposals"] .content-grid {
     grid-template-columns: 1fr;
 }
 
@@ -826,8 +834,16 @@ body[data-role="admin"] .admin-inline-only {
     grid-template-columns: 1.2fr 1fr 0.7fr 0.7fr 0.7fr 1fr;
 }
 
+.table-row.proposals {
+    grid-template-columns: 1.2fr 0.55fr 1fr 1.2fr 0.7fr 0.7fr 0.7fr 1.2fr;
+}
+
 .table-row.portal-invoices {
     grid-template-columns: 1.2fr 0.8fr 0.7fr 0.7fr 1fr;
+}
+
+.table-row.portal-proposals {
+    grid-template-columns: 1.2fr 1.4fr 0.7fr 0.7fr 0.7fr 1fr;
 }
 
 .table-row.job-photos {
@@ -1306,9 +1322,16 @@ body[data-role="staff"] .staff-only {
         --cell-label: "Invoice";
     }
 
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(1),
+    #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Proposal";
+    }
+
     #recent-invoices .table-row:not(.table-empty) > span:nth-child(2),
     #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(4),
     #portal-invoices .table-row.portal-invoices:not(.table-empty) > span:nth-child(2),
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(6),
+    #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(4),
     #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(5),
     #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(4),
     #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(5),
@@ -1346,7 +1369,8 @@ body[data-role="staff"] .staff-only {
     #staff-users-table .table-row.staff-users:not(.table-empty) > span:nth-child(2),
     #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(2),
     #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(3),
-    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(3) {
+    #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(3),
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(3) {
         --cell-label: "Customer";
     }
 
@@ -1418,6 +1442,31 @@ body[data-role="staff"] .staff-only {
 
     #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(3) {
         --cell-label: "Total";
+    }
+
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(5),
+    #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Total";
+    }
+
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Version";
+    }
+
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Job";
+    }
+
+    #proposals-table .table-row.proposals:not(.table-empty) > span:nth-child(7) {
+        --cell-label: "Expires";
+    }
+
+    #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Title";
+    }
+
+    #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(5) {
+        --cell-label: "Expires";
     }
 
     .view[data-view="portal"] .card-header {

@@ -68,10 +68,12 @@
                     <a href="#" class="nav-item" data-view="jobs">Jobs</a>
                     <a href="#" class="nav-item" data-view="subscriptions">Subscriptions</a>
                     <a href="#" class="nav-item" data-view="costs">Costs</a>
+                    <a href="#" class="nav-item" data-view="proposals">Proposals</a>
                     <a href="#" class="nav-item" data-view="invoices">Invoices</a>
                     <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-proposals">Proposals</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
@@ -832,6 +834,122 @@
                     </section>
                 </section>
 
+                <section class="view staff-view" data-view="proposals">
+                    <section class="content-grid proposals-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="proposal-form-title">New proposal</div>
+                                    <div class="card-subtitle">Compose a proposal linked to one job.</div>
+                                </div>
+                            </div>
+                            <form id="proposal-form" class="form-stack">
+                                <input type="hidden" name="id">
+                                <label class="field">
+                                    <span>Customer</span>
+                                    <select name="customer_id" id="proposal-customer-select" required></select>
+                                </label>
+                                <label class="field">
+                                    <span>Job</span>
+                                    <select name="job_id" id="proposal-job-select" required>
+                                        <option value="" selected disabled>Select customer first</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>Title</span>
+                                    <input type="text" name="title" id="proposal-title" placeholder="Website amendments proposal" required>
+                                </label>
+                                <label class="field">
+                                    <span>Issue date</span>
+                                    <input type="date" name="issue_date" required>
+                                </label>
+                                <label class="field">
+                                    <span>Expiry date</span>
+                                    <input type="date" name="expiry_date" required>
+                                </label>
+                                <label class="field">
+                                    <span>Line item description</span>
+                                    <input type="text" name="line_item_description" id="proposal-line-item-description" placeholder="Auto-filled from selected job" required>
+                                </label>
+                                <div class="line-item">
+                                    <input type="number" name="line_item_quantity" min="0.5" step="0.5" value="1" required>
+                                    <input type="number" name="line_item_unit_price" min="0" step="0.01" placeholder="Unit price" required>
+                                    <select name="status">
+                                        <option value="draft">Draft</option>
+                                        <option value="sent">Send now</option>
+                                    </select>
+                                </div>
+                                <label class="field">
+                                    <span>Notes</span>
+                                    <textarea name="notes" rows="3" placeholder="Scope, assumptions, and delivery details"></textarea>
+                                </label>
+                                <label class="field">
+                                    <span>Terms</span>
+                                    <textarea name="terms" rows="3" placeholder="Payment terms, validity, and conditions"></textarea>
+                                </label>
+                                <div id="proposal-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save proposal</button>
+                                    <button type="button" class="btn btn-outline" id="proposal-form-cancel">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Proposals</div>
+                                    <div class="card-subtitle">Create, send, and download proposals.</div>
+                                </div>
+                                <button class="btn btn-outline" id="proposals-refresh">Refresh</button>
+                            </div>
+                            <div class="filters">
+                                <label class="field">
+                                    <span>Status</span>
+                                    <select id="proposals-filter-status">
+                                        <option value="all">All</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="sent">Sent</option>
+                                        <option value="accepted">Accepted</option>
+                                        <option value="rejected">Rejected</option>
+                                        <option value="expired">Expired</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>Customer</span>
+                                    <select id="proposals-filter-customer"></select>
+                                </label>
+                                <button class="btn btn-ghost" id="proposals-clear" type="button">Clear</button>
+                            </div>
+                            <div class="table" id="proposals-table">
+                                <div class="table-row table-header proposals">
+                                    <span>Proposal</span>
+                                    <span>Version</span>
+                                    <span>Customer</span>
+                                    <span>Job</span>
+                                    <span>Total</span>
+                                    <span>Status</span>
+                                    <span>Expires</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty proposals">
+                                    <span>Loading proposals...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                            <div class="table-actions" style="margin-top: 20px;">
+                                <button class="btn btn-ghost" id="proposals-load-more" type="button">Load more</button>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
                 <section class="view staff-view" data-view="invoices">
                     <section class="content-grid invoices-layout">
                         <div class="card">
@@ -1177,6 +1295,38 @@
                                 </div>
                                 <div class="table-row table-empty portal-subscriptions">
                                     <span>Loading subscriptions...</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view portal-view" data-view="portal-proposals">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Your proposals</div>
+                                    <div class="card-subtitle">Review, accept, reject, and download proposal PDFs</div>
+                                </div>
+                                <button class="btn btn-outline" id="portal-proposals-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="table" id="portal-proposals">
+                                <div class="table-row table-header portal-proposals">
+                                    <span>Proposal</span>
+                                    <span>Title</span>
+                                    <span>Total</span>
+                                    <span>Status</span>
+                                    <span>Expires</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty portal-proposals">
+                                    <span>Loading proposals...</span>
+                                    <span></span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>

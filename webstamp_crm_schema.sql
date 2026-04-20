@@ -278,6 +278,58 @@ CREATE TABLE `invoice_line_items` (
   CONSTRAINT `invoice_line_items_invoice_id_foreign` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `proposals` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `job_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `created_by_user_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `parent_proposal_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `proposal_number` VARCHAR(255) NOT NULL,
+  `version` INT UNSIGNED NOT NULL DEFAULT 1,
+  `title` VARCHAR(255) NOT NULL,
+  `issue_date` DATE NOT NULL,
+  `expiry_date` DATE NOT NULL,
+  `status` VARCHAR(255) NOT NULL DEFAULT 'draft',
+  `notes` TEXT NULL,
+  `terms` TEXT NULL,
+  `subtotal` DECIMAL(12, 2) NOT NULL,
+  `total` DECIMAL(12, 2) NOT NULL,
+  `pdf_file_id` BIGINT UNSIGNED NULL DEFAULT NULL,
+  `sent_at` TIMESTAMP NULL DEFAULT NULL,
+  `accepted_at` TIMESTAMP NULL DEFAULT NULL,
+  `rejected_at` TIMESTAMP NULL DEFAULT NULL,
+  `locked_at` TIMESTAMP NULL DEFAULT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  `deleted_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `proposals_proposal_number_version_unique` (`proposal_number`, `version`),
+  KEY `proposals_customer_id_foreign` (`customer_id`),
+  KEY `proposals_job_id_foreign` (`job_id`),
+  KEY `proposals_created_by_user_id_foreign` (`created_by_user_id`),
+  KEY `proposals_parent_proposal_id_foreign` (`parent_proposal_id`),
+  KEY `proposals_pdf_file_id_foreign` (`pdf_file_id`),
+  CONSTRAINT `proposals_customer_id_foreign` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `proposals_job_id_foreign` FOREIGN KEY (`job_id`) REFERENCES `jobs` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `proposals_created_by_user_id_foreign` FOREIGN KEY (`created_by_user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `proposals_parent_proposal_id_foreign` FOREIGN KEY (`parent_proposal_id`) REFERENCES `proposals` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `proposals_pdf_file_id_foreign` FOREIGN KEY (`pdf_file_id`) REFERENCES `files` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `proposal_line_items` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `proposal_id` BIGINT UNSIGNED NOT NULL,
+  `description` TEXT NOT NULL,
+  `quantity` DECIMAL(8, 2) NOT NULL DEFAULT 1.00,
+  `unit_price` DECIMAL(12, 2) NOT NULL,
+  `total` DECIMAL(12, 2) NOT NULL,
+  `created_at` TIMESTAMP NULL DEFAULT NULL,
+  `updated_at` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `proposal_line_items_proposal_id_foreign` (`proposal_id`),
+  CONSTRAINT `proposal_line_items_proposal_id_foreign` FOREIGN KEY (`proposal_id`) REFERENCES `proposals` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `user_preferences` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `user_id` BIGINT UNSIGNED NOT NULL,

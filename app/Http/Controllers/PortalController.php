@@ -4,16 +4,20 @@ namespace App\Http\Controllers;
 
 use App\Http\Resources\InvoiceResource;
 use App\Http\Resources\JobResource;
+use App\Http\Resources\ProposalResource;
 use App\Http\Resources\SubscriptionResource;
 use App\Http\Resources\WebsiteResource;
+use App\Jobs\SendProposalAcceptedNotification;
 use App\Models\Customer;
 use App\Models\Invoice;
 use App\Models\Job;
+use App\Models\Proposal;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
 use App\Services\InvoiceJobStatusSyncService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
+use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
@@ -21,6 +25,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 use Throwable;
@@ -82,6 +87,24 @@ class PortalController extends Controller
         );
     }
 
+    public function proposals(Request $request)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        $query = Proposal::query()
+            ->whereIn('customer_id', $customerIds)
+            ->with(['job', 'lineItems', 'pdfFile'])
+            ->latest();
+
+        $query->filterByStatus($request->query('status'));
+
+        $perPage = $request->integer('per_page', 15);
+
+        return ProposalResource::collection(
+            $query->paginate($perPage)
+        );
+    }
+
     public function websites(Request $request)
     {
         $customerIds = $this->resolveCustomerIds($request);
@@ -108,6 +131,17 @@ class PortalController extends Controller
         return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
     }
 
+    public function proposal(Request $request, Proposal $proposal)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
+            abort(404);
+        }
+
+        return new ProposalResource($proposal->load(['job', 'lineItems', 'pdfFile']));
+    }
+
     public function downloadInvoice(Request $request, Invoice $invoice)
     {
         $customerIds = $this->resolveCustomerIds($request);
@@ -125,6 +159,28 @@ class PortalController extends Controller
         return Storage::disk($invoice->pdfFile->disk)->download(
             $invoice->pdfFile->path,
             "Invoice-{$invoice->invoice_number}.pdf"
+        );
+    }
+
+    public function downloadProposal(Request $request, Proposal $proposal, ProposalPdfService $pdfService)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
+            abort(404);
+        }
+
+        $proposal->loadMissing('pdfFile');
+
+        if (!$proposal->pdfFile) {
+            $storedFile = $pdfService->generate($proposal);
+            $proposal->forceFill(['pdf_file_id' => $storedFile->id])->save();
+            $proposal->setRelation('pdfFile', $storedFile);
+        }
+
+        return Storage::disk($proposal->pdfFile->disk)->download(
+            $proposal->pdfFile->path,
+            "Proposal-{$proposal->proposal_number}-v{$proposal->version}.pdf"
         );
     }
 
@@ -166,6 +222,39 @@ class PortalController extends Controller
         $invoiceJobStatusSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
 
         return new InvoiceResource($invoice->load(['lineItems', 'pdfFile']));
+    }
+
+    public function updateProposalStatus(Request $request, Proposal $proposal)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        if (!in_array((int) $proposal->customer_id, $customerIds, true)) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'status' => ['required', Rule::in(['accepted', 'rejected'])],
+        ]);
+
+        if ($validated['status'] === 'accepted') {
+            $proposal->forceFill([
+                'status' => 'accepted',
+                'accepted_at' => $proposal->accepted_at ?? now(),
+                'rejected_at' => null,
+                'locked_at' => $proposal->locked_at ?? now(),
+            ])->save();
+
+            $this->sendProposalAcceptedNotificationNow($proposal);
+        } else {
+            $proposal->forceFill([
+                'status' => 'rejected',
+                'accepted_at' => null,
+                'rejected_at' => $proposal->rejected_at ?? now(),
+                'locked_at' => $proposal->locked_at ?? now(),
+            ])->save();
+        }
+
+        return new ProposalResource($proposal->load(['job', 'lineItems', 'pdfFile']));
     }
 
     public function support(Request $request, AdminMailSettings $mailSettings)
@@ -398,6 +487,25 @@ class PortalController extends Controller
                 ?: 'Unknown SMTP2GO failure.';
 
             throw new RuntimeException((string) $failureMessage);
+        }
+    }
+
+    private function sendProposalAcceptedNotificationNow(Proposal $proposal): void
+    {
+        try {
+            SendProposalAcceptedNotification::dispatchSync($proposal->id);
+        } catch (Throwable $exception) {
+            Log::error('Proposal accepted notification email failed', [
+                'proposal_id' => $proposal->id,
+                'proposal_number' => $proposal->proposal_number,
+                'customer_id' => $proposal->customer_id,
+                'error' => $exception->getMessage(),
+            ]);
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'status' => ['Proposal status was updated, but admin notification email could not be sent.'],
+            ]);
         }
     }
 }

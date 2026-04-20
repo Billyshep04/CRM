@@ -116,6 +116,10 @@ const dom = {
     subscriptionsFilterCustomer: document.getElementById('subscriptions-filter-customer'),
     subscriptionsClear: document.getElementById('subscriptions-clear'),
     subscriptionsLoadMore: document.getElementById('subscriptions-load-more'),
+    proposalsFilterStatus: document.getElementById('proposals-filter-status'),
+    proposalsFilterCustomer: document.getElementById('proposals-filter-customer'),
+    proposalsClear: document.getElementById('proposals-clear'),
+    proposalsLoadMore: document.getElementById('proposals-load-more'),
     invoicesFilterStatus: document.getElementById('invoices-filter-status'),
     invoicesFilterCustomer: document.getElementById('invoices-filter-customer'),
     invoicesClear: document.getElementById('invoices-clear'),
@@ -159,6 +163,16 @@ const dom = {
     subscriptionMonthsRefresh: document.getElementById('subscription-months-refresh'),
     subscriptionCustomerSelect: document.getElementById('subscription-customer-select'),
     subscriptionsRefresh: document.getElementById('subscriptions-refresh'),
+    proposalsTable: document.getElementById('proposals-table'),
+    proposalForm: document.getElementById('proposal-form'),
+    proposalFormTitle: document.getElementById('proposal-form-title'),
+    proposalFormStatus: document.getElementById('proposal-form-status'),
+    proposalFormCancel: document.getElementById('proposal-form-cancel'),
+    proposalCustomerSelect: document.getElementById('proposal-customer-select'),
+    proposalJobSelect: document.getElementById('proposal-job-select'),
+    proposalTitle: document.getElementById('proposal-title'),
+    proposalLineItemDescription: document.getElementById('proposal-line-item-description'),
+    proposalsRefresh: document.getElementById('proposals-refresh'),
     invoicesTable: document.getElementById('invoices-table'),
     invoiceForm: document.getElementById('invoice-form'),
     invoiceFormTitle: document.getElementById('invoice-form-title'),
@@ -168,6 +182,8 @@ const dom = {
     invoiceLineItems: document.getElementById('invoice-line-items'),
     invoiceAddLineItem: document.getElementById('invoice-add-line-item'),
     invoicesRefresh: document.getElementById('invoices-refresh'),
+    portalProposals: document.getElementById('portal-proposals'),
+    portalProposalsRefresh: document.getElementById('portal-proposals-refresh'),
 };
 
 const statTargets = {
@@ -202,6 +218,7 @@ const state = {
     jobPhotos: [],
     costs: [],
     subscriptions: [],
+    proposals: [],
     subscriptionMonths: [],
     invoices: [],
     staffUsers: [],
@@ -211,6 +228,7 @@ const state = {
     mailSettings: null,
     invoiceSettings: null,
     portalInvoices: [],
+    portalProposals: [],
     portalJobs: [],
     portalSubscriptions: [],
     currentCustomer: null,
@@ -227,6 +245,10 @@ const state = {
             status: 'all',
             customer: 'all',
         },
+        proposals: {
+            status: 'all',
+            customer: 'all',
+        },
         invoices: {
             status: 'all',
             customer: 'all',
@@ -237,6 +259,7 @@ const state = {
         jobs: { page: 1, lastPage: 1 },
         costs: { page: 1, lastPage: 1 },
         subscriptions: { page: 1, lastPage: 1 },
+        proposals: { page: 1, lastPage: 1 },
         invoices: { page: 1, lastPage: 1 },
     },
     editing: {
@@ -245,6 +268,7 @@ const state = {
         jobPhotoJobId: null,
         cost: null,
         subscription: null,
+        proposal: null,
         invoice: null,
         website: null,
     },
@@ -271,6 +295,10 @@ const viewMeta = {
         title: 'Subscriptions',
         subtitle: 'Recurring services and billing cadence.',
     },
+    proposals: {
+        title: 'Proposals',
+        subtitle: 'Create and send customer proposals.',
+    },
     costs: {
         title: 'Costs',
         subtitle: 'Track expenses and receipt uploads.',
@@ -294,6 +322,10 @@ const viewMeta = {
     portal: {
         title: 'Customer Portal',
         subtitle: 'Review invoices and quick-login links.',
+    },
+    'portal-proposals': {
+        title: 'Proposals',
+        subtitle: 'Review, accept, and download your proposals.',
     },
     'portal-support': {
         title: 'Support',
@@ -418,6 +450,9 @@ function setActiveView(view) {
     if (view === 'subscriptions') {
         ensureCustomersLoaded().then(loadSubscriptions);
     }
+    if (view === 'proposals') {
+        ensureCustomersLoaded().then(loadProposals);
+    }
     if (view === 'costs') {
         loadCosts();
     }
@@ -435,6 +470,9 @@ function setActiveView(view) {
         loadPortalJobs();
         loadPortalSubscriptions();
         loadPortalWebsites();
+    }
+    if (view === 'portal-proposals') {
+        loadPortalProposals();
     }
     if (view === 'portal-admin') {
         populatePortalProfileForm(state.user);
@@ -518,6 +556,7 @@ const loadMoreButtons = {
     jobs: dom.jobsLoadMore,
     costs: dom.costsLoadMore,
     subscriptions: dom.subscriptionsLoadMore,
+    proposals: dom.proposalsLoadMore,
     invoices: dom.invoicesLoadMore,
 };
 
@@ -1754,7 +1793,7 @@ async function handleStaffUserSubmit(event) {
 }
 
 function populateCustomerSelects(customers) {
-    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.invoiceCustomerSelect];
+    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value;
@@ -1778,7 +1817,7 @@ function populateCustomerSelects(customers) {
 }
 
 function populateCustomerFilterSelects(customers) {
-    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.invoicesFilterCustomer];
+    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.proposalsFilterCustomer, dom.invoicesFilterCustomer];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value || 'all';
@@ -3102,6 +3141,524 @@ async function handleSubscriptionAction(event) {
     }
 }
 
+async function loadProposalJobsForCustomer(customerId, preferredJobId = null) {
+    if (!dom.proposalJobSelect) return;
+
+    dom.proposalJobSelect.innerHTML = '';
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.disabled = true;
+    placeholder.selected = true;
+    placeholder.textContent = customerId ? 'Loading jobs...' : 'Select customer first';
+    dom.proposalJobSelect.appendChild(placeholder);
+
+    if (!customerId) {
+        return;
+    }
+
+    try {
+        const jobs = await loadInvoiceBillables('job', customerId);
+        dom.proposalJobSelect.innerHTML = '';
+
+        const selectOption = document.createElement('option');
+        selectOption.value = '';
+        selectOption.disabled = true;
+        selectOption.selected = true;
+        selectOption.textContent = 'Select job';
+        dom.proposalJobSelect.appendChild(selectOption);
+
+        jobs.forEach((job) => {
+            const option = document.createElement('option');
+            option.value = String(job.id);
+            option.textContent = `#${job.id} - ${truncate(job.description, 52)} (${formatCurrency(Number(job.cost || 0))})`;
+            dom.proposalJobSelect.appendChild(option);
+        });
+
+        if (preferredJobId && jobs.some((job) => Number(job.id) === Number(preferredJobId))) {
+            dom.proposalJobSelect.value = String(preferredJobId);
+        }
+    } catch (error) {
+        dom.proposalJobSelect.innerHTML = '';
+        const option = document.createElement('option');
+        option.value = '';
+        option.disabled = true;
+        option.selected = true;
+        option.textContent = 'Unable to load jobs';
+        dom.proposalJobSelect.appendChild(option);
+    }
+}
+
+function applySelectedProposalJobDetails(job, overwriteExisting = false) {
+    if (!job || !dom.proposalForm) return;
+
+    const descriptionInput = dom.proposalLineItemDescription
+        || dom.proposalForm.querySelector('input[name="line_item_description"]');
+    const titleInput = dom.proposalTitle || dom.proposalForm.querySelector('input[name="title"]');
+    const unitPriceInput = dom.proposalForm.querySelector('input[name="line_item_unit_price"]');
+    const notesInput = dom.proposalForm.querySelector('textarea[name="notes"]');
+
+    if (descriptionInput && (overwriteExisting || !String(descriptionInput.value || '').trim())) {
+        descriptionInput.value = String(job.description || '');
+    }
+
+    if (titleInput && (overwriteExisting || !String(titleInput.value || '').trim())) {
+        titleInput.value = String(job.description || 'Job proposal');
+    }
+
+    if (unitPriceInput && (overwriteExisting || !String(unitPriceInput.value || '').trim())) {
+        unitPriceInput.value = normalizeQuantityDisplay(job.cost || 0);
+    }
+
+    if (notesInput && (overwriteExisting || !String(notesInput.value || '').trim())) {
+        notesInput.value = String(job.notes || '');
+    }
+}
+
+function resetProposalForm() {
+    if (!dom.proposalForm) return;
+    dom.proposalForm.reset();
+    dom.proposalForm.querySelector('input[name="id"]').value = '';
+    state.editing.proposal = null;
+    if (dom.proposalFormTitle) dom.proposalFormTitle.textContent = 'New proposal';
+    setFormStatus(dom.proposalFormStatus, '');
+
+    if (dom.proposalJobSelect) {
+        dom.proposalJobSelect.innerHTML = '<option value="" selected disabled>Select customer first</option>';
+    }
+}
+
+async function handleProposalCustomerChange() {
+    if (!dom.proposalCustomerSelect) return;
+    const customerId = Number(dom.proposalCustomerSelect.value || 0);
+    if (dom.proposalForm) {
+        const descriptionInput = dom.proposalForm.querySelector('input[name="line_item_description"]');
+        const unitPriceInput = dom.proposalForm.querySelector('input[name="line_item_unit_price"]');
+        if (descriptionInput) descriptionInput.value = '';
+        if (unitPriceInput) unitPriceInput.value = '';
+    }
+    await loadProposalJobsForCustomer(customerId || null);
+}
+
+async function handleProposalJobChange(overwriteExisting = false) {
+    if (!dom.proposalCustomerSelect || !dom.proposalJobSelect) return;
+
+    const customerId = Number(dom.proposalCustomerSelect.value || 0);
+    const jobId = Number(dom.proposalJobSelect.value || 0);
+    if (!customerId || !jobId) return;
+
+    try {
+        const jobs = await loadInvoiceBillables('job', customerId);
+        const selectedJob = jobs.find((job) => Number(job.id) === jobId);
+        if (selectedJob) {
+            applySelectedProposalJobDetails(selectedJob, overwriteExisting);
+        }
+    } catch (error) {
+        // Keep form values if we cannot load job details.
+    }
+}
+
+async function loadProposals(append = false) {
+    if (!dom.proposalsTable) return;
+    setFormStatus(dom.proposalFormStatus, '');
+    setLoadMoreLoading('proposals', true);
+
+    if (!append) {
+        resetPagination('proposals');
+        resetTable(dom.proposalsTable);
+        const loadingRow = document.createElement('div');
+        loadingRow.className = 'table-row table-empty proposals';
+        loadingRow.innerHTML = '<span>Loading proposals...</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.proposalsTable.appendChild(loadingRow);
+    }
+
+    try {
+        const page = append ? state.pagination.proposals.page + 1 : 1;
+        const query = buildQuery({
+            per_page: 20,
+            page,
+            status: state.filters.proposals.status,
+            customer_id: state.filters.proposals.customer,
+        });
+        const response = await api.get(`/api/proposals${query}`);
+        const items = response?.data?.data ?? [];
+        state.proposals = append ? [...state.proposals, ...items] : items;
+        updatePagination('proposals', response, append);
+        renderProposals();
+    } catch (error) {
+        resetTable(dom.proposalsTable);
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty proposals';
+        emptyRow.innerHTML = '<span>Unable to load proposals.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.proposalsTable.appendChild(emptyRow);
+    } finally {
+        setLoadMoreLoading('proposals', false);
+    }
+}
+
+function renderProposals() {
+    if (!dom.proposalsTable) return;
+    resetTable(dom.proposalsTable);
+
+    if (!state.proposals.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty proposals';
+        emptyRow.innerHTML = '<span>No proposals yet.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.proposalsTable.appendChild(emptyRow);
+        return;
+    }
+
+    state.proposals.forEach((proposal) => {
+        const row = document.createElement('div');
+        row.className = 'table-row proposals';
+
+        const lineItem = Array.isArray(proposal.line_items) && proposal.line_items.length
+            ? proposal.line_items[0]
+            : null;
+        const effectiveStatus = proposal.effective_status || proposal.status || 'draft';
+        const isLocked = Boolean(proposal.locked_at) || ['sent', 'accepted', 'rejected', 'expired'].includes(effectiveStatus);
+        const actionButtons = [];
+
+        if (proposal.status === 'draft') {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="send" data-id="${proposal.id}">Send</button>`);
+        }
+
+        if (effectiveStatus !== 'accepted') {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="accepted" data-id="${proposal.id}">Mark accepted</button>`);
+        }
+
+        if (effectiveStatus !== 'rejected') {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="rejected" data-id="${proposal.id}">Mark rejected</button>`);
+        }
+
+        actionButtons.push(`<button class="btn btn-outline btn-small" data-action="edit" data-id="${proposal.id}">Edit</button>`);
+
+        if (isLocked) {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="new-version" data-id="${proposal.id}">New version</button>`);
+        }
+
+        actionButtons.push(`<button class="btn btn-outline btn-small" data-action="download" data-id="${proposal.id}">Download</button>`);
+        actionButtons.push(`<button class="btn btn-outline btn-small" data-action="delete" data-id="${proposal.id}">Delete</button>`);
+
+        row.innerHTML = `
+            <span>#${escapeHtml(proposal.proposal_number)}</span>
+            <span>v${escapeHtml(String(proposal.version || 1))}</span>
+            <span>${escapeHtml(proposal.customer?.name || getCustomerName(proposal.customer_id))}</span>
+            <span>${escapeHtml(lineItem?.description || proposal.job?.description || `Job #${proposal.job_id}`)}</span>
+            <span>${formatCurrency(Number(proposal.total || 0))}</span>
+            <span>${escapeHtml(effectiveStatus)}</span>
+            <span>${formatDate(proposal.expiry_date)}</span>
+            <div class="row-actions">${actionButtons.join('')}</div>
+        `;
+        dom.proposalsTable.appendChild(row);
+    });
+}
+
+async function handleProposalSubmit(event) {
+    event.preventDefault();
+    if (!dom.proposalForm) return;
+
+    const formData = new FormData(dom.proposalForm);
+    const customerId = Number(formData.get('customer_id'));
+    const jobId = Number(formData.get('job_id'));
+    const quantity = Number(formData.get('line_item_quantity'));
+    const unitPrice = Number(formData.get('line_item_unit_price'));
+    const description = String(formData.get('line_item_description') || '').trim();
+
+    const scaledQuantity = quantity * 2;
+    const isHalfStepQuantity = Math.abs(scaledQuantity - Math.round(scaledQuantity)) < 0.00001;
+    if (!quantity || quantity < 0.5 || Number.isNaN(quantity) || !isHalfStepQuantity) {
+        setFormStatus(dom.proposalFormStatus, 'Quantity must be a whole number or end in .5.', true);
+        return;
+    }
+    if (Number.isNaN(unitPrice) || unitPrice < 0) {
+        setFormStatus(dom.proposalFormStatus, 'Unit price is invalid.', true);
+        return;
+    }
+    if (!customerId || Number.isNaN(customerId)) {
+        setFormStatus(dom.proposalFormStatus, 'Select a customer.', true);
+        return;
+    }
+    if (!jobId || Number.isNaN(jobId)) {
+        setFormStatus(dom.proposalFormStatus, 'Select a job.', true);
+        return;
+    }
+    if (!description) {
+        setFormStatus(dom.proposalFormStatus, 'Line item description is required.', true);
+        return;
+    }
+
+    const payload = {
+        customer_id: customerId,
+        job_id: jobId,
+        title: String(formData.get('title') || '').trim(),
+        issue_date: formData.get('issue_date'),
+        expiry_date: formData.get('expiry_date'),
+        status: formData.get('status') || 'draft',
+        notes: String(formData.get('notes') || '').trim() || null,
+        terms: String(formData.get('terms') || '').trim() || null,
+        line_item: {
+            description,
+            quantity,
+            unit_price: unitPrice,
+        },
+    };
+
+    if (!payload.title) {
+        setFormStatus(dom.proposalFormStatus, 'Title is required.', true);
+        return;
+    }
+
+    try {
+        if (state.editing.proposal) {
+            await api.put(`/api/proposals/${state.editing.proposal}`, payload);
+            setFormStatus(dom.proposalFormStatus, 'Proposal updated.');
+        } else {
+            await api.post('/api/proposals', payload);
+            setFormStatus(dom.proposalFormStatus, 'Proposal created.');
+        }
+        await loadProposals();
+        resetProposalForm();
+    } catch (error) {
+        setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to save proposal.'), true);
+    }
+}
+
+async function downloadProposal(id, filename, portal = false) {
+    try {
+        const url = portal ? `/api/portal/proposals/${id}/download` : `/api/proposals/${id}/download`;
+        const response = await api.get(url, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+        if (portal) {
+            showToast('Unable to download proposal', true);
+        } else {
+            setFormStatus(dom.proposalFormStatus, 'Unable to download proposal.', true);
+        }
+    }
+}
+
+async function handleProposalAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const id = Number(actionButton.dataset.id);
+    const action = actionButton.dataset.action;
+    const proposal = state.proposals.find((item) => item.id === id);
+
+    if (!id || !action) return;
+
+    if (action === 'edit' && proposal && dom.proposalForm) {
+        state.editing.proposal = id;
+        if (dom.proposalFormTitle) {
+            dom.proposalFormTitle.textContent = `Edit ${proposal.proposal_number} v${proposal.version}`;
+        }
+        dom.proposalForm.querySelector('input[name="id"]').value = proposal.id;
+        dom.proposalForm.querySelector('select[name="customer_id"]').value = proposal.customer_id;
+        await loadProposalJobsForCustomer(proposal.customer_id, proposal.job_id);
+        dom.proposalForm.querySelector('select[name="job_id"]').value = proposal.job_id;
+        dom.proposalForm.querySelector('input[name="title"]').value = proposal.title || '';
+        dom.proposalForm.querySelector('input[name="issue_date"]').value = proposal.issue_date || '';
+        dom.proposalForm.querySelector('input[name="expiry_date"]').value = proposal.expiry_date || '';
+        dom.proposalForm.querySelector('select[name="status"]').value = proposal.status === 'sent' ? 'sent' : 'draft';
+
+        const lineItem = Array.isArray(proposal.line_items) && proposal.line_items.length
+            ? proposal.line_items[0]
+            : null;
+        dom.proposalForm.querySelector('input[name="line_item_description"]').value = lineItem?.description || '';
+        dom.proposalForm.querySelector('input[name="line_item_quantity"]').value = normalizeQuantityDisplay(lineItem?.quantity || 1);
+        dom.proposalForm.querySelector('input[name="line_item_unit_price"]').value = normalizeQuantityDisplay(lineItem?.unit_price || 0);
+        dom.proposalForm.querySelector('textarea[name="notes"]').value = proposal.notes || '';
+        dom.proposalForm.querySelector('textarea[name="terms"]').value = proposal.terms || '';
+        setFormStatus(dom.proposalFormStatus, 'Editing proposal.');
+        return;
+    }
+
+    if (action === 'send') {
+        try {
+            await api.post(`/api/proposals/${id}/send`);
+            showToast('Proposal sent');
+            await loadProposals();
+        } catch (error) {
+            setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to send proposal.'), true);
+            showToast('Unable to send proposal', true);
+        }
+        return;
+    }
+
+    if (action === 'set-status') {
+        const nextStatus = actionButton.dataset.nextStatus;
+        if (!['accepted', 'rejected'].includes(nextStatus || '')) {
+            return;
+        }
+
+        actionButton.disabled = true;
+        try {
+            const payload = { status: nextStatus };
+            try {
+                await api.patch(`/api/proposals/${id}/status`, payload);
+            } catch (error) {
+                const statusCode = Number(error?.response?.status || 0);
+                if (statusCode !== 404 && statusCode !== 405) {
+                    throw error;
+                }
+                await api.post(`/api/proposals/${id}/status`, payload);
+            }
+            showToast(nextStatus === 'accepted' ? 'Proposal marked accepted' : 'Proposal marked rejected');
+            await loadProposals();
+        } catch (error) {
+            setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to update proposal status.'), true);
+            showToast('Unable to update proposal status', true);
+        } finally {
+            actionButton.disabled = false;
+        }
+        return;
+    }
+
+    if (action === 'new-version') {
+        try {
+            await api.post(`/api/proposals/${id}/new-version`);
+            showToast('New proposal version created');
+            await loadProposals();
+        } catch (error) {
+            setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to create new version.'), true);
+            showToast('Unable to create new version', true);
+        }
+        return;
+    }
+
+    if (action === 'download' && proposal) {
+        await downloadProposal(id, `Proposal-${proposal.proposal_number}-v${proposal.version}.pdf`);
+        return;
+    }
+
+    if (action === 'delete') {
+        if (!window.confirm('Delete this proposal?')) return;
+        try {
+            await api.delete(`/api/proposals/${id}`);
+            if (state.editing.proposal === id) {
+                resetProposalForm();
+            }
+            await loadProposals();
+        } catch (error) {
+            setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to delete proposal.'), true);
+        }
+    }
+}
+
+async function loadPortalProposals() {
+    if (!dom.portalProposals) return;
+    resetTable(dom.portalProposals);
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty portal-proposals';
+    loadingRow.innerHTML = '<span>Loading proposals...</span><span></span><span></span><span></span><span></span><span></span>';
+    dom.portalProposals.appendChild(loadingRow);
+
+    try {
+        const response = await api.get('/api/portal/proposals?per_page=100');
+        const items = response?.data?.data ?? [];
+        state.portalProposals = items;
+        renderPortalProposals(items);
+    } catch (error) {
+        state.portalProposals = [];
+        renderPortalProposals([], 'Unable to load proposals.');
+    }
+}
+
+function renderPortalProposals(proposals = [], emptyMessage = 'No proposals available.') {
+    if (!dom.portalProposals) return;
+    resetTable(dom.portalProposals);
+
+    if (!proposals.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty portal-proposals';
+        emptyRow.innerHTML = `<span>${escapeHtml(emptyMessage)}</span><span></span><span></span><span></span><span></span><span></span>`;
+        dom.portalProposals.appendChild(emptyRow);
+        return;
+    }
+
+    proposals.forEach((proposal) => {
+        const row = document.createElement('div');
+        row.className = 'table-row portal-proposals';
+        const effectiveStatus = proposal.effective_status || proposal.status || 'draft';
+        const actionButtons = [];
+
+        if (!['accepted', 'rejected', 'expired'].includes(effectiveStatus)) {
+            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="accepted">Accept</button>`);
+            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="rejected">Reject</button>`);
+        }
+
+        actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-download" data-id="${proposal.id}">Download</button>`);
+
+        row.innerHTML = `
+            <span>#${escapeHtml(proposal.proposal_number)} v${escapeHtml(String(proposal.version || 1))}</span>
+            <span>${escapeHtml(proposal.title || proposal.job?.description || 'Proposal')}</span>
+            <span>${formatCurrency(Number(proposal.total || 0))}</span>
+            <span>${escapeHtml(effectiveStatus)}</span>
+            <span>${formatDate(proposal.expiry_date)}</span>
+            <div class="row-actions">${actionButtons.join('')}</div>
+        `;
+        dom.portalProposals.appendChild(row);
+    });
+}
+
+async function handlePortalProposalAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const proposalId = Number(actionButton.dataset.id);
+    const action = actionButton.dataset.action;
+    const nextStatus = actionButton.dataset.nextStatus;
+    const proposal = state.portalProposals.find((item) => item.id === proposalId);
+
+    if (!proposalId || !action) return;
+
+    if (action === 'portal-proposal-download' && proposal) {
+        await downloadProposal(
+            proposal.id,
+            `Proposal-${proposal.proposal_number}-v${proposal.version}.pdf`,
+            true
+        );
+        return;
+    }
+
+    if (action !== 'portal-proposal-status') {
+        return;
+    }
+
+    if (!['accepted', 'rejected'].includes(nextStatus || '')) {
+        return;
+    }
+
+    actionButton.disabled = true;
+
+    try {
+        const payload = { status: nextStatus };
+        try {
+            await api.patch(`/api/portal/proposals/${proposalId}/status`, payload);
+        } catch (error) {
+            const statusCode = Number(error?.response?.status || 0);
+            if (statusCode !== 404 && statusCode !== 405) {
+                throw error;
+            }
+            await api.post(`/api/portal/proposals/${proposalId}/status`, payload);
+        }
+
+        showToast(nextStatus === 'accepted' ? 'Proposal accepted' : 'Proposal rejected');
+        await loadPortalProposals();
+    } catch (error) {
+        showToast('Unable to update proposal status', true);
+    } finally {
+        actionButton.disabled = false;
+    }
+}
+
 function clearInvoiceLineItems() {
     if (dom.invoiceLineItems) {
         dom.invoiceLineItems.innerHTML = '';
@@ -3691,7 +4248,7 @@ function initializeNavigation() {
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
-            if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
+            if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
             if (adminOnlyViews.includes(item.dataset.view) && state.role !== 'admin') return;
             setActiveView(item.dataset.view);
             setNavOpen(false);
@@ -3707,7 +4264,7 @@ function initializeNavigation() {
                 if (adminOnlyViews.includes(button.dataset.goView) && state.role !== 'admin') {
                     return;
                 }
-                if (state.role === 'customer' && !['portal', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
+                if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -3997,6 +4554,58 @@ if (dom.subscriptionsClear) {
     });
 }
 
+if (dom.proposalForm) {
+    dom.proposalForm.addEventListener('submit', handleProposalSubmit);
+}
+
+if (dom.proposalFormCancel) {
+    dom.proposalFormCancel.addEventListener('click', resetProposalForm);
+}
+
+if (dom.proposalCustomerSelect) {
+    dom.proposalCustomerSelect.addEventListener('change', handleProposalCustomerChange);
+}
+
+if (dom.proposalJobSelect) {
+    dom.proposalJobSelect.addEventListener('change', () => handleProposalJobChange(true));
+}
+
+if (dom.proposalsTable) {
+    dom.proposalsTable.addEventListener('click', handleProposalAction);
+}
+
+if (dom.proposalsRefresh) {
+    dom.proposalsRefresh.addEventListener('click', loadProposals);
+}
+
+if (dom.proposalsLoadMore) {
+    dom.proposalsLoadMore.addEventListener('click', () => loadProposals(true));
+}
+
+if (dom.proposalsFilterStatus) {
+    dom.proposalsFilterStatus.addEventListener('change', () => {
+        state.filters.proposals.status = dom.proposalsFilterStatus.value;
+        loadProposals();
+    });
+}
+
+if (dom.proposalsFilterCustomer) {
+    dom.proposalsFilterCustomer.addEventListener('change', () => {
+        state.filters.proposals.customer = dom.proposalsFilterCustomer.value;
+        loadProposals();
+    });
+}
+
+if (dom.proposalsClear) {
+    dom.proposalsClear.addEventListener('click', () => {
+        if (dom.proposalsFilterStatus) dom.proposalsFilterStatus.value = 'all';
+        if (dom.proposalsFilterCustomer) dom.proposalsFilterCustomer.value = 'all';
+        state.filters.proposals.status = 'all';
+        state.filters.proposals.customer = 'all';
+        loadProposals();
+    });
+}
+
 if (dom.invoiceForm) {
     dom.invoiceForm.addEventListener('submit', handleInvoiceSubmit);
 }
@@ -4111,6 +4720,14 @@ if (dom.portalDownloadLatest) {
 
 if (invoiceTables.portal) {
     invoiceTables.portal.addEventListener('click', handlePortalInvoiceAction);
+}
+
+if (dom.portalProposalsRefresh) {
+    dom.portalProposalsRefresh.addEventListener('click', loadPortalProposals);
+}
+
+if (dom.portalProposals) {
+    dom.portalProposals.addEventListener('click', handlePortalProposalAction);
 }
 
 initializeInvoiceForm();
