@@ -2465,6 +2465,7 @@ async function handleJobSubmit(event) {
     const payload = {
         customer_id: Number(formData.get('customer_id')),
         description: String(formData.get('description') || '').trim(),
+        notes: String(formData.get('notes') || '').trim() || null,
         cost: Number(formData.get('cost')),
         status: formData.get('status') || 'draft',
     };
@@ -2497,7 +2498,8 @@ async function handleJobAction(event) {
         if (dom.jobFormTitle) dom.jobFormTitle.textContent = 'Edit job';
         dom.jobForm.querySelector('input[name="id"]').value = job.id;
         dom.jobForm.querySelector('select[name="customer_id"]').value = job.customer_id;
-        dom.jobForm.querySelector('textarea[name="description"]').value = job.description || '';
+        dom.jobForm.querySelector('input[name="description"]').value = job.description || '';
+        dom.jobForm.querySelector('textarea[name="notes"]').value = job.notes || '';
         dom.jobForm.querySelector('input[name="cost"]').value = job.cost || '';
         dom.jobForm.querySelector('select[name="status"]').value = job.status || 'draft';
         setFormStatus(dom.jobFormStatus, 'Editing job.');

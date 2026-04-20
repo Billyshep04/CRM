@@ -46,7 +46,12 @@ class InvoiceController extends Controller
         );
     }
 
-    public function store(Request $request, InvoiceNumberGenerator $numberGenerator)
+    public function store(
+        Request $request,
+        InvoiceNumberGenerator $numberGenerator,
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync,
+        InvoiceJobStatusSyncService $invoiceJobStatusSync
+    )
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
@@ -98,6 +103,13 @@ class InvoiceController extends Controller
             $invoice->forceFill(['sent_at' => now()])->save();
         }
 
+        if ($invoice->status === 'paid') {
+            $invoice->forceFill([
+                'paid_at' => $invoice->paid_at ?? now(),
+            ])->save();
+            $this->syncInvoiceLinkedPaymentStatus($invoice, 'paid', $subscriptionMonthSync, $invoiceJobStatusSync);
+        }
+
         return new InvoiceResource($invoice);
     }
 
@@ -106,7 +118,12 @@ class InvoiceController extends Controller
         return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
     }
 
-    public function update(Request $request, Invoice $invoice)
+    public function update(
+        Request $request,
+        Invoice $invoice,
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync,
+        InvoiceJobStatusSyncService $invoiceJobStatusSync
+    )
     {
         $validated = $request->validate([
             'customer_id' => ['sometimes', 'integer', 'exists:customers,id'],
@@ -160,6 +177,13 @@ class InvoiceController extends Controller
         if (($validated['status'] ?? null) === 'sent' && !$invoice->sent_at) {
             $this->sendInvoiceEmailNow($invoice);
             $invoice->forceFill(['sent_at' => now()])->save();
+        }
+
+        if ($invoice->status === 'paid') {
+            $invoice->forceFill([
+                'paid_at' => $invoice->paid_at ?? now(),
+            ])->save();
+            $this->syncInvoiceLinkedPaymentStatus($invoice, 'paid', $subscriptionMonthSync, $invoiceJobStatusSync);
         }
 
         return new InvoiceResource($invoice);
@@ -224,8 +248,7 @@ class InvoiceController extends Controller
         }
 
         $loadedInvoice = $invoice->loadMissing('lineItems');
-        $subscriptionMonthSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
-        $invoiceJobStatusSync->syncFromInvoice($loadedInvoice, $validated['payment_status']);
+        $this->syncInvoiceLinkedPaymentStatus($loadedInvoice, $validated['payment_status'], $subscriptionMonthSync, $invoiceJobStatusSync);
 
         return new InvoiceResource($invoice->load(['customer', 'lineItems', 'pdfFile']));
     }
@@ -355,6 +378,17 @@ class InvoiceController extends Controller
                 'send' => ['Invoice email could not be sent. Check mail settings in .env (MAIL_*).'],
             ]);
         }
+    }
+
+    private function syncInvoiceLinkedPaymentStatus(
+        Invoice $invoice,
+        string $paymentStatus,
+        InvoiceSubscriptionMonthSyncService $subscriptionMonthSync,
+        InvoiceJobStatusSyncService $invoiceJobStatusSync
+    ): void {
+        $loadedInvoice = $invoice->loadMissing('lineItems');
+        $subscriptionMonthSync->syncFromInvoice($loadedInvoice, $paymentStatus);
+        $invoiceJobStatusSync->syncFromInvoice($loadedInvoice, $paymentStatus);
     }
 
 }

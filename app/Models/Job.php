@@ -20,6 +20,7 @@ class Job extends Model
         'customer_id',
         'created_by_user_id',
         'description',
+        'notes',
         'cost',
         'status',
         'completed_at',

@@ -16,7 +16,7 @@ class InvoicePdfService
 
     public function generate(Invoice $invoice): StoredFile
     {
-        $invoice->loadMissing(['customer', 'lineItems']);
+        $invoice->loadMissing(['customer', 'lineItems.billable']);
 
         if ($invoice->pdfFile && $this->fileExists($invoice->pdfFile)) {
             return $invoice->pdfFile;

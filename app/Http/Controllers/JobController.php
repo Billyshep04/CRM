@@ -6,10 +6,14 @@ use App\Http\Resources\JobResource;
 use App\Http\Resources\StoredFileResource;
 use App\Models\Job;
 use App\Models\StoredFile;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 use ZipArchive;
 
 class JobController extends Controller
@@ -35,14 +39,27 @@ class JobController extends Controller
 
     public function store(Request $request)
     {
+        $supportsJobNotes = $this->ensureJobNotesColumnExists(true);
+
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
             'description' => ['required', 'string'],
+            'notes' => ['nullable', 'string'],
             'cost' => ['required', 'numeric', 'min:0'],
             'status' => ['nullable', Rule::in(['draft', 'completed', 'invoiced'])],
             'completed_at' => ['nullable', 'date'],
             'invoiced_at' => ['nullable', 'date'],
         ]);
+
+        if (!$supportsJobNotes && trim((string) ($validated['notes'] ?? '')) !== '') {
+            throw ValidationException::withMessages([
+                'notes' => ['Job notes are unavailable. Add the notes column on jobs, then retry.'],
+            ]);
+        }
+
+        if (!$supportsJobNotes) {
+            unset($validated['notes']);
+        }
 
         $job = Job::create([
             ...$validated,
@@ -68,14 +85,27 @@ class JobController extends Controller
 
     public function update(Request $request, Job $job)
     {
+        $supportsJobNotes = $this->ensureJobNotesColumnExists(true);
+
         $validated = $request->validate([
             'customer_id' => ['sometimes', 'integer', 'exists:customers,id'],
             'description' => ['sometimes', 'string'],
+            'notes' => ['nullable', 'string'],
             'cost' => ['sometimes', 'numeric', 'min:0'],
             'status' => ['sometimes', Rule::in(['draft', 'completed', 'invoiced'])],
             'completed_at' => ['nullable', 'date'],
             'invoiced_at' => ['nullable', 'date'],
         ]);
+
+        if (!$supportsJobNotes && array_key_exists('notes', $validated) && trim((string) ($validated['notes'] ?? '')) !== '') {
+            throw ValidationException::withMessages([
+                'notes' => ['Job notes are unavailable. Add the notes column on jobs, then retry.'],
+            ]);
+        }
+
+        if (!$supportsJobNotes) {
+            unset($validated['notes']);
+        }
 
         $job->update($validated);
 
@@ -231,5 +261,31 @@ class JobController extends Controller
 
         $usedNames[$candidate] = true;
         return $candidate;
+    }
+
+    private function ensureJobNotesColumnExists(bool $attemptAutoCreate = false): bool
+    {
+        static $supportsJobNotes = null;
+
+        if ($supportsJobNotes !== null) {
+            return $supportsJobNotes;
+        }
+
+        $supportsJobNotes = Schema::hasColumn('jobs', 'notes');
+        if ($supportsJobNotes || !$attemptAutoCreate || !Schema::hasTable('jobs')) {
+            return $supportsJobNotes;
+        }
+
+        try {
+            Schema::table('jobs', function (Blueprint $table): void {
+                $table->text('notes')->nullable()->after('description');
+            });
+        } catch (Throwable) {
+            // Ignore if DB user cannot alter schema.
+        }
+
+        $supportsJobNotes = Schema::hasColumn('jobs', 'notes');
+
+        return $supportsJobNotes;
     }
 }

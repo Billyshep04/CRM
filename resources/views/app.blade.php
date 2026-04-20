@@ -526,7 +526,11 @@
                                 </label>
                                 <label class="field">
                                     <span>Description</span>
-                                    <textarea name="description" rows="3" required></textarea>
+                                    <input type="text" name="description" required>
+                                </label>
+                                <label class="field">
+                                    <span>Notes</span>
+                                    <textarea name="notes" rows="3" placeholder="Detailed notes for this job (shown on invoice)"></textarea>
                                 </label>
                                 <label class="field">
                                     <span>Cost</span>

@@ -112,6 +112,20 @@
             $paymentAccountName = trim((string) ($payment_details['account_name'] ?? 'Billy Sheppard'));
             $paymentSortCode = trim((string) ($payment_details['sort_code'] ?? '04-00-03'));
             $paymentAccountNumber = trim((string) ($payment_details['account_number'] ?? '05574495'));
+
+            $jobNotes = $invoice->lineItems
+                ->filter(function ($item) {
+                    return $item->billable_type === \App\Models\Job::class
+                        && $item->billable instanceof \App\Models\Job;
+                })
+                ->map(function ($item) {
+                    return trim((string) ($item->billable->notes ?? ''));
+                })
+                ->filter(function ($value) {
+                    return $value !== '';
+                })
+                ->unique()
+                ->values();
         @endphp
 
         <div class="header">
@@ -135,6 +149,15 @@
             <div class="muted">{{ $customer?->email }}</div>
             <div class="muted" style="white-space: pre-line;">{{ $customer?->billing_address }}</div>
         </div>
+
+        @if ($jobNotes->isNotEmpty())
+            <div class="section">
+                <div style="font-weight: 600;">Notes</div>
+                @foreach ($jobNotes as $note)
+                    <div class="muted" style="white-space: pre-line; margin-top: 6px;">{{ $note }}</div>
+                @endforeach
+            </div>
+        @endif
 
         <div class="section">
             <table>

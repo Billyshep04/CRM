@@ -180,6 +180,7 @@ CREATE TABLE `jobs` (
   `customer_id` BIGINT UNSIGNED NOT NULL,
   `created_by_user_id` BIGINT UNSIGNED NULL,
   `description` TEXT NOT NULL,
+  `notes` TEXT NULL,
   `cost` DECIMAL(12, 2) NOT NULL,
   `status` VARCHAR(255) NOT NULL DEFAULT 'draft',
   `completed_at` TIMESTAMP NULL DEFAULT NULL,

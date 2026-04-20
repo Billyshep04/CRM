@@ -20,6 +20,7 @@ class JobResource extends JsonResource
             'customer_id' => $this->customer_id,
             'created_by_user_id' => $this->created_by_user_id,
             'description' => $this->description,
+            'notes' => $this->notes,
             'cost' => $this->cost,
             'status' => $this->status,
             'completed_at' => $this->completed_at,
