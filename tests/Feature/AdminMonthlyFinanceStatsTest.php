@@ -25,7 +25,7 @@ class AdminMonthlyFinanceStatsTest extends TestCase
         parent::tearDown();
     }
 
-    public function test_admin_can_fetch_monthly_finance_from_february_to_current_month(): void
+    public function test_admin_can_fetch_monthly_finance_from_march_to_current_month(): void
     {
         Carbon::setTestNow(Carbon::parse('2026-04-16 10:00:00'));
 
@@ -89,12 +89,12 @@ class AdminMonthlyFinanceStatsTest extends TestCase
         $response = $this->getJson('/api/admin/stats/monthly-finance');
 
         $response->assertOk();
-        $response->assertJsonPath('start_month', '2026-02-01');
+        $response->assertJsonPath('start_month', '2026-03-01');
         $response->assertJsonPath('end_month', '2026-04-01');
         $response->assertJsonPath('selected_month', '2026-04-01');
 
         $months = collect($response->json('months'));
-        $this->assertCount(3, $months);
+        $this->assertCount(2, $months);
 
         $march = $months->firstWhere('month_start', '2026-03-01');
         $this->assertNotNull($march);
@@ -131,4 +131,3 @@ class AdminMonthlyFinanceStatsTest extends TestCase
         $user->roles()->syncWithoutDetaching([$role->id]);
     }
 }
-

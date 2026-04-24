@@ -46,7 +46,7 @@ class StatsController extends Controller
         $now = now();
         $startMonth = Carbon::create(
             $now->year,
-            2,
+            3,
             1,
             0,
             0,
@@ -54,7 +54,7 @@ class StatsController extends Controller
             config('app.timezone')
         )->startOfMonth();
 
-        if ($now->month < 2) {
+        if ($now->month < 3) {
             $startMonth->subYearNoOverflow();
         }
 

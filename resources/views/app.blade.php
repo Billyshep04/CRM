@@ -205,7 +205,7 @@
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Months</div>
-                                    <div class="card-subtitle">From February to the current month.</div>
+                                    <div class="card-subtitle">From March to the current month.</div>
                                     <div class="monthly-finance-selected-month" id="monthly-finance-selected-month">--</div>
                                 </div>
                                 <button class="btn btn-outline" id="monthly-finance-refresh" type="button">Refresh</button>
