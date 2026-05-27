@@ -71,7 +71,10 @@ class InvoiceController extends Controller
         $lineItems = $validated['line_items'];
 
         $invoice = DB::transaction(function () use ($validated, $lineItems, $request, $numberGenerator): Invoice {
-            $invoiceNumber = $validated['invoice_number'] ?? $numberGenerator->generate();
+            $invoiceNumber = $validated['invoice_number'] ?? $numberGenerator->generate(
+                (int) $validated['customer_id'],
+                $validated['issue_date']
+            );
 
             $subtotal = 0;
             foreach ($lineItems as $item) {

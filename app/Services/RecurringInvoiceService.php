@@ -103,8 +103,11 @@ class RecurringInvoiceService
             while ($nextInvoiceDate->lte($today)) {
                 if (!$this->subscriptionInvoiceExistsForDate($subscription, $nextInvoiceDate)) {
                     $createdInvoices[] = DB::transaction(function () use ($subscription, $nextInvoiceDate): Invoice {
-                        $invoiceNumber = $this->numberGenerator->generate();
                         $issueDate = $nextInvoiceDate->toDateString();
+                        $invoiceNumber = $this->numberGenerator->generate(
+                            (int) $subscription->customer_id,
+                            $issueDate
+                        );
                         $dueDate = $nextInvoiceDate->copy()->addDays(14)->toDateString();
 
                         $invoice = Invoice::create([

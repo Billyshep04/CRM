@@ -50,6 +50,7 @@ class RecurringInvoiceServiceTest extends TestCase
             ->first();
 
         $this->assertNotNull($invoice);
+        $this->assertSame('TC-1-010326', $invoice->invoice_number);
         $this->assertSame('2026-03-01', $invoice->issue_date?->toDateString());
 
         $subscription->refresh();
