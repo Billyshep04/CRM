@@ -31,8 +31,18 @@
                 </div>
 
                 <div class="auth-panel">
-                    <h1>Welcome back</h1>
-                    <p>Sign in to manage customers, subscriptions, and invoices.</p>
+                    <div id="login-intro">
+                        <h1>Welcome back</h1>
+                        <p>Sign in to manage customers, subscriptions, and invoices.</p>
+                    </div>
+                    <div id="forgot-password-intro" hidden>
+                        <h1>Reset password</h1>
+                        <p>Enter your customer portal email and we will send you a reset link.</p>
+                    </div>
+                    <div id="reset-password-intro" hidden>
+                        <h1>Choose a new password</h1>
+                        <p>Enter and confirm your new customer portal password.</p>
+                    </div>
 
                     <form id="login-form" class="form-stack">
                         <label class="field">
@@ -43,11 +53,41 @@
                             <span>Password</span>
                             <input type="password" name="password" placeholder="********" required>
                         </label>
+                        <button type="button" class="auth-link" id="forgot-password-link">forgotten password?</button>
                         <div id="login-error" class="form-error"></div>
                         <button type="submit" class="btn btn-primary">Sign in</button>
                         <div class="form-hint">
                             Demo: admin@example.com / password
                         </div>
+                    </form>
+
+                    <form id="forgot-password-form" class="form-stack" hidden>
+                        <label class="field">
+                            <span>Email</span>
+                            <input type="email" name="email" placeholder="you@company.com" required>
+                        </label>
+                        <div id="forgot-password-status" class="form-hint"></div>
+                        <button type="submit" class="btn btn-primary">Send reset link</button>
+                        <button type="button" class="auth-link" id="forgot-password-back">Back to sign in</button>
+                    </form>
+
+                    <form id="reset-password-form" class="form-stack" hidden>
+                        <input type="hidden" name="token">
+                        <label class="field">
+                            <span>Email</span>
+                            <input type="email" name="email" required>
+                        </label>
+                        <label class="field">
+                            <span>New password</span>
+                            <input type="password" name="password" minlength="8" required>
+                        </label>
+                        <label class="field">
+                            <span>Confirm new password</span>
+                            <input type="password" name="password_confirmation" minlength="8" required>
+                        </label>
+                        <div id="reset-password-status" class="form-hint"></div>
+                        <button type="submit" class="btn btn-primary">Reset password</button>
+                        <button type="button" class="auth-link" id="reset-password-back">Back to sign in</button>
                     </form>
                 </div>
             </div>

@@ -11,6 +11,7 @@ use App\Http\Controllers\CostController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\StatsController;
@@ -19,6 +20,8 @@ use App\Http\Controllers\UserPreferenceController;
 use App\Http\Controllers\WebsiteController;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/forgot-password', [PasswordResetController::class, 'request']);
+Route::post('/auth/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('brand/logo', [BrandSettingController::class, 'logo']);
 
 Route::middleware('auth:sanctum')->group(function (): void {

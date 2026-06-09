@@ -7,8 +7,18 @@ const dom = {
     body: document.body,
     themeToggles: document.querySelectorAll('[data-theme-toggle]'),
     themeLabels: document.querySelectorAll('.theme-label'),
+    loginIntro: document.getElementById('login-intro'),
+    forgotPasswordIntro: document.getElementById('forgot-password-intro'),
+    resetPasswordIntro: document.getElementById('reset-password-intro'),
     loginForm: document.getElementById('login-form'),
     loginError: document.getElementById('login-error'),
+    forgotPasswordForm: document.getElementById('forgot-password-form'),
+    forgotPasswordLink: document.getElementById('forgot-password-link'),
+    forgotPasswordBack: document.getElementById('forgot-password-back'),
+    forgotPasswordStatus: document.getElementById('forgot-password-status'),
+    resetPasswordForm: document.getElementById('reset-password-form'),
+    resetPasswordBack: document.getElementById('reset-password-back'),
+    resetPasswordStatus: document.getElementById('reset-password-status'),
     userName: document.getElementById('user-name'),
     userRole: document.getElementById('user-role'),
     brandLogo: document.getElementById('brand-logo'),
@@ -603,6 +613,44 @@ function setFormStatus(element, message, isError = false) {
     if (!element) return;
     element.textContent = message;
     element.style.color = isError ? '#ef4444' : '';
+}
+
+function setAuthMode(mode) {
+    const isForgot = mode === 'forgot';
+    const isReset = mode === 'reset';
+
+    if (dom.loginIntro) dom.loginIntro.hidden = isForgot || isReset;
+    if (dom.forgotPasswordIntro) dom.forgotPasswordIntro.hidden = !isForgot;
+    if (dom.resetPasswordIntro) dom.resetPasswordIntro.hidden = !isReset;
+    if (dom.loginForm) dom.loginForm.hidden = isForgot || isReset;
+    if (dom.forgotPasswordForm) dom.forgotPasswordForm.hidden = !isForgot;
+    if (dom.resetPasswordForm) dom.resetPasswordForm.hidden = !isReset;
+
+    if (mode === 'login') {
+        if (dom.loginError) dom.loginError.textContent = '';
+        setFormStatus(dom.forgotPasswordStatus, '');
+        setFormStatus(dom.resetPasswordStatus, '');
+    }
+}
+
+function initializePasswordResetMode() {
+    if (!dom.resetPasswordForm) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('reset_token') || '';
+    const email = params.get('email') || '';
+
+    if (!token || !email) {
+        setAuthMode('login');
+        return;
+    }
+
+    const tokenInput = dom.resetPasswordForm.querySelector('input[name="token"]');
+    const emailInput = dom.resetPasswordForm.querySelector('input[name="email"]');
+
+    if (tokenInput) tokenInput.value = token;
+    if (emailInput) emailInput.value = email;
+    setAuthMode('reset');
 }
 
 function showToast(message, isError = false) {
@@ -1411,7 +1459,79 @@ async function handleLogin(event) {
     } catch (error) {
         if (dom.loginError) {
             dom.loginError.textContent = 'Invalid credentials. Please try again.';
+            dom.loginError.style.color = '#ef4444';
         }
+    } finally {
+        if (submitButton) submitButton.disabled = false;
+    }
+}
+
+async function handleForgotPassword(event) {
+    event.preventDefault();
+    if (!dom.forgotPasswordForm) return;
+
+    const submitButton = dom.forgotPasswordForm.querySelector('button[type="submit"]');
+    const formData = new FormData(dom.forgotPasswordForm);
+    const payload = {
+        email: String(formData.get('email') || '').trim(),
+    };
+
+    if (!payload.email) {
+        setFormStatus(dom.forgotPasswordStatus, 'Email is required.', true);
+        return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+    setFormStatus(dom.forgotPasswordStatus, '');
+
+    try {
+        const response = await api.post('/api/auth/forgot-password', payload);
+        setFormStatus(dom.forgotPasswordStatus, response.data?.message || 'If a customer portal account exists for that email, a password reset link has been sent.');
+        dom.forgotPasswordForm.reset();
+    } catch (error) {
+        setFormStatus(dom.forgotPasswordStatus, getErrorMessage(error, 'Unable to request password reset.'), true);
+    } finally {
+        if (submitButton) submitButton.disabled = false;
+    }
+}
+
+async function handleResetPassword(event) {
+    event.preventDefault();
+    if (!dom.resetPasswordForm) return;
+
+    const submitButton = dom.resetPasswordForm.querySelector('button[type="submit"]');
+    const formData = new FormData(dom.resetPasswordForm);
+    const payload = {
+        email: String(formData.get('email') || '').trim(),
+        token: String(formData.get('token') || ''),
+        password: String(formData.get('password') || ''),
+        password_confirmation: String(formData.get('password_confirmation') || ''),
+    };
+
+    if (!payload.email || !payload.token || !payload.password || !payload.password_confirmation) {
+        setFormStatus(dom.resetPasswordStatus, 'All fields are required.', true);
+        return;
+    }
+
+    if (payload.password !== payload.password_confirmation) {
+        setFormStatus(dom.resetPasswordStatus, 'Passwords do not match.', true);
+        return;
+    }
+
+    if (submitButton) submitButton.disabled = true;
+    setFormStatus(dom.resetPasswordStatus, '');
+
+    try {
+        const response = await api.post('/api/auth/reset-password', payload);
+        dom.resetPasswordForm.reset();
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setAuthMode('login');
+        if (dom.loginError) {
+            dom.loginError.textContent = response.data?.message || 'Your password has been reset. You can now sign in.';
+            dom.loginError.style.color = '';
+        }
+    } catch (error) {
+        setFormStatus(dom.resetPasswordStatus, getErrorMessage(error, 'Unable to reset password.'), true);
     } finally {
         if (submitButton) submitButton.disabled = false;
     }
@@ -4287,6 +4407,29 @@ if (dom.loginForm) {
     dom.loginForm.addEventListener('submit', handleLogin);
 }
 
+if (dom.forgotPasswordLink) {
+    dom.forgotPasswordLink.addEventListener('click', () => setAuthMode('forgot'));
+}
+
+if (dom.forgotPasswordBack) {
+    dom.forgotPasswordBack.addEventListener('click', () => setAuthMode('login'));
+}
+
+if (dom.forgotPasswordForm) {
+    dom.forgotPasswordForm.addEventListener('submit', handleForgotPassword);
+}
+
+if (dom.resetPasswordBack) {
+    dom.resetPasswordBack.addEventListener('click', () => {
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setAuthMode('login');
+    });
+}
+
+if (dom.resetPasswordForm) {
+    dom.resetPasswordForm.addEventListener('submit', handleResetPassword);
+}
+
 if (dom.logoutButton) {
     dom.logoutButton.addEventListener('click', handleLogout);
 }
@@ -4733,6 +4876,7 @@ if (dom.portalProposals) {
 initializeInvoiceForm();
 initializeNavigation();
 applyStoredTheme();
+initializePasswordResetMode();
 applyMonthlyFinanceBoxVisibility();
 renderSubscriptionMonths();
 updateCustomerArchiveControls();
