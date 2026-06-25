@@ -880,7 +880,7 @@
                             <div class="card-header">
                                 <div>
                                     <div class="card-title" id="proposal-form-title">New proposal</div>
-                                    <div class="card-subtitle">Compose a proposal linked to one job.</div>
+                                    <div class="card-subtitle">Complete a proposal form and set a manual price.</div>
                                 </div>
                             </div>
                             <form id="proposal-form" class="form-stack">
@@ -890,10 +890,8 @@
                                     <select name="customer_id" id="proposal-customer-select" required></select>
                                 </label>
                                 <label class="field">
-                                    <span>Job</span>
-                                    <select name="job_id" id="proposal-job-select" required>
-                                        <option value="" selected disabled>Select customer first</option>
-                                    </select>
+                                    <span>Proposal type</span>
+                                    <select name="proposal_type" id="proposal-type-select" required></select>
                                 </label>
                                 <label class="field">
                                     <span>Title</span>
@@ -907,16 +905,17 @@
                                     <span>Expiry date</span>
                                     <input type="date" name="expiry_date" required>
                                 </label>
+                                <div id="proposal-form-answers" class="form-stack"></div>
                                 <label class="field">
-                                    <span>Line item description</span>
+                                    <span>Price description</span>
                                     <input type="text" name="line_item_description" id="proposal-line-item-description" placeholder="Auto-filled from selected job" required>
                                 </label>
                                 <div class="line-item">
-                                    <input type="number" name="line_item_quantity" min="0.5" step="0.5" value="1" required>
-                                    <input type="number" name="line_item_unit_price" min="0" step="0.01" placeholder="Unit price" required>
+                                    <input type="hidden" name="line_item_quantity" value="1">
+                                    <input type="number" name="line_item_unit_price" min="0" step="0.01" placeholder="Manual price" required>
                                     <select name="status">
                                         <option value="draft">Draft</option>
-                                        <option value="sent">Send now</option>
+                                        <option value="pending">Send now / Pending</option>
                                     </select>
                                 </div>
                                 <label class="field">
@@ -949,9 +948,9 @@
                                     <select id="proposals-filter-status">
                                         <option value="all">All</option>
                                         <option value="draft">Draft</option>
-                                        <option value="sent">Sent</option>
-                                        <option value="accepted">Accepted</option>
-                                        <option value="rejected">Rejected</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="approved">Approved</option>
+                                        <option value="declined">Declined</option>
                                         <option value="expired">Expired</option>
                                     </select>
                                 </label>
@@ -966,7 +965,7 @@
                                     <span>Proposal</span>
                                     <span>Version</span>
                                     <span>Customer</span>
-                                    <span>Job</span>
+                                    <span>Type</span>
                                     <span>Total</span>
                                     <span>Status</span>
                                     <span>Expires</span>
@@ -1163,6 +1162,18 @@
                             </form>
                         </div>
 
+                        <div class="card wide admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Edit Proposal forms</div>
+                                    <div class="card-subtitle">Choose a proposal form to edit its questions.</div>
+                                </div>
+                                <button class="btn btn-outline" id="proposal-forms-add-type" type="button">Add type</button>
+                            </div>
+                            <div id="proposal-forms-editor" class="form-stack"></div>
+                            <div id="proposal-forms-settings-status" class="form-hint"></div>
+                        </div>
+
                         <div class="card admin-only">
                             <div class="card-header">
                                 <div>
@@ -1244,6 +1255,33 @@
                                 </label>
                                 <div id="password-form-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Update password</button>
+                            </form>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="proposal-form-edit">
+                    <section class="content-grid">
+                        <div class="card wide admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="proposal-form-edit-title">Edit proposal form</div>
+                                    <div class="card-subtitle">Update the form name and questions shown when creating this proposal type.</div>
+                                </div>
+                                <button class="btn btn-outline" id="proposal-form-edit-back" type="button">Back to Admin</button>
+                            </div>
+                            <form id="proposal-forms-settings-form" class="form-stack">
+                                <label class="field">
+                                    <span>Proposal type name</span>
+                                    <input type="text" id="proposal-form-edit-label" required>
+                                </label>
+                                <div id="proposal-form-edit-editor" class="form-stack"></div>
+                                <div id="proposal-form-edit-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn btn-outline" id="proposal-form-edit-add-question">Add question</button>
+                                    <button type="submit" class="btn btn-primary">Save form</button>
+                                    <button type="button" class="btn btn-ghost" id="proposal-form-edit-delete">Delete form</button>
+                                </div>
                             </form>
                         </div>
                     </section>
@@ -1350,7 +1388,7 @@
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Your proposals</div>
-                                    <div class="card-subtitle">Review, accept, reject, and download proposal PDFs</div>
+                                    <div class="card-subtitle">Review, approve, decline, and download proposal PDFs</div>
                                 </div>
                                 <button class="btn btn-outline" id="portal-proposals-refresh" type="button">Refresh</button>
                             </div>

@@ -68,9 +68,9 @@ class SendProposalAcceptedNotification implements ShouldQueue
             'api_key' => $apiKey,
             'sender' => $sender,
             'to' => [$targetEmail],
-            'subject' => "Proposal accepted: {$proposal->proposal_number} (v{$proposal->version})",
+            'subject' => "Proposal approved: {$proposal->proposal_number} (v{$proposal->version})",
             'html_body' => $htmlBody,
-            'text_body' => "Proposal accepted: {$proposal->proposal_number} (v{$proposal->version})",
+            'text_body' => "Proposal approved: {$proposal->proposal_number} (v{$proposal->version})",
         ];
 
         $response = Http::acceptJson()

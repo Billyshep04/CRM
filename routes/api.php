@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminInvoiceSettingController;
 use App\Http\Controllers\AdminMailSettingController;
+use App\Http\Controllers\AdminProposalFormController;
 use App\Http\Controllers\AdminStaffUserController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\BrandSettingController;
@@ -49,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::patch('subscriptions/{subscription}/months/{subscriptionMonth}', [SubscriptionController::class, 'updateMonth']);
         Route::post('subscriptions/{subscription}/months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPayment']);
         Route::apiResource('subscriptions', SubscriptionController::class);
+        Route::get('proposal-forms', [AdminProposalFormController::class, 'show']);
         Route::apiResource('proposals', ProposalController::class);
         Route::post('proposals/{proposal}/send', [ProposalController::class, 'send']);
         Route::get('proposals/{proposal}/download', [ProposalController::class, 'download']);
@@ -76,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::put('admin/invoice-settings', [AdminInvoiceSettingController::class, 'update']);
         Route::get('admin/mail-settings', [AdminMailSettingController::class, 'show']);
         Route::put('admin/mail-settings', [AdminMailSettingController::class, 'update']);
+        Route::get('admin/proposal-forms', [AdminProposalFormController::class, 'show']);
+        Route::put('admin/proposal-forms', [AdminProposalFormController::class, 'update']);
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {

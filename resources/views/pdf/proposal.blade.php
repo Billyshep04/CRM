@@ -65,15 +65,24 @@
             .content {
                 padding: 18px 20px 20px;
             }
-            .two-col {
+            .proposal-title {
+                margin: 14px 0 0;
+                color: #31B8F0;
+                font-family: DejaVu Sans, Arial, Helvetica, sans-serif;
+                font-size: 24px;
+                line-height: 1.2;
+                font-weight: 700;
+                letter-spacing: 0;
+            }
+            .proposal-for {
                 width: 100%;
                 border-collapse: collapse;
                 margin-bottom: 16px;
             }
-            .two-col td {
+            .proposal-for td {
                 vertical-align: top;
-                width: 50%;
-                padding-right: 10px;
+                width: 100%;
+                padding-right: 0;
             }
             .label {
                 font-size: 11px;
@@ -135,6 +144,30 @@
                 border-top: 1px dashed #dce6f2;
                 padding-top: 12px;
             }
+            .answers {
+                margin-top: 14px;
+            }
+            .answer-grid {
+                width: 100%;
+                border-collapse: separate;
+                border-spacing: 0;
+                border: 1px solid #e5e7eb;
+                border-radius: 12px;
+                overflow: hidden;
+            }
+            .answer-grid td {
+                border-bottom: 1px solid #e5e7eb;
+                padding: 8px 10px;
+            }
+            .answer-grid tr:last-child td {
+                border-bottom: none;
+            }
+            .answer-label {
+                width: 45%;
+                color: #475569;
+                font-weight: 700;
+                background: #f8fbff;
+            }
             .footer {
                 margin-top: 14px;
                 color: #64748b;
@@ -166,6 +199,7 @@
                             <div class="hero-meta">#{{ $proposal->proposal_number }} &middot; Version {{ $proposal->version }}</div>
                             <div class="hero-meta">Issued {{ $proposal->issue_date?->format('M j, Y') }} &middot; Valid until {{ $proposal->expiry_date?->format('M j, Y') }}</div>
                             <div class="status-pill">{{ $statusLabel }}</div>
+                            <h2 class="proposal-title">{{ $proposal->title }}</h2>
                         </td>
                         <td class="logo-wrap">
                             @if ($logoDataUri)
@@ -177,28 +211,43 @@
             </div>
 
             <div class="content">
-                <table class="two-col">
+                <table class="proposal-for">
                     <tr>
                         <td>
-                            <div class="label">Billed To</div>
+                            <div class="label">Proposal For</div>
                             <div class="box">
                                 <p><strong>{{ $customer?->name }}</strong></p>
                                 <p>{{ $customer?->email }}</p>
                                 <p>{{ $customer?->billing_address }}</p>
                             </div>
                         </td>
-                        <td>
-                            <div class="label">Project</div>
-                            <div class="box">
-                                <p><strong>{{ $proposal->title }}</strong></p>
-                                @if ($job)
-                                    <p>Linked job #{{ $job->id }}</p>
-                                    <p>{{ $job->description }}</p>
-                                @endif
-                            </div>
-                        </td>
                     </tr>
                 </table>
+
+                @if (is_array($proposal->form_answers) && count($proposal->form_answers))
+                    <div class="answers">
+                        <div class="label">Proposal details</div>
+                        <table class="answer-grid">
+                            <tbody>
+                                @foreach ($proposal->form_answers as $answer)
+                                    @php
+                                        $answerValue = $answer['value'] ?? null;
+                                        if (is_bool($answerValue)) {
+                                            $answerValue = $answerValue ? 'Yes' : 'No';
+                                        }
+                                        if ($answerValue === null || $answerValue === '') {
+                                            $answerValue = 'Not specified';
+                                        }
+                                    @endphp
+                                    <tr>
+                                        <td class="answer-label">{{ $answer['label'] ?? $answer['key'] ?? 'Question' }}</td>
+                                        <td>{{ $answerValue }}</td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @endif
 
                 @if (trim((string) $proposal->notes) !== '')
                     <div class="label">Notes</div>
@@ -249,7 +298,7 @@
                 @endif
 
                 <div class="footer">
-                    Please review this proposal in your customer portal at crm.web-stamp.co.uk, where you can accept or reject it.
+                    Please review this proposal in your customer portal at crm.web-stamp.co.uk, where you can approve or decline it.
                 </div>
             </div>
         </div>

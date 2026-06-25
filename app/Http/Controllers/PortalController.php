@@ -263,21 +263,28 @@ class PortalController extends Controller
         }
 
         $validated = $request->validate([
-            'status' => ['required', Rule::in(['accepted', 'rejected'])],
+            'status' => ['required', Rule::in(['approved', 'declined', 'accepted', 'rejected'])],
         ]);
 
-        if ($validated['status'] === 'accepted') {
+        $status = match ($validated['status']) {
+            'accepted' => 'approved',
+            'rejected' => 'declined',
+            default => $validated['status'],
+        };
+
+        if ($status === 'approved') {
             $proposal->forceFill([
-                'status' => 'accepted',
+                'status' => 'approved',
                 'accepted_at' => $proposal->accepted_at ?? now(),
                 'rejected_at' => null,
                 'locked_at' => $proposal->locked_at ?? now(),
             ])->save();
 
+            $this->createJobFromApprovedProposal($proposal, $request->user()?->id);
             $this->sendProposalAcceptedNotificationNow($proposal);
         } else {
             $proposal->forceFill([
-                'status' => 'rejected',
+                'status' => 'declined',
                 'accepted_at' => null,
                 'rejected_at' => $proposal->rejected_at ?? now(),
                 'locked_at' => $proposal->locked_at ?? now(),
@@ -537,6 +544,35 @@ class PortalController extends Controller
                 'status' => ['Proposal status was updated, but admin notification email could not be sent.'],
             ]);
         }
+    }
+
+    private function createJobFromApprovedProposal(Proposal $proposal, ?int $userId = null): void
+    {
+        if ($proposal->job_id) {
+            return;
+        }
+
+        $answers = collect($proposal->form_answers ?? [])
+            ->map(function (array $answer): string {
+                $value = $answer['value'] ?? null;
+                if (is_bool($value)) {
+                    $value = $value ? 'Yes' : 'No';
+                }
+
+                return ($answer['label'] ?? $answer['key'] ?? 'Question') . ': ' . ($value === null || $value === '' ? 'Not specified' : $value);
+            })
+            ->implode("\n");
+
+        $job = Job::create([
+            'customer_id' => $proposal->customer_id,
+            'created_by_user_id' => $userId ?: $proposal->created_by_user_id,
+            'description' => $proposal->title,
+            'notes' => trim("Created automatically from approved proposal {$proposal->proposal_number} v{$proposal->version}.\n\nProposal type: {$proposal->proposal_type_label}\n\n{$answers}\n\n{$proposal->notes}"),
+            'cost' => $proposal->total,
+            'status' => 'open',
+        ]);
+
+        $proposal->forceFill(['job_id' => $job->id])->save();
     }
 
     private function proposalsFeatureReady(): bool

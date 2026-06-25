@@ -26,7 +26,7 @@
                         </tr>
                         <tr>
                             <td style="font-size:13px;color:#6b7280;padding-top:16px;">
-                                Please review and accept/reject this proposal in your portal.
+                                Please review and approve or decline this proposal in your portal.
                             </td>
                         </tr>
                         <tr>

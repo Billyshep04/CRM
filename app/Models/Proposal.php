@@ -25,6 +25,9 @@ class Proposal extends Model
         'proposal_number',
         'version',
         'title',
+        'proposal_type',
+        'proposal_type_label',
+        'form_answers',
         'issue_date',
         'expiry_date',
         'status',
@@ -42,6 +45,7 @@ class Proposal extends Model
     protected $casts = [
         'issue_date' => 'date',
         'expiry_date' => 'date',
+        'form_answers' => 'array',
         'sent_at' => 'datetime',
         'accepted_at' => 'datetime',
         'rejected_at' => 'datetime',
@@ -88,8 +92,20 @@ class Proposal extends Model
 
         if ($normalized === 'expired') {
             return $query
-                ->whereNotIn('status', ['accepted', 'rejected'])
+                ->whereNotIn('status', ['approved', 'declined', 'accepted', 'rejected'])
                 ->whereDate('expiry_date', '<', today());
+        }
+
+        if ($normalized === 'pending') {
+            return $query->whereIn('status', ['pending', 'sent']);
+        }
+
+        if ($normalized === 'approved') {
+            return $query->whereIn('status', ['approved', 'accepted']);
+        }
+
+        if ($normalized === 'declined') {
+            return $query->whereIn('status', ['declined', 'rejected']);
         }
 
         return $query->where('status', $normalized);
@@ -97,7 +113,19 @@ class Proposal extends Model
 
     public function effectiveStatus(): string
     {
-        if (in_array($this->status, ['accepted', 'rejected'], true)) {
+        if ($this->status === 'accepted') {
+            return 'approved';
+        }
+
+        if ($this->status === 'rejected') {
+            return 'declined';
+        }
+
+        if ($this->status === 'sent') {
+            return 'pending';
+        }
+
+        if (in_array($this->status, ['approved', 'declined'], true)) {
             return $this->status;
         }
 
@@ -110,6 +138,6 @@ class Proposal extends Model
 
     public function isLocked(): bool
     {
-        return $this->locked_at !== null || in_array($this->status, ['accepted', 'rejected'], true);
+        return $this->locked_at !== null || in_array($this->effectiveStatus(), ['approved', 'declined'], true);
     }
 }

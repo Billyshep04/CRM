@@ -9,6 +9,7 @@ use App\Models\Proposal;
 use App\Models\ProposalLineItem;
 use App\Services\ProposalNumberGenerator;
 use App\Services\ProposalPdfService;
+use App\Services\ProposalFormSettings;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
@@ -54,32 +55,29 @@ class ProposalController extends Controller
         return ProposalResource::collection($query->paginate($perPage));
     }
 
-    public function store(Request $request, ProposalNumberGenerator $numberGenerator)
+    public function store(Request $request, ProposalNumberGenerator $numberGenerator, ProposalFormSettings $formSettings)
     {
         $this->assertProposalTablesExist();
 
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $formSettings);
 
-        /** @var Proposal $proposal */
         $proposal = DB::transaction(function () use ($validated, $request, $numberGenerator): Proposal {
-            $job = Job::query()
-                ->where('id', $validated['job_id'])
-                ->where('customer_id', $validated['customer_id'])
-                ->firstOrFail();
-
-            $lineItem = $this->buildLineItem($validated['line_item'], $job);
+            $lineItem = $this->buildLineItem($validated['line_item'], $validated['title']);
             $subtotal = $lineItem['total'];
 
             $proposal = Proposal::create([
                 'customer_id' => $validated['customer_id'],
-                'job_id' => $job->id,
+                'job_id' => null,
                 'created_by_user_id' => $request->user()?->id,
                 'proposal_number' => $numberGenerator->generate(),
                 'version' => 1,
                 'title' => $validated['title'],
+                'proposal_type' => $validated['proposal_type'],
+                'proposal_type_label' => $validated['proposal_type_label'],
+                'form_answers' => $validated['form_answers'],
                 'issue_date' => $validated['issue_date'],
                 'expiry_date' => $validated['expiry_date'],
-                'status' => $validated['status'] ?? 'draft',
+                'status' => $this->normalizeStatus($validated['status'] ?? 'draft'),
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $validated['terms'] ?? null,
                 'subtotal' => $subtotal,
@@ -91,7 +89,7 @@ class ProposalController extends Controller
             return $proposal->load(['customer', 'job', 'lineItems', 'pdfFile']);
         });
 
-        $this->applyStatusTransitions($proposal, $proposal->status);
+        $this->applyStatusTransitions($proposal, $proposal->status, $request->user()?->id);
 
         return new ProposalResource($proposal->fresh()->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
@@ -103,11 +101,11 @@ class ProposalController extends Controller
         return new ProposalResource($proposal->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
 
-    public function update(Request $request, Proposal $proposal)
+    public function update(Request $request, Proposal $proposal, ProposalFormSettings $formSettings)
     {
         $this->assertProposalTablesExist();
 
-        $validated = $this->validatePayload($request);
+        $validated = $this->validatePayload($request, $formSettings);
 
         /** @var Proposal $targetProposal */
         $targetProposal = DB::transaction(function () use ($validated, $proposal, $request): Proposal {
@@ -115,21 +113,18 @@ class ProposalController extends Controller
                 ? $this->createDraftVersion($proposal, $request->user()?->id)
                 : $proposal;
 
-            $job = Job::query()
-                ->where('id', $validated['job_id'])
-                ->where('customer_id', $validated['customer_id'])
-                ->firstOrFail();
-
-            $lineItem = $this->buildLineItem($validated['line_item'], $job);
+            $lineItem = $this->buildLineItem($validated['line_item'], $validated['title']);
             $subtotal = $lineItem['total'];
 
             $editableProposal->update([
                 'customer_id' => $validated['customer_id'],
-                'job_id' => $job->id,
                 'title' => $validated['title'],
+                'proposal_type' => $validated['proposal_type'],
+                'proposal_type_label' => $validated['proposal_type_label'],
+                'form_answers' => $validated['form_answers'],
                 'issue_date' => $validated['issue_date'],
                 'expiry_date' => $validated['expiry_date'],
-                'status' => $validated['status'] ?? 'draft',
+                'status' => $this->normalizeStatus($validated['status'] ?? 'draft'),
                 'notes' => $validated['notes'] ?? null,
                 'terms' => $validated['terms'] ?? null,
                 'subtotal' => $subtotal,
@@ -142,7 +137,7 @@ class ProposalController extends Controller
             return $editableProposal->load(['customer', 'job', 'lineItems', 'pdfFile']);
         });
 
-        $this->applyStatusTransitions($targetProposal, $targetProposal->status);
+        $this->applyStatusTransitions($targetProposal, $targetProposal->status, $request->user()?->id);
 
         return new ProposalResource($targetProposal->fresh()->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
@@ -152,11 +147,13 @@ class ProposalController extends Controller
         $this->assertProposalTablesExist();
 
         $validated = $request->validate([
-            'status' => ['required', Rule::in(['draft', 'sent', 'accepted', 'rejected'])],
+            'status' => ['required', Rule::in(['draft', 'pending', 'approved', 'declined', 'sent', 'accepted', 'rejected'])],
         ]);
 
-        $proposal->forceFill(['status' => $validated['status']])->save();
-        $this->applyStatusTransitions($proposal, $validated['status']);
+        $status = $this->normalizeStatus($validated['status']);
+
+        $proposal->forceFill(['status' => $status])->save();
+        $this->applyStatusTransitions($proposal, $status, $request->user()?->id);
 
         return new ProposalResource($proposal->fresh()->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
@@ -165,8 +162,8 @@ class ProposalController extends Controller
     {
         $this->assertProposalTablesExist();
 
-        $proposal->forceFill(['status' => 'sent'])->save();
-        $this->applyStatusTransitions($proposal, 'sent');
+        $proposal->forceFill(['status' => 'pending'])->save();
+        $this->applyStatusTransitions($proposal, 'pending');
 
         return new ProposalResource($proposal->fresh()->load(['customer', 'job', 'lineItems', 'pdfFile']));
     }
@@ -210,33 +207,51 @@ class ProposalController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function validatePayload(Request $request): array
+    private function validatePayload(Request $request, ProposalFormSettings $formSettings): array
     {
-        return $request->validate([
+        $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
-            'job_id' => ['required', 'integer', 'exists:jobs,id'],
             'title' => ['required', 'string', 'max:255'],
+            'proposal_type' => ['required', 'string', 'max:100'],
             'issue_date' => ['required', 'date'],
             'expiry_date' => ['required', 'date', 'after_or_equal:issue_date'],
-            'status' => ['nullable', Rule::in(['draft', 'sent', 'accepted', 'rejected'])],
+            'status' => ['nullable', Rule::in(['draft', 'pending', 'approved', 'declined', 'sent', 'accepted', 'rejected'])],
             'notes' => ['nullable', 'string'],
             'terms' => ['nullable', 'string'],
+            'form_answers' => ['nullable', 'array'],
             'line_item' => ['required', 'array'],
-            'line_item.quantity' => $this->quantityRules('required'),
+            'line_item.quantity' => $this->quantityRules('nullable'),
             'line_item.unit_price' => ['required', 'numeric', 'min:0'],
             'line_item.description' => ['nullable', 'string'],
         ]);
+
+        $proposalType = $formSettings->findType((string) $validated['proposal_type']);
+        if (!$proposalType) {
+            throw ValidationException::withMessages([
+                'proposal_type' => ['Please select a valid proposal type.'],
+            ]);
+        }
+
+        $validated['proposal_type_label'] = $proposalType['label'];
+        $validated['form_answers'] = $this->normalizeFormAnswers(
+            $proposalType,
+            $validated['form_answers'] ?? []
+        );
+
+        $validated['line_item']['quantity'] = $validated['line_item']['quantity'] ?? 1;
+
+        return $validated;
     }
 
     /**
      * @param  array<string, mixed>  $lineItemInput
      * @return array<string, mixed>
      */
-    private function buildLineItem(array $lineItemInput, Job $job): array
+    private function buildLineItem(array $lineItemInput, string $fallbackTitle): array
     {
         $description = trim((string) ($lineItemInput['description'] ?? ''));
         if ($description === '') {
-            $description = trim((string) ($job->description ?? ''));
+            $description = trim($fallbackTitle);
         }
 
         if ($description === '') {
@@ -300,6 +315,9 @@ class ProposalController extends Controller
             'proposal_number' => $source->proposal_number,
             'version' => $nextVersion,
             'title' => $source->title,
+            'proposal_type' => $source->proposal_type,
+            'proposal_type_label' => $source->proposal_type_label,
+            'form_answers' => $source->form_answers,
             'issue_date' => $source->issue_date,
             'expiry_date' => $source->expiry_date,
             'status' => 'draft',
@@ -327,9 +345,11 @@ class ProposalController extends Controller
         return $newProposal;
     }
 
-    private function applyStatusTransitions(Proposal $proposal, string $status): void
+    private function applyStatusTransitions(Proposal $proposal, string $status, ?int $userId = null): void
     {
-        if ($status === 'sent') {
+        $status = $this->normalizeStatus($status);
+
+        if ($status === 'pending') {
             $proposal->forceFill([
                 'sent_at' => $proposal->sent_at ?? now(),
                 'locked_at' => $proposal->locked_at ?? now(),
@@ -341,16 +361,18 @@ class ProposalController extends Controller
             return;
         }
 
-        if ($status === 'accepted') {
+        if ($status === 'approved') {
             $proposal->forceFill([
                 'accepted_at' => $proposal->accepted_at ?? now(),
                 'rejected_at' => null,
                 'locked_at' => $proposal->locked_at ?? now(),
             ])->save();
+
+            $this->createApprovedJob($proposal, $userId);
             return;
         }
 
-        if ($status === 'rejected') {
+        if ($status === 'declined') {
             $proposal->forceFill([
                 'accepted_at' => null,
                 'rejected_at' => $proposal->rejected_at ?? now(),
@@ -406,6 +428,9 @@ class ProposalController extends Controller
             && Schema::hasColumn('proposals', 'proposal_number')
             && Schema::hasColumn('proposals', 'version')
             && Schema::hasColumn('proposals', 'title')
+            && Schema::hasColumn('proposals', 'proposal_type')
+            && Schema::hasColumn('proposals', 'proposal_type_label')
+            && Schema::hasColumn('proposals', 'form_answers')
             && Schema::hasColumn('proposals', 'issue_date')
             && Schema::hasColumn('proposals', 'expiry_date')
             && Schema::hasColumn('proposals', 'status')
@@ -448,6 +473,9 @@ class ProposalController extends Controller
                     $table->string('proposal_number');
                     $table->unsignedInteger('version')->default(1);
                     $table->string('title');
+                    $table->string('proposal_type')->nullable();
+                    $table->string('proposal_type_label')->nullable();
+                    $table->json('form_answers')->nullable();
                     $table->date('issue_date');
                     $table->date('expiry_date');
                     $table->string('status')->default('draft');
@@ -463,6 +491,20 @@ class ProposalController extends Controller
                     $table->timestamps();
                     $table->softDeletes();
                     $table->unique(['proposal_number', 'version']);
+                });
+            } else {
+                Schema::table('proposals', function (Blueprint $table): void {
+                    if (!Schema::hasColumn('proposals', 'proposal_type')) {
+                        $table->string('proposal_type')->nullable()->after('title');
+                    }
+
+                    if (!Schema::hasColumn('proposals', 'proposal_type_label')) {
+                        $table->string('proposal_type_label')->nullable()->after('proposal_type');
+                    }
+
+                    if (!Schema::hasColumn('proposals', 'form_answers')) {
+                        $table->json('form_answers')->nullable()->after('proposal_type_label');
+                    }
                 });
             }
 
@@ -487,6 +529,9 @@ class ProposalController extends Controller
             && Schema::hasColumn('proposals', 'proposal_number')
             && Schema::hasColumn('proposals', 'version')
             && Schema::hasColumn('proposals', 'title')
+            && Schema::hasColumn('proposals', 'proposal_type')
+            && Schema::hasColumn('proposals', 'proposal_type_label')
+            && Schema::hasColumn('proposals', 'form_answers')
             && Schema::hasColumn('proposals', 'issue_date')
             && Schema::hasColumn('proposals', 'expiry_date')
             && Schema::hasColumn('proposals', 'status')
@@ -532,5 +577,85 @@ class ProposalController extends Controller
                 }
             },
         ];
+    }
+
+    private function normalizeStatus(string $status): string
+    {
+        return match ($status) {
+            'sent' => 'pending',
+            'accepted' => 'approved',
+            'rejected' => 'declined',
+            default => $status,
+        };
+    }
+
+    /**
+     * @param  array<string, mixed>  $proposalType
+     * @param  array<string, mixed>  $input
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeFormAnswers(array $proposalType, array $input): array
+    {
+        $answers = [];
+
+        foreach (($proposalType['questions'] ?? []) as $question) {
+            $key = (string) ($question['key'] ?? '');
+            if ($key === '') {
+                continue;
+            }
+
+            $value = $input[$key] ?? null;
+            $type = (string) ($question['type'] ?? 'text');
+
+            if ($type === 'checkbox') {
+                $value = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+            } elseif (is_string($value)) {
+                $value = trim($value);
+            }
+
+            if (($question['required'] ?? false) && ($value === null || $value === '')) {
+                throw ValidationException::withMessages([
+                    "form_answers.{$key}" => ["{$question['label']} is required."],
+                ]);
+            }
+
+            $answers[] = [
+                'key' => $key,
+                'label' => (string) ($question['label'] ?? $key),
+                'type' => $type,
+                'value' => $value,
+            ];
+        }
+
+        return $answers;
+    }
+
+    private function createApprovedJob(Proposal $proposal, ?int $userId = null): void
+    {
+        if ($proposal->job_id) {
+            return;
+        }
+
+        $answers = collect($proposal->form_answers ?? [])
+            ->map(function (array $answer): string {
+                $value = $answer['value'] ?? null;
+                if (is_bool($value)) {
+                    $value = $value ? 'Yes' : 'No';
+                }
+
+                return ($answer['label'] ?? $answer['key'] ?? 'Question') . ': ' . ($value === null || $value === '' ? 'Not specified' : $value);
+            })
+            ->implode("\n");
+
+        $job = Job::create([
+            'customer_id' => $proposal->customer_id,
+            'created_by_user_id' => $userId ?: $proposal->created_by_user_id,
+            'description' => $proposal->title,
+            'notes' => trim("Created automatically from approved proposal {$proposal->proposal_number} v{$proposal->version}.\n\nProposal type: {$proposal->proposal_type_label}\n\n{$answers}\n\n{$proposal->notes}"),
+            'cost' => $proposal->total,
+            'status' => 'open',
+        ]);
+
+        $proposal->forceFill(['job_id' => $job->id])->save();
     }
 }

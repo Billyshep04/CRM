@@ -19,7 +19,7 @@ class ProposalAcceptedAdminMailable extends Mailable
 
     public function build(): self
     {
-        return $this->subject("Proposal accepted: {$this->proposal->proposal_number} (v{$this->proposal->version})")
+        return $this->subject("Proposal approved: {$this->proposal->proposal_number} (v{$this->proposal->version})")
             ->view('emails.proposal-accepted-admin', [
                 'proposal' => $this->proposal,
                 'customer' => $this->proposal->customer,

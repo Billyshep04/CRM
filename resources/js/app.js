@@ -73,6 +73,17 @@ const dom = {
     invoiceAccountName: document.getElementById('invoice-account-name'),
     invoiceSortCode: document.getElementById('invoice-sort-code'),
     invoiceAccountNumber: document.getElementById('invoice-account-number'),
+    proposalFormsSettingsForm: document.getElementById('proposal-forms-settings-form'),
+    proposalFormsSettingsStatus: document.getElementById('proposal-forms-settings-status'),
+    proposalFormsEditor: document.getElementById('proposal-forms-editor'),
+    proposalFormsAddType: document.getElementById('proposal-forms-add-type'),
+    proposalFormEditTitle: document.getElementById('proposal-form-edit-title'),
+    proposalFormEditLabel: document.getElementById('proposal-form-edit-label'),
+    proposalFormEditEditor: document.getElementById('proposal-form-edit-editor'),
+    proposalFormEditStatus: document.getElementById('proposal-form-edit-status'),
+    proposalFormEditBack: document.getElementById('proposal-form-edit-back'),
+    proposalFormEditAddQuestion: document.getElementById('proposal-form-edit-add-question'),
+    proposalFormEditDelete: document.getElementById('proposal-form-edit-delete'),
     staffUserForm: document.getElementById('staff-user-form'),
     staffUserFormStatus: document.getElementById('staff-user-form-status'),
     staffUsersTable: document.getElementById('staff-users-table'),
@@ -179,7 +190,8 @@ const dom = {
     proposalFormStatus: document.getElementById('proposal-form-status'),
     proposalFormCancel: document.getElementById('proposal-form-cancel'),
     proposalCustomerSelect: document.getElementById('proposal-customer-select'),
-    proposalJobSelect: document.getElementById('proposal-job-select'),
+    proposalTypeSelect: document.getElementById('proposal-type-select'),
+    proposalFormAnswers: document.getElementById('proposal-form-answers'),
     proposalTitle: document.getElementById('proposal-title'),
     proposalLineItemDescription: document.getElementById('proposal-line-item-description'),
     proposalsRefresh: document.getElementById('proposals-refresh'),
@@ -237,6 +249,7 @@ const state = {
     monthlyFinanceBoxVisibility: { ...monthlyFinanceBoxDefaults },
     mailSettings: null,
     invoiceSettings: null,
+    proposalFormSettings: { types: [] },
     portalInvoices: [],
     portalProposals: [],
     portalJobs: [],
@@ -279,6 +292,7 @@ const state = {
         cost: null,
         subscription: null,
         proposal: null,
+        proposalFormTypeIndex: null,
         invoice: null,
         website: null,
     },
@@ -325,6 +339,10 @@ const viewMeta = {
         title: 'Admin',
         subtitle: 'Brand settings and configuration.',
     },
+    'proposal-form-edit': {
+        title: 'Edit Proposal Form',
+        subtitle: 'Manage the questions for one proposal type.',
+    },
     'customer-detail': {
         title: 'Customer overview',
         subtitle: 'Jobs, subscriptions, and websites for this customer.',
@@ -335,7 +353,7 @@ const viewMeta = {
     },
     'portal-proposals': {
         title: 'Proposals',
-        subtitle: 'Review, accept, and download your proposals.',
+        subtitle: 'Review, approve, decline, and download your proposals.',
     },
     'portal-support': {
         title: 'Support',
@@ -428,7 +446,7 @@ function updateSyncStatus(status) {
 }
 
 function setActiveView(view) {
-    if (view === 'monthly-finance' && state.role !== 'admin') {
+    if (['monthly-finance', 'proposal-form-edit'].includes(view) && state.role !== 'admin') {
         return;
     }
 
@@ -461,7 +479,9 @@ function setActiveView(view) {
         ensureCustomersLoaded().then(loadSubscriptions);
     }
     if (view === 'proposals') {
-        ensureCustomersLoaded().then(loadProposals);
+        ensureCustomersLoaded()
+            .then(loadAdminProposalForms)
+            .then(loadProposals);
     }
     if (view === 'costs') {
         loadCosts();
@@ -494,6 +514,14 @@ function setActiveView(view) {
         loadStaffUsers();
         loadAdminMailSettings();
         loadAdminInvoiceSettings();
+        loadAdminProposalForms();
+    }
+    if (view === 'proposal-form-edit' && state.role === 'admin') {
+        if ((state.proposalFormSettings.types || []).length) {
+            renderProposalFormEdit();
+        } else {
+            loadAdminProposalForms().then(renderProposalFormEdit);
+        }
     }
 }
 
@@ -1835,6 +1863,245 @@ async function handleInvoiceSettingsSubmit(event) {
         showToast('Settings saved');
     } catch (error) {
         setFormStatus(dom.invoiceSettingsStatus, getErrorMessage(error, 'Unable to update invoice settings.'), true);
+    }
+}
+
+function renderProposalTypeOptions() {
+    if (!dom.proposalTypeSelect) return;
+
+    const currentValue = dom.proposalTypeSelect.value;
+    dom.proposalTypeSelect.innerHTML = '<option value="" selected disabled>Select proposal type</option>';
+
+    (state.proposalFormSettings.types || []).forEach((type) => {
+        const option = document.createElement('option');
+        option.value = type.slug;
+        option.textContent = type.label;
+        dom.proposalTypeSelect.appendChild(option);
+    });
+
+    if (currentValue && [...dom.proposalTypeSelect.options].some((option) => option.value === currentValue)) {
+        dom.proposalTypeSelect.value = currentValue;
+    }
+
+    renderProposalFormAnswers();
+}
+
+function getSelectedProposalType() {
+    const slug = dom.proposalTypeSelect?.value || '';
+    return (state.proposalFormSettings.types || []).find((type) => type.slug === slug) || null;
+}
+
+function renderProposalFormAnswers(existingAnswers = null) {
+    if (!dom.proposalFormAnswers) return;
+
+    const selectedType = getSelectedProposalType();
+    const answersByKey = {};
+    (existingAnswers || []).forEach((answer) => {
+        answersByKey[answer.key] = answer.value;
+    });
+
+    dom.proposalFormAnswers.innerHTML = '';
+
+    if (!selectedType) {
+        dom.proposalFormAnswers.innerHTML = '<div class="form-hint">Select a proposal type to show its questions.</div>';
+        return;
+    }
+
+    (selectedType.questions || []).forEach((question) => {
+        const label = document.createElement('label');
+        label.className = 'field';
+        const requiredText = question.required ? ' *' : '';
+        const value = answersByKey[question.key] ?? '';
+
+        if (question.type === 'textarea') {
+            label.innerHTML = `
+                <span>${escapeHtml(question.label)}${requiredText}</span>
+                <textarea name="form_answer_${escapeHtml(question.key)}" rows="3" ${question.required ? 'required' : ''}>${escapeHtml(String(value || ''))}</textarea>
+            `;
+        } else if (question.type === 'checkbox') {
+            label.innerHTML = `
+                <span>${escapeHtml(question.label)}</span>
+                <select name="form_answer_${escapeHtml(question.key)}">
+                    <option value="0"${value ? '' : ' selected'}>No</option>
+                    <option value="1"${value ? ' selected' : ''}>Yes</option>
+                </select>
+            `;
+        } else if (question.type === 'select') {
+            const options = (question.options || []).map((option) => `<option value="${escapeHtml(option)}"${String(value) === String(option) ? ' selected' : ''}>${escapeHtml(option)}</option>`).join('');
+            label.innerHTML = `
+                <span>${escapeHtml(question.label)}${requiredText}</span>
+                <select name="form_answer_${escapeHtml(question.key)}" ${question.required ? 'required' : ''}>
+                    <option value="">Select</option>
+                    ${options}
+                </select>
+            `;
+        } else {
+            const inputType = ['number', 'date'].includes(question.type) ? question.type : 'text';
+            label.innerHTML = `
+                <span>${escapeHtml(question.label)}${requiredText}</span>
+                <input type="${inputType}" name="form_answer_${escapeHtml(question.key)}" value="${escapeHtml(String(value || ''))}" ${question.required ? 'required' : ''}>
+            `;
+        }
+
+        dom.proposalFormAnswers.appendChild(label);
+    });
+}
+
+async function loadAdminProposalForms() {
+    if (!dom.proposalTypeSelect && !dom.proposalFormsEditor) return;
+
+    try {
+        const url = state.role === 'admin' ? '/api/admin/proposal-forms' : '/api/proposal-forms';
+        const response = await api.get(url);
+        state.proposalFormSettings = response?.data?.data ?? { types: [] };
+        renderProposalTypeOptions();
+        renderProposalFormsEditor();
+    } catch (error) {
+        if (dom.proposalFormsSettingsStatus && state.role === 'admin') {
+            setFormStatus(dom.proposalFormsSettingsStatus, 'Unable to load proposal forms.', true);
+        }
+    }
+}
+
+function renderProposalFormsEditor() {
+    if (!dom.proposalFormsEditor || state.role !== 'admin') return;
+
+    dom.proposalFormsEditor.innerHTML = '';
+
+    if (!(state.proposalFormSettings.types || []).length) {
+        dom.proposalFormsEditor.innerHTML = '<div class="form-hint">No proposal forms yet. Click Add type to create one.</div>';
+        return;
+    }
+
+    (state.proposalFormSettings.types || []).forEach((type, typeIndex) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'btn btn-outline';
+        row.dataset.action = 'edit-proposal-form-type';
+        row.dataset.typeIndex = String(typeIndex);
+        row.style.justifyContent = 'space-between';
+        row.innerHTML = `
+            <span>${escapeHtml(type.label || 'Untitled proposal form')}</span>
+            <span>${escapeHtml(String((type.questions || []).length))} questions</span>
+        `;
+        dom.proposalFormsEditor.appendChild(row);
+    });
+}
+
+function renderProposalFormEdit() {
+    if (!dom.proposalFormEditEditor || state.role !== 'admin') return;
+
+    const typeIndex = Number(state.editing.proposalFormTypeIndex);
+    const proposalType = state.proposalFormSettings.types?.[typeIndex];
+
+    if (!proposalType) {
+        setActiveView('admin');
+        return;
+    }
+
+    if (dom.proposalFormEditTitle) {
+        dom.proposalFormEditTitle.textContent = `Edit ${proposalType.label || 'proposal form'}`;
+    }
+    if (dom.proposalFormEditLabel) {
+        dom.proposalFormEditLabel.value = proposalType.label || '';
+    }
+
+    setFormStatus(dom.proposalFormEditStatus, '');
+    dom.proposalFormEditEditor.innerHTML = '';
+
+    (proposalType.questions || []).forEach((question, questionIndex) => {
+        dom.proposalFormEditEditor.appendChild(buildProposalQuestionEditor(question, questionIndex));
+    });
+
+    if (!(proposalType.questions || []).length) {
+        dom.proposalFormEditEditor.innerHTML = '<div class="form-hint">No questions yet. Click Add question to create one.</div>';
+    }
+}
+
+function buildProposalQuestionEditor(question = {}, questionIndex = 0) {
+    const row = document.createElement('div');
+    row.className = 'line-item';
+    row.dataset.questionIndex = String(questionIndex);
+    row.innerHTML = `
+        <input type="text" data-question-label placeholder="Question" value="${escapeHtml(question.label || '')}" required>
+        <select data-question-type>
+            ${['text', 'textarea', 'number', 'date', 'select', 'checkbox'].map((type) => `<option value="${type}"${(question.type || 'text') === type ? ' selected' : ''}>${type}</option>`).join('')}
+        </select>
+        <select data-question-required>
+            <option value="0"${question.required ? '' : ' selected'}>Optional</option>
+            <option value="1"${question.required ? ' selected' : ''}>Required</option>
+        </select>
+        <input type="text" data-question-options placeholder="Options, comma-separated" value="${escapeHtml((question.options || []).join(', '))}">
+        <button type="button" class="btn btn-ghost btn-small" data-action="remove-proposal-question">Remove</button>
+    `;
+
+    return row;
+}
+
+function collectProposalFormsEditorPayload() {
+    const types = [...(state.proposalFormSettings.types || [])];
+    const typeIndex = Number(state.editing.proposalFormTypeIndex);
+    const existingType = types[typeIndex] || {};
+    const label = dom.proposalFormEditLabel?.value?.trim() || '';
+    const questions = [];
+
+    dom.proposalFormEditEditor?.querySelectorAll('[data-question-index]').forEach((questionRow, questionIndex) => {
+        const questionLabel = questionRow.querySelector('[data-question-label]')?.value?.trim() || '';
+        if (!questionLabel) return;
+
+        const options = String(questionRow.querySelector('[data-question-options]')?.value || '')
+            .split(',')
+            .map((option) => option.trim())
+            .filter(Boolean);
+
+        questions.push({
+            label: questionLabel,
+            key: existingType.questions?.[questionIndex]?.key || '',
+            type: questionRow.querySelector('[data-question-type]')?.value || 'text',
+            required: questionRow.querySelector('[data-question-required]')?.value === '1',
+            options,
+            sort_order: questionIndex,
+        });
+    });
+
+    if (types[typeIndex]) {
+        types[typeIndex] = {
+            label,
+            slug: existingType.slug || '',
+            sort_order: typeIndex,
+            questions,
+        };
+    }
+
+    return { types };
+}
+
+async function handleProposalFormsSettingsSubmit(event) {
+    event.preventDefault();
+    if (!dom.proposalFormsSettingsForm || state.role !== 'admin') return;
+
+    const payload = collectProposalFormsEditorPayload();
+    if (!payload.types.length) {
+        setFormStatus(dom.proposalFormEditStatus, 'At least one proposal type is required.', true);
+        return;
+    }
+
+    const typeIndex = Number(state.editing.proposalFormTypeIndex);
+    if (!payload.types[typeIndex]?.label) {
+        setFormStatus(dom.proposalFormEditStatus, 'Proposal type name is required.', true);
+        return;
+    }
+
+    try {
+        const response = await api.put('/api/admin/proposal-forms', payload);
+        state.proposalFormSettings = response?.data?.data ?? { types: [] };
+        renderProposalTypeOptions();
+        renderProposalFormsEditor();
+        renderProposalFormEdit();
+        setFormStatus(dom.proposalFormEditStatus, 'Proposal form updated.');
+        showToast('Proposal form saved');
+    } catch (error) {
+        setFormStatus(dom.proposalFormEditStatus, getErrorMessage(error, 'Unable to update proposal form.'), true);
     }
 }
 
@@ -3342,9 +3609,7 @@ function resetProposalForm() {
     if (dom.proposalFormTitle) dom.proposalFormTitle.textContent = 'New proposal';
     setFormStatus(dom.proposalFormStatus, '');
 
-    if (dom.proposalJobSelect) {
-        dom.proposalJobSelect.innerHTML = '<option value="" selected disabled>Select customer first</option>';
-    }
+    renderProposalTypeOptions();
 }
 
 async function handleProposalCustomerChange() {
@@ -3435,19 +3700,19 @@ function renderProposals() {
             ? proposal.line_items[0]
             : null;
         const effectiveStatus = proposal.effective_status || proposal.status || 'draft';
-        const isLocked = Boolean(proposal.locked_at) || ['sent', 'accepted', 'rejected', 'expired'].includes(effectiveStatus);
+        const isLocked = Boolean(proposal.locked_at) || ['pending', 'approved', 'declined', 'expired'].includes(effectiveStatus);
         const actionButtons = [];
 
         if (proposal.status === 'draft') {
             actionButtons.push(`<button class="btn btn-outline btn-small" data-action="send" data-id="${proposal.id}">Send</button>`);
         }
 
-        if (effectiveStatus !== 'accepted') {
-            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="accepted" data-id="${proposal.id}">Mark accepted</button>`);
+        if (effectiveStatus !== 'approved') {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="approved" data-id="${proposal.id}">Approve</button>`);
         }
 
-        if (effectiveStatus !== 'rejected') {
-            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="rejected" data-id="${proposal.id}">Mark rejected</button>`);
+        if (effectiveStatus !== 'declined') {
+            actionButtons.push(`<button class="btn btn-outline btn-small" data-action="set-status" data-next-status="declined" data-id="${proposal.id}">Decline</button>`);
         }
 
         actionButtons.push(`<button class="btn btn-outline btn-small" data-action="edit" data-id="${proposal.id}">Edit</button>`);
@@ -3463,7 +3728,7 @@ function renderProposals() {
             <span>#${escapeHtml(proposal.proposal_number)}</span>
             <span>v${escapeHtml(String(proposal.version || 1))}</span>
             <span>${escapeHtml(proposal.customer?.name || getCustomerName(proposal.customer_id))}</span>
-            <span>${escapeHtml(lineItem?.description || proposal.job?.description || `Job #${proposal.job_id}`)}</span>
+            <span>${escapeHtml(proposal.proposal_type_label || lineItem?.description || 'Proposal')}</span>
             <span>${formatCurrency(Number(proposal.total || 0))}</span>
             <span>${escapeHtml(effectiveStatus)}</span>
             <span>${formatDate(proposal.expiry_date)}</span>
@@ -3479,43 +3744,54 @@ async function handleProposalSubmit(event) {
 
     const formData = new FormData(dom.proposalForm);
     const customerId = Number(formData.get('customer_id'));
-    const jobId = Number(formData.get('job_id'));
-    const quantity = Number(formData.get('line_item_quantity'));
+    const quantity = 1;
     const unitPrice = Number(formData.get('line_item_unit_price'));
     const description = String(formData.get('line_item_description') || '').trim();
+    const proposalType = String(formData.get('proposal_type') || '').trim();
+    const selectedType = getSelectedProposalType();
 
-    const scaledQuantity = quantity * 2;
-    const isHalfStepQuantity = Math.abs(scaledQuantity - Math.round(scaledQuantity)) < 0.00001;
-    if (!quantity || quantity < 0.5 || Number.isNaN(quantity) || !isHalfStepQuantity) {
-        setFormStatus(dom.proposalFormStatus, 'Quantity must be a whole number or end in .5.', true);
-        return;
-    }
     if (Number.isNaN(unitPrice) || unitPrice < 0) {
-        setFormStatus(dom.proposalFormStatus, 'Unit price is invalid.', true);
+        setFormStatus(dom.proposalFormStatus, 'Manual price is invalid.', true);
         return;
     }
     if (!customerId || Number.isNaN(customerId)) {
         setFormStatus(dom.proposalFormStatus, 'Select a customer.', true);
         return;
     }
-    if (!jobId || Number.isNaN(jobId)) {
-        setFormStatus(dom.proposalFormStatus, 'Select a job.', true);
+    if (!proposalType || !selectedType) {
+        setFormStatus(dom.proposalFormStatus, 'Select a proposal type.', true);
         return;
     }
     if (!description) {
-        setFormStatus(dom.proposalFormStatus, 'Line item description is required.', true);
+        setFormStatus(dom.proposalFormStatus, 'Price description is required.', true);
         return;
+    }
+
+    const formAnswers = {};
+    for (const question of selectedType.questions || []) {
+        const rawValue = formData.get(`form_answer_${question.key}`);
+        const value = question.type === 'checkbox'
+            ? String(rawValue || '0') === '1'
+            : String(rawValue || '').trim();
+
+        if (question.required && (value === '' || value === null)) {
+            setFormStatus(dom.proposalFormStatus, `${question.label} is required.`, true);
+            return;
+        }
+
+        formAnswers[question.key] = value;
     }
 
     const payload = {
         customer_id: customerId,
-        job_id: jobId,
         title: String(formData.get('title') || '').trim(),
+        proposal_type: proposalType,
         issue_date: formData.get('issue_date'),
         expiry_date: formData.get('expiry_date'),
         status: formData.get('status') || 'draft',
         notes: String(formData.get('notes') || '').trim() || null,
         terms: String(formData.get('terms') || '').trim() || null,
+        form_answers: formAnswers,
         line_item: {
             description,
             quantity,
@@ -3581,12 +3857,12 @@ async function handleProposalAction(event) {
         }
         dom.proposalForm.querySelector('input[name="id"]').value = proposal.id;
         dom.proposalForm.querySelector('select[name="customer_id"]').value = proposal.customer_id;
-        await loadProposalJobsForCustomer(proposal.customer_id, proposal.job_id);
-        dom.proposalForm.querySelector('select[name="job_id"]').value = proposal.job_id;
+        dom.proposalForm.querySelector('select[name="proposal_type"]').value = proposal.proposal_type || '';
+        renderProposalFormAnswers(proposal.form_answers || []);
         dom.proposalForm.querySelector('input[name="title"]').value = proposal.title || '';
         dom.proposalForm.querySelector('input[name="issue_date"]').value = proposal.issue_date || '';
         dom.proposalForm.querySelector('input[name="expiry_date"]').value = proposal.expiry_date || '';
-        dom.proposalForm.querySelector('select[name="status"]').value = proposal.status === 'sent' ? 'sent' : 'draft';
+        dom.proposalForm.querySelector('select[name="status"]').value = proposal.status === 'pending' ? 'pending' : 'draft';
 
         const lineItem = Array.isArray(proposal.line_items) && proposal.line_items.length
             ? proposal.line_items[0]
@@ -3614,7 +3890,7 @@ async function handleProposalAction(event) {
 
     if (action === 'set-status') {
         const nextStatus = actionButton.dataset.nextStatus;
-        if (!['accepted', 'rejected'].includes(nextStatus || '')) {
+        if (!['approved', 'declined'].includes(nextStatus || '')) {
             return;
         }
 
@@ -3630,7 +3906,7 @@ async function handleProposalAction(event) {
                 }
                 await api.post(`/api/proposals/${id}/status`, payload);
             }
-            showToast(nextStatus === 'accepted' ? 'Proposal marked accepted' : 'Proposal marked rejected');
+            showToast(nextStatus === 'approved' ? 'Proposal approved' : 'Proposal declined');
             await loadProposals();
         } catch (error) {
             setFormStatus(dom.proposalFormStatus, getErrorMessage(error, 'Unable to update proposal status.'), true);
@@ -3709,9 +3985,9 @@ function renderPortalProposals(proposals = [], emptyMessage = 'No proposals avai
         const effectiveStatus = proposal.effective_status || proposal.status || 'draft';
         const actionButtons = [];
 
-        if (!['accepted', 'rejected', 'expired'].includes(effectiveStatus)) {
-            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="accepted">Accept</button>`);
-            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="rejected">Reject</button>`);
+        if (!['approved', 'declined', 'expired'].includes(effectiveStatus)) {
+            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="approved">Approve</button>`);
+            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="declined">Decline</button>`);
         }
 
         actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-download" data-id="${proposal.id}">Download</button>`);
@@ -3752,7 +4028,7 @@ async function handlePortalProposalAction(event) {
         return;
     }
 
-    if (!['accepted', 'rejected'].includes(nextStatus || '')) {
+    if (!['approved', 'declined'].includes(nextStatus || '')) {
         return;
     }
 
@@ -3770,7 +4046,7 @@ async function handlePortalProposalAction(event) {
             await api.post(`/api/portal/proposals/${proposalId}/status`, payload);
         }
 
-        showToast(nextStatus === 'accepted' ? 'Proposal accepted' : 'Proposal rejected');
+        showToast(nextStatus === 'approved' ? 'Proposal approved' : 'Proposal declined');
         await loadPortalProposals();
     } catch (error) {
         showToast('Unable to update proposal status', true);
@@ -4363,7 +4639,7 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
-    const adminOnlyViews = ['monthly-finance'];
+    const adminOnlyViews = ['monthly-finance', 'proposal-form-edit'];
 
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
@@ -4458,6 +4734,98 @@ if (dom.smtp2goSettingsForm) {
 
 if (dom.invoiceSettingsForm) {
     dom.invoiceSettingsForm.addEventListener('submit', handleInvoiceSettingsSubmit);
+}
+
+if (dom.proposalFormsSettingsForm) {
+    dom.proposalFormsSettingsForm.addEventListener('submit', handleProposalFormsSettingsSubmit);
+}
+
+if (dom.proposalFormsAddType) {
+    dom.proposalFormsAddType.addEventListener('click', () => {
+        const nextIndex = (state.proposalFormSettings.types || []).length;
+        state.proposalFormSettings.types = [
+            ...(state.proposalFormSettings.types || []),
+            { label: 'New proposal type', slug: '', questions: [] },
+        ];
+        state.editing.proposalFormTypeIndex = nextIndex;
+        setActiveView('proposal-form-edit');
+    });
+}
+
+if (dom.proposalFormsEditor) {
+    dom.proposalFormsEditor.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action]');
+        if (!button) return;
+
+        if (button.dataset.action === 'edit-proposal-form-type') {
+            const typeIndex = Number(button.dataset.typeIndex);
+            if (Number.isNaN(typeIndex)) return;
+
+            state.editing.proposalFormTypeIndex = typeIndex;
+            setActiveView('proposal-form-edit');
+        }
+    });
+}
+
+if (dom.proposalFormEditBack) {
+    dom.proposalFormEditBack.addEventListener('click', () => {
+        state.editing.proposalFormTypeIndex = null;
+        setActiveView('admin');
+    });
+}
+
+if (dom.proposalFormEditAddQuestion) {
+    dom.proposalFormEditAddQuestion.addEventListener('click', () => {
+        state.proposalFormSettings = collectProposalFormsEditorPayload();
+        const typeIndex = Number(state.editing.proposalFormTypeIndex);
+        if (Number.isNaN(typeIndex) || !state.proposalFormSettings.types[typeIndex]) return;
+
+        state.proposalFormSettings.types[typeIndex].questions = [
+            ...(state.proposalFormSettings.types[typeIndex].questions || []),
+            { label: 'New question', type: 'text', required: false, options: [] },
+        ];
+        renderProposalFormEdit();
+    });
+}
+
+if (dom.proposalFormEditDelete) {
+    dom.proposalFormEditDelete.addEventListener('click', async () => {
+        const typeIndex = Number(state.editing.proposalFormTypeIndex);
+        if (Number.isNaN(typeIndex) || !state.proposalFormSettings.types[typeIndex]) return;
+        if (!window.confirm('Delete this proposal form?')) return;
+
+        state.proposalFormSettings.types.splice(typeIndex, 1);
+
+        try {
+            const response = await api.put('/api/admin/proposal-forms', {
+                types: state.proposalFormSettings.types,
+            });
+            state.proposalFormSettings = response?.data?.data ?? { types: [] };
+            state.editing.proposalFormTypeIndex = null;
+            renderProposalTypeOptions();
+            renderProposalFormsEditor();
+            showToast('Proposal form deleted');
+            setActiveView('admin');
+        } catch (error) {
+            setFormStatus(dom.proposalFormEditStatus, getErrorMessage(error, 'Unable to delete proposal form.'), true);
+        }
+    });
+}
+
+if (dom.proposalFormEditEditor) {
+    dom.proposalFormEditEditor.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action]');
+        if (!button || button.dataset.action !== 'remove-proposal-question') return;
+
+        state.proposalFormSettings = collectProposalFormsEditorPayload();
+        const typeIndex = Number(state.editing.proposalFormTypeIndex);
+        const questionRow = button.closest('[data-question-index]');
+        const questionIndex = Number(questionRow?.dataset.questionIndex);
+        if (Number.isNaN(typeIndex) || Number.isNaN(questionIndex)) return;
+
+        state.proposalFormSettings.types[typeIndex].questions.splice(questionIndex, 1);
+        renderProposalFormEdit();
+    });
 }
 
 if (dom.profileForm) {
@@ -4706,11 +5074,22 @@ if (dom.proposalFormCancel) {
 }
 
 if (dom.proposalCustomerSelect) {
-    dom.proposalCustomerSelect.addEventListener('change', handleProposalCustomerChange);
+    dom.proposalCustomerSelect.addEventListener('change', () => {
+        setFormStatus(dom.proposalFormStatus, '');
+    });
 }
 
-if (dom.proposalJobSelect) {
-    dom.proposalJobSelect.addEventListener('change', () => handleProposalJobChange(true));
+if (dom.proposalTypeSelect) {
+    dom.proposalTypeSelect.addEventListener('change', () => {
+        const selectedType = getSelectedProposalType();
+        if (selectedType && !dom.proposalTitle?.value) {
+            dom.proposalTitle.value = selectedType.label;
+        }
+        if (selectedType && dom.proposalLineItemDescription && !dom.proposalLineItemDescription.value) {
+            dom.proposalLineItemDescription.value = selectedType.label;
+        }
+        renderProposalFormAnswers();
+    });
 }
 
 if (dom.proposalsTable) {
