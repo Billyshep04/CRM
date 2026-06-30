@@ -226,7 +226,7 @@
                             </div>
                         </div>
 
-                        <div class="card">
+                        <div class="card admin-only">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Quick actions</div>
