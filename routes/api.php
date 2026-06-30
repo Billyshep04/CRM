@@ -17,6 +17,7 @@ use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SubscriptionController;
+use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserPreferenceController;
 use App\Http\Controllers\WebsiteController;
 
@@ -37,14 +38,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('brand', [BrandSettingController::class, 'show']);
 
     Route::middleware('role:admin,staff')->group(function (): void {
-        Route::apiResource('costs', CostController::class);
-        Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
         Route::apiResource('customers', CustomerController::class);
-        Route::apiResource('jobs', JobController::class);
-        Route::get('jobs/{job}/photos', [JobController::class, 'photos']);
-        Route::post('jobs/{job}/photos', [JobController::class, 'uploadPhotos']);
-        Route::get('jobs/{job}/photos/download-all', [JobController::class, 'downloadAllPhotos']);
-        Route::get('jobs/{job}/photos/{file}/download', [JobController::class, 'downloadPhoto']);
         Route::post('subscription-months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPaymentById']);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);
         Route::patch('subscriptions/{subscription}/months/{subscriptionMonth}', [SubscriptionController::class, 'updateMonth']);
@@ -57,22 +51,33 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('proposals/{proposal}/new-version', [ProposalController::class, 'createNewVersion']);
         Route::patch('proposals/{proposal}/status', [ProposalController::class, 'updateStatus']);
         Route::post('proposals/{proposal}/status', [ProposalController::class, 'updateStatus']);
-        Route::apiResource('invoices', InvoiceController::class);
-        Route::patch('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
-        Route::post('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
-        Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
-        Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
+        Route::get('tasks/dashboard', [TaskController::class, 'dashboard']);
+        Route::get('tasks/monthly', [TaskController::class, 'monthly']);
+        Route::apiResource('tasks', TaskController::class);
         Route::apiResource('websites', WebsiteController::class);
         Route::get('stats/revenue', [StatsController::class, 'revenue']);
         Route::get('stats/profit-weekly', [StatsController::class, 'weeklyProfit']);
     });
 
     Route::middleware('role:admin')->group(function (): void {
+        Route::apiResource('jobs', JobController::class);
+        Route::get('jobs/{job}/photos', [JobController::class, 'photos']);
+        Route::post('jobs/{job}/photos', [JobController::class, 'uploadPhotos']);
+        Route::get('jobs/{job}/photos/download-all', [JobController::class, 'downloadAllPhotos']);
+        Route::get('jobs/{job}/photos/{file}/download', [JobController::class, 'downloadPhoto']);
+        Route::apiResource('costs', CostController::class);
+        Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
+        Route::apiResource('invoices', InvoiceController::class);
+        Route::patch('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
+        Route::post('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
+        Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
+        Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::patch('customers/{customer}/archive', [CustomerController::class, 'archive']);
         Route::patch('customers/{customer}/unarchive', [CustomerController::class, 'unarchive']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
+        Route::get('admin/staff-task-summary', [TaskController::class, 'staffSummary']);
         Route::get('admin/stats/monthly-finance', [StatsController::class, 'monthlyFinance']);
         Route::get('admin/invoice-settings', [AdminInvoiceSettingController::class, 'show']);
         Route::put('admin/invoice-settings', [AdminInvoiceSettingController::class, 'update']);

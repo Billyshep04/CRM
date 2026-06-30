@@ -104,13 +104,16 @@
                 </div>
                 <nav class="nav-stack">
                     <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
-                    <a href="#" class="nav-item" data-view="customers">Customers</a>
-                    <a href="#" class="nav-item" data-view="jobs">Jobs</a>
-                    <a href="#" class="nav-item" data-view="subscriptions">Subscriptions</a>
-                    <a href="#" class="nav-item" data-view="costs">Costs</a>
-                    <a href="#" class="nav-item" data-view="proposals">Proposals</a>
-                    <a href="#" class="nav-item" data-view="invoices">Invoices</a>
+                    <a href="#" class="nav-item admin-only" data-view="customers">Customers</a>
+                    <a href="#" class="nav-item admin-only" data-view="jobs">Jobs</a>
+                    <a href="#" class="nav-item admin-only" data-view="subscriptions">Subscriptions</a>
+                    <a href="#" class="nav-item admin-only" data-view="costs">Costs</a>
+                    <a href="#" class="nav-item admin-only" data-view="proposals">Proposals</a>
+                    <a href="#" class="nav-item admin-only" data-view="invoices">Invoices</a>
+                    <a href="#" class="nav-item staff-only" data-view="tasks">Tasks</a>
                     <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
+                    <a href="#" class="nav-item staff-member-only" data-view="monthly-tasks">Monthly Tasks</a>
+                    <a href="#" class="nav-item admin-only" data-view="staff-tracking">Staff</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-proposals">Proposals</a>
@@ -673,6 +676,196 @@
                     </section>
                 </section>
 
+                <section class="view staff-view" data-view="tasks">
+                    <section class="content-grid tasks-layout">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Tasks</div>
+                                    <div class="card-subtitle">Assigned work and completion tracking.</div>
+                                </div>
+                                <button class="btn btn-outline" id="tasks-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="filters">
+                                <label class="field">
+                                    <span>Status</span>
+                                    <select id="tasks-filter-status">
+                                        <option value="all">All</option>
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In progress</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Staff</span>
+                                    <select id="tasks-filter-staff"></select>
+                                </label>
+                                <button class="btn btn-ghost" id="tasks-clear" type="button">Clear</button>
+                            </div>
+                            <div class="table" id="tasks-table">
+                                <div class="table-row table-header tasks">
+                                    <span>Task</span>
+                                    <span>Staff</span>
+                                    <span>Priority</span>
+                                    <span>Status</span>
+                                    <span>Due</span>
+                                    <span>Job</span>
+                                    <span>Time</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty tasks">
+                                    <span>Loading tasks...</span>
+                                    <span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="task-form-title">New task</div>
+                                    <div class="card-subtitle">Create, edit, and update task progress.</div>
+                                </div>
+                            </div>
+                            <form id="task-form" class="form-stack">
+                                <input type="hidden" name="id">
+                                <label class="field admin-only">
+                                    <span>Title</span>
+                                    <input type="text" name="title">
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Description</span>
+                                    <textarea name="description" rows="3"></textarea>
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Assign to</span>
+                                    <select name="assigned_to_user_id" id="task-staff-select"></select>
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Linked job (optional)</span>
+                                    <select name="job_id" id="task-job-select"></select>
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Priority</span>
+                                    <select name="priority">
+                                        <option value="low">Low</option>
+                                        <option value="normal" selected>Normal</option>
+                                        <option value="high">High</option>
+                                        <option value="urgent">Urgent</option>
+                                    </select>
+                                </label>
+                                <label class="field admin-only">
+                                    <span>Due date</span>
+                                    <input type="date" name="due_date">
+                                </label>
+                                <label class="field">
+                                    <span>Status</span>
+                                    <select name="status">
+                                        <option value="pending">Pending</option>
+                                        <option value="in_progress">In progress</option>
+                                        <option value="completed">Completed</option>
+                                    </select>
+                                </label>
+                                <div class="line-item">
+                                    <label class="field">
+                                        <span>Hours</span>
+                                        <input type="number" name="hours" min="0" step="1" value="0">
+                                    </label>
+                                    <label class="field">
+                                        <span>Minutes</span>
+                                        <select name="minutes">
+                                            <option value="0">00</option>
+                                            <option value="15">15</option>
+                                            <option value="30">30</option>
+                                            <option value="45">45</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <label class="field">
+                                    <span>Notes</span>
+                                    <textarea name="staff_notes" rows="3"></textarea>
+                                </label>
+                                <div id="task-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save task</button>
+                                    <button type="button" class="btn btn-outline" id="task-form-cancel">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view staff-member-only-view" data-view="monthly-tasks">
+                    <section class="content-grid monthly-finance-layout">
+                        <div class="card">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Monthly Tasks</div>
+                                    <div class="card-subtitle">Completed task and hour totals.</div>
+                                    <div class="monthly-finance-selected-month" id="monthly-tasks-selected-month">--</div>
+                                </div>
+                                <button class="btn btn-outline" id="monthly-tasks-refresh" type="button">Refresh</button>
+                            </div>
+                            <div id="monthly-tasks-months" class="monthly-finance-months">
+                                <div class="monthly-finance-empty">Loading months...</div>
+                            </div>
+                        </div>
+
+                        <div class="monthly-finance-right">
+                            <div class="monthly-finance-metrics">
+                                <div class="card monthly-finance-card">
+                                    <div class="card-label">Tasks completed</div>
+                                    <div class="card-value" id="monthly-tasks-completed">--</div>
+                                    <div class="card-meta">Completed in selected month</div>
+                                </div>
+                                <div class="card monthly-finance-card">
+                                    <div class="card-label">Hours done</div>
+                                    <div class="card-value" id="monthly-tasks-hours">--</div>
+                                    <div class="card-meta">Logged hours in selected month</div>
+                                </div>
+                                <div class="card monthly-finance-card" id="monthly-tasks-card-task-change">
+                                    <div class="card-label">Task change</div>
+                                    <div class="card-value" id="monthly-tasks-task-change">--</div>
+                                    <div class="card-meta">Compared with previous month</div>
+                                </div>
+                                <div class="card monthly-finance-card" id="monthly-tasks-card-hour-change">
+                                    <div class="card-label">Hour change</div>
+                                    <div class="card-value" id="monthly-tasks-hour-change">--</div>
+                                    <div class="card-meta">Compared with previous month</div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="staff-tracking">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Staff</div>
+                                    <div class="card-subtitle">Track pending tasks, completed tasks, and logged hours by staff member.</div>
+                                </div>
+                                <button class="btn btn-outline" id="staff-tracking-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="table" id="staff-tracking-table">
+                                <div class="table-row table-header staff-tracking">
+                                    <span>Staff</span>
+                                    <span>Pending</span>
+                                    <span>Completed this month</span>
+                                    <span>Hours this month</span>
+                                    <span>Total completed</span>
+                                    <span>Total hours</span>
+                                </div>
+                                <div class="table-row table-empty staff-tracking">
+                                    <span>Loading staff tracking...</span>
+                                    <span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
                 <section class="view staff-view" data-view="subscriptions">
                     <section class="content-grid">
                         <div class="card wide">
@@ -1174,11 +1367,11 @@
                             <div id="proposal-forms-settings-status" class="form-hint"></div>
                         </div>
 
-                        <div class="card admin-only">
+                        <div class="card">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Profile</div>
-                                    <div class="card-subtitle">Update your admin contact details.</div>
+                                    <div class="card-subtitle">Update your account contact details.</div>
                                 </div>
                             </div>
                             <form id="profile-form" class="form-stack">

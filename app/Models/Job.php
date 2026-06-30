@@ -53,4 +53,9 @@ class Job extends Model
     {
         return $this->hasMany(Proposal::class);
     }
+
+    public function tasks(): HasMany
+    {
+        return $this->hasMany(CrmTask::class);
+    }
 }

@@ -57,6 +57,15 @@ const dom = {
     monthlyFinanceToggleProfit: document.getElementById('monthly-finance-toggle-profit'),
     monthlyFinanceToggleTax: document.getElementById('monthly-finance-toggle-tax'),
     monthlyFinanceToggleOwed: document.getElementById('monthly-finance-toggle-owed'),
+    monthlyTasksMonths: document.getElementById('monthly-tasks-months'),
+    monthlyTasksRefresh: document.getElementById('monthly-tasks-refresh'),
+    monthlyTasksSelectedMonth: document.getElementById('monthly-tasks-selected-month'),
+    monthlyTasksCompleted: document.getElementById('monthly-tasks-completed'),
+    monthlyTasksHours: document.getElementById('monthly-tasks-hours'),
+    monthlyTasksTaskChange: document.getElementById('monthly-tasks-task-change'),
+    monthlyTasksHourChange: document.getElementById('monthly-tasks-hour-change'),
+    monthlyTasksCardTaskChange: document.getElementById('monthly-tasks-card-task-change'),
+    monthlyTasksCardHourChange: document.getElementById('monthly-tasks-card-hour-change'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
@@ -174,6 +183,17 @@ const dom = {
     jobPhotosRefresh: document.getElementById('job-photos-refresh'),
     jobPhotosDownloadAll: document.getElementById('job-photos-download-all'),
     jobsRefresh: document.getElementById('jobs-refresh'),
+    tasksTable: document.getElementById('tasks-table'),
+    tasksRefresh: document.getElementById('tasks-refresh'),
+    tasksFilterStatus: document.getElementById('tasks-filter-status'),
+    tasksFilterStaff: document.getElementById('tasks-filter-staff'),
+    tasksClear: document.getElementById('tasks-clear'),
+    taskForm: document.getElementById('task-form'),
+    taskFormTitle: document.getElementById('task-form-title'),
+    taskFormStatus: document.getElementById('task-form-status'),
+    taskFormCancel: document.getElementById('task-form-cancel'),
+    taskStaffSelect: document.getElementById('task-staff-select'),
+    taskJobSelect: document.getElementById('task-job-select'),
     subscriptionsTable: document.getElementById('subscriptions-table'),
     subscriptionForm: document.getElementById('subscription-form'),
     subscriptionFormTitle: document.getElementById('subscription-form-title'),
@@ -206,6 +226,8 @@ const dom = {
     invoicesRefresh: document.getElementById('invoices-refresh'),
     portalProposals: document.getElementById('portal-proposals'),
     portalProposalsRefresh: document.getElementById('portal-proposals-refresh'),
+    staffTrackingTable: document.getElementById('staff-tracking-table'),
+    staffTrackingRefresh: document.getElementById('staff-tracking-refresh'),
 };
 
 const statTargets = {
@@ -241,6 +263,10 @@ const state = {
     costs: [],
     subscriptions: [],
     proposals: [],
+    tasks: [],
+    monthlyTasks: [],
+    monthlyTasksSelectedMonth: null,
+    staffTracking: [],
     subscriptionMonths: [],
     invoices: [],
     staffUsers: [],
@@ -276,6 +302,10 @@ const state = {
             status: 'all',
             customer: 'all',
         },
+        tasks: {
+            status: 'all',
+            staff: 'all',
+        },
     },
     pagination: {
         customers: { page: 1, lastPage: 1 },
@@ -284,6 +314,7 @@ const state = {
         subscriptions: { page: 1, lastPage: 1 },
         proposals: { page: 1, lastPage: 1 },
         invoices: { page: 1, lastPage: 1 },
+        tasks: { page: 1, lastPage: 1 },
     },
     editing: {
         customer: null,
@@ -293,6 +324,7 @@ const state = {
         subscription: null,
         proposal: null,
         proposalFormTypeIndex: null,
+        task: null,
         invoice: null,
         website: null,
     },
@@ -315,6 +347,10 @@ const viewMeta = {
         title: 'Jobs',
         subtitle: 'Track one-off work and invoicing status.',
     },
+    tasks: {
+        title: 'Tasks',
+        subtitle: 'Assigned work and completion tracking.',
+    },
     subscriptions: {
         title: 'Subscriptions',
         subtitle: 'Recurring services and billing cadence.',
@@ -330,6 +366,14 @@ const viewMeta = {
     'monthly-finance': {
         title: 'Monthly Finance',
         subtitle: 'Revenue, costs, profits, and tax by month.',
+    },
+    'monthly-tasks': {
+        title: 'Monthly Tasks',
+        subtitle: 'Completed tasks and logged hours by month.',
+    },
+    'staff-tracking': {
+        title: 'Staff',
+        subtitle: 'Track staff task completion and logged hours.',
     },
     invoices: {
         title: 'Invoices',
@@ -446,7 +490,11 @@ function updateSyncStatus(status) {
 }
 
 function setActiveView(view) {
-    if (['monthly-finance', 'proposal-form-edit'].includes(view) && state.role !== 'admin') {
+    if (['monthly-finance', 'proposal-form-edit', 'staff-tracking'].includes(view) && state.role !== 'admin') {
+        return;
+    }
+
+    if (view === 'monthly-tasks' && state.role !== 'staff') {
         return;
     }
 
@@ -463,7 +511,11 @@ function setActiveView(view) {
     });
 
     if (dom.pageTitle) dom.pageTitle.textContent = meta.title;
-    if (dom.pageSubtitle) dom.pageSubtitle.textContent = meta.subtitle;
+    if (dom.pageSubtitle) {
+        dom.pageSubtitle.textContent = view === 'admin' && state.role === 'staff'
+            ? 'Manage your account details and password.'
+            : meta.subtitle;
+    }
 
     if (view !== 'monthly-finance') {
         setMonthlyFinanceSettingsOpen(false);
@@ -474,6 +526,13 @@ function setActiveView(view) {
     }
     if (view === 'jobs') {
         ensureCustomersLoaded().then(loadJobs);
+    }
+    if (view === 'tasks') {
+        Promise.all([loadStaffUsers(), ensureJobsLoaded()])
+            .then(() => {
+                populateTaskSelects();
+                loadTasks();
+            });
     }
     if (view === 'subscriptions') {
         ensureCustomersLoaded().then(loadSubscriptions);
@@ -488,6 +547,12 @@ function setActiveView(view) {
     }
     if (view === 'monthly-finance' && state.role === 'admin') {
         loadMonthlyFinance();
+    }
+    if (view === 'monthly-tasks' && state.role === 'staff') {
+        loadMonthlyTasks();
+    }
+    if (view === 'staff-tracking' && state.role === 'admin') {
+        loadStaffTracking();
     }
     if (view === 'invoices') {
         ensureCustomersLoaded().then(loadInvoices);
@@ -510,11 +575,14 @@ function setActiveView(view) {
     if (view === 'portal-support') {
         setFormStatus(dom.portalSupportStatus, '');
     }
-    if (view === 'admin' && state.role === 'admin') {
-        loadStaffUsers();
-        loadAdminMailSettings();
-        loadAdminInvoiceSettings();
-        loadAdminProposalForms();
+    if (view === 'admin') {
+        populateProfileForm(state.user);
+        if (state.role === 'admin') {
+            loadStaffUsers();
+            loadAdminMailSettings();
+            loadAdminInvoiceSettings();
+            loadAdminProposalForms();
+        }
     }
     if (view === 'proposal-form-edit' && state.role === 'admin') {
         if ((state.proposalFormSettings.types || []).length) {
@@ -945,6 +1013,54 @@ function renderInvoiceRows(container, invoices, emptyMessage) {
 }
 
 async function loadStaffStats() {
+    if (state.role === 'staff') {
+        const result = await api.get('/api/tasks/dashboard');
+        const data = result?.data ?? {};
+
+        if (dom.dashboardRevenue) dom.dashboardRevenue.textContent = String(data.pending_tasks ?? 0);
+        if (dom.dashboardCosts) dom.dashboardCosts.textContent = String(data.completed_this_month ?? 0);
+        if (dom.dashboardProfit) dom.dashboardProfit.textContent = `${Number(data.hours_this_month ?? 0).toFixed(2)}h`;
+        if (statTargets.jobs) statTargets.jobs.textContent = String(data.overdue_tasks ?? 0);
+        if (statTargets.subscriptions) statTargets.subscriptions.textContent = String(data.total_tasks ?? 0);
+
+        const cards = document.querySelectorAll('[data-view="dashboard"] .panel-grid .card');
+        const labels = ['Pending tasks', 'Completed this month', 'Hours this month', 'Overdue tasks', 'Total tasks'];
+        const metas = ['Assigned to you', 'Completed by you', 'Logged by you', 'Past due and incomplete', 'All assigned tasks'];
+        cards.forEach((card, index) => {
+            const label = card.querySelector('.card-label');
+            const meta = card.querySelector('.card-meta');
+            if (label && labels[index]) label.textContent = labels[index];
+            if (meta && metas[index]) meta.textContent = metas[index];
+        });
+
+        const chartCard = dom.dashboardProfitChart?.closest('.card');
+        const invoiceCard = invoiceTables.dashboard?.closest('.card');
+        if (chartCard) chartCard.style.display = 'none';
+        if (invoiceCard) invoiceCard.style.display = 'none';
+        updateSyncStatus('Connected');
+        return;
+    }
+
+    const chartCard = dom.dashboardProfitChart?.closest('.card');
+    const invoiceCard = invoiceTables.dashboard?.closest('.card');
+    if (chartCard) chartCard.style.display = '';
+    if (invoiceCard) invoiceCard.style.display = '';
+    const cards = document.querySelectorAll('[data-view="dashboard"] .panel-grid .card');
+    const labels = ['Revenue this month', 'Costs this month', 'Profit this month', 'Jobs', 'Subscriptions'];
+    const metas = [
+        'Completed jobs this month + paid subscriptions',
+        'Total incurred costs this month',
+        'Revenue this month minus costs this month',
+        'Open or invoiced',
+        'Recurring monthly',
+    ];
+    cards.forEach((card, index) => {
+        const label = card.querySelector('.card-label');
+        const meta = card.querySelector('.card-meta');
+        if (label && labels[index]) label.textContent = labels[index];
+        if (meta && metas[index]) meta.textContent = metas[index];
+    });
+
     const results = await Promise.allSettled([
         api.get('/api/jobs?per_page=1'),
         api.get('/api/subscriptions?per_page=1'),
@@ -1204,6 +1320,133 @@ async function loadMonthlyFinance() {
         renderMonthlyFinanceMonths();
         resetMonthlyFinanceCards();
     }
+}
+
+function findSelectedMonthlyTasks() {
+    const selected = state.monthlyTasks.find((item) => item.month_start === state.monthlyTasksSelectedMonth);
+    return selected || state.monthlyTasks[state.monthlyTasks.length - 2] || state.monthlyTasks[state.monthlyTasks.length - 1] || null;
+}
+
+function renderMonthlyTaskCards() {
+    const selected = findSelectedMonthlyTasks();
+    if (!selected) {
+        if (dom.monthlyTasksSelectedMonth) dom.monthlyTasksSelectedMonth.textContent = '--';
+        if (dom.monthlyTasksCompleted) dom.monthlyTasksCompleted.textContent = '--';
+        if (dom.monthlyTasksHours) dom.monthlyTasksHours.textContent = '--';
+        if (dom.monthlyTasksTaskChange) dom.monthlyTasksTaskChange.textContent = '--';
+        if (dom.monthlyTasksHourChange) dom.monthlyTasksHourChange.textContent = '--';
+        return;
+    }
+
+    state.monthlyTasksSelectedMonth = selected.month_start;
+    const isTotal = selected.month_start === 'total';
+    if (dom.monthlyTasksSelectedMonth) {
+        dom.monthlyTasksSelectedMonth.textContent = `Selected: ${selected.label}`;
+    }
+    if (dom.monthlyTasksCompleted) dom.monthlyTasksCompleted.textContent = String(selected.completed_tasks || 0);
+    if (dom.monthlyTasksHours) dom.monthlyTasksHours.textContent = `${Number(selected.hours_total || 0).toFixed(2)}h`;
+    if (dom.monthlyTasksTaskChange) {
+        dom.monthlyTasksTaskChange.textContent = selected.tasks_change_percent === null || selected.tasks_change_percent === undefined
+            ? '--'
+            : `${Number(selected.tasks_change_percent).toFixed(1)}%`;
+    }
+    if (dom.monthlyTasksHourChange) {
+        dom.monthlyTasksHourChange.textContent = selected.hours_change_percent === null || selected.hours_change_percent === undefined
+            ? '--'
+            : `${Number(selected.hours_change_percent).toFixed(1)}%`;
+    }
+    if (dom.monthlyTasksCardTaskChange) dom.monthlyTasksCardTaskChange.style.display = isTotal ? 'none' : '';
+    if (dom.monthlyTasksCardHourChange) dom.monthlyTasksCardHourChange.style.display = isTotal ? 'none' : '';
+}
+
+function renderMonthlyTaskMonths() {
+    if (!dom.monthlyTasksMonths) return;
+    dom.monthlyTasksMonths.innerHTML = '';
+
+    if (!state.monthlyTasks.length) {
+        dom.monthlyTasksMonths.innerHTML = '<div class="monthly-finance-empty">No monthly task data yet.</div>';
+        return;
+    }
+
+    state.monthlyTasks.forEach((month) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'monthly-finance-month';
+        button.dataset.monthStart = month.month_start;
+        button.textContent = month.label || formatMonth(month.month_start);
+        if (month.month_start === state.monthlyTasksSelectedMonth) {
+            button.classList.add('active');
+        }
+        dom.monthlyTasksMonths.appendChild(button);
+    });
+}
+
+async function loadMonthlyTasks() {
+    if (!dom.monthlyTasksMonths) return;
+    dom.monthlyTasksMonths.innerHTML = '<div class="monthly-finance-empty">Loading months...</div>';
+
+    try {
+        const response = await api.get('/api/tasks/monthly');
+        state.monthlyTasks = response?.data?.months ?? [];
+        const selected = response?.data?.selected_month || state.monthlyTasks[state.monthlyTasks.length - 2]?.month_start || null;
+        if (!state.monthlyTasksSelectedMonth) {
+            state.monthlyTasksSelectedMonth = selected;
+        }
+        renderMonthlyTaskMonths();
+        renderMonthlyTaskCards();
+    } catch (error) {
+        state.monthlyTasks = [];
+        renderMonthlyTaskMonths();
+        renderMonthlyTaskCards();
+    }
+}
+
+async function loadStaffTracking() {
+    if (!dom.staffTrackingTable || state.role !== 'admin') return;
+    resetTable(dom.staffTrackingTable);
+    const loading = document.createElement('div');
+    loading.className = 'table-row table-empty staff-tracking';
+    loading.innerHTML = '<span>Loading staff tracking...</span><span></span><span></span><span></span><span></span><span></span>';
+    dom.staffTrackingTable.appendChild(loading);
+
+    try {
+        const response = await api.get('/api/admin/staff-task-summary');
+        state.staffTracking = response?.data?.data ?? [];
+        renderStaffTracking();
+    } catch (error) {
+        resetTable(dom.staffTrackingTable);
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty staff-tracking';
+        row.innerHTML = '<span>Unable to load staff tracking.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.staffTrackingTable.appendChild(row);
+    }
+}
+
+function renderStaffTracking() {
+    if (!dom.staffTrackingTable) return;
+    resetTable(dom.staffTrackingTable);
+
+    if (!state.staffTracking.length) {
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty staff-tracking';
+        row.innerHTML = '<span>No staff users yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.staffTrackingTable.appendChild(row);
+        return;
+    }
+
+    state.staffTracking.forEach((staff) => {
+        const row = document.createElement('div');
+        row.className = 'table-row staff-tracking';
+        row.innerHTML = `
+            <span>${escapeHtml(staff.name || staff.email || '')}</span>
+            <span>${escapeHtml(String(staff.pending_tasks || 0))}</span>
+            <span>${escapeHtml(String(staff.completed_this_month || 0))}</span>
+            <span>${Number(staff.hours_this_month || 0).toFixed(2)}h</span>
+            <span>${escapeHtml(String(staff.total_completed || 0))}</span>
+            <span>${Number(staff.total_hours || 0).toFixed(2)}h</span>
+        `;
+        dom.staffTrackingTable.appendChild(row);
+    });
 }
 
 async function loadPortalInvoices() {
@@ -2143,6 +2386,7 @@ async function loadStaffUsers() {
         const response = await api.get('/api/admin/staff-users');
         state.staffUsers = response?.data?.data ?? [];
         renderStaffUsers();
+        populateTaskSelects();
     } catch (error) {
         state.staffUsers = [];
         const emptyRow = document.createElement('div');
@@ -2276,6 +2520,242 @@ async function ensureCustomersLoaded() {
     }
     if (!state.customers.length) {
         await loadCustomers();
+    }
+}
+
+async function ensureJobsLoaded() {
+    if (state.role !== 'admin') return;
+    if (state.jobs.length) return;
+
+    const response = await api.get('/api/jobs?per_page=200');
+    state.jobs = response?.data?.data ?? [];
+}
+
+function populateTaskSelects() {
+    if (dom.taskStaffSelect) {
+        const current = dom.taskStaffSelect.value;
+        dom.taskStaffSelect.innerHTML = '<option value="" selected disabled>Select staff user</option>';
+        state.staffUsers.forEach((staff) => {
+            const option = document.createElement('option');
+            option.value = String(staff.id);
+            option.textContent = staff.name || staff.email || `Staff #${staff.id}`;
+            dom.taskStaffSelect.appendChild(option);
+        });
+        if (current) dom.taskStaffSelect.value = current;
+    }
+
+    if (dom.tasksFilterStaff) {
+        const current = dom.tasksFilterStaff.value || 'all';
+        dom.tasksFilterStaff.innerHTML = '<option value="all">All staff</option>';
+        state.staffUsers.forEach((staff) => {
+            const option = document.createElement('option');
+            option.value = String(staff.id);
+            option.textContent = staff.name || staff.email || `Staff #${staff.id}`;
+            dom.tasksFilterStaff.appendChild(option);
+        });
+        dom.tasksFilterStaff.value = current;
+    }
+
+    if (dom.taskJobSelect) {
+        const current = dom.taskJobSelect.value;
+        dom.taskJobSelect.innerHTML = '<option value="">No linked job</option>';
+        state.jobs.forEach((job) => {
+            const option = document.createElement('option');
+            option.value = String(job.id);
+            option.textContent = `#${job.id} - ${truncate(job.description || 'Job', 60)}`;
+            dom.taskJobSelect.appendChild(option);
+        });
+        if (current) dom.taskJobSelect.value = current;
+    }
+}
+
+function formatTaskTime(task) {
+    const hours = Number(task?.hours || 0);
+    const minutes = Number(task?.minutes || 0);
+    return `${hours}h ${String(minutes).padStart(2, '0')}m`;
+}
+
+async function loadTasks() {
+    if (!dom.tasksTable) return;
+    resetTable(dom.tasksTable);
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty tasks';
+    loadingRow.innerHTML = '<span>Loading tasks...</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+    dom.tasksTable.appendChild(loadingRow);
+
+    try {
+        const query = buildQuery({
+            per_page: 100,
+            status: state.filters.tasks.status,
+            staff_id: state.role === 'admin' ? state.filters.tasks.staff : undefined,
+        });
+        const response = await api.get(`/api/tasks${query}`);
+        state.tasks = response?.data?.data ?? [];
+        renderTasks();
+    } catch (error) {
+        resetTable(dom.tasksTable);
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty tasks';
+        row.innerHTML = '<span>Unable to load tasks.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.tasksTable.appendChild(row);
+    }
+}
+
+function renderTasks() {
+    if (!dom.tasksTable) return;
+    resetTable(dom.tasksTable);
+
+    if (!state.tasks.length) {
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty tasks';
+        row.innerHTML = '<span>No tasks yet.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.tasksTable.appendChild(row);
+        return;
+    }
+
+    state.tasks.forEach((task) => {
+        const row = document.createElement('div');
+        row.className = 'table-row tasks';
+        const jobText = task.job ? `#${task.job.id} - ${task.job.description || 'Job'}` : 'No linked job';
+        const actions = [];
+        if (state.role === 'admin') {
+            actions.push(`<button class="btn btn-outline btn-small" data-action="edit-task" data-id="${task.id}">Edit</button>`);
+            actions.push(`<button class="btn btn-outline btn-small" data-action="delete-task" data-id="${task.id}">Delete</button>`);
+        } else {
+            actions.push(`<button class="btn btn-outline btn-small" data-action="update-task" data-id="${task.id}">Update</button>`);
+        }
+
+        row.innerHTML = `
+            <span>${escapeHtml(task.title || '')}</span>
+            <span>${escapeHtml(task.assigned_to?.name || 'Staff')}</span>
+            <span>${escapeHtml(task.priority || 'normal')}</span>
+            <span>${escapeHtml((task.status || '').replace('_', ' '))}</span>
+            <span>${formatDate(task.due_date)}</span>
+            <span>${escapeHtml(truncate(jobText, 42))}</span>
+            <span>${formatTaskTime(task)}</span>
+            <div class="row-actions">${actions.join('')}</div>
+        `;
+        dom.tasksTable.appendChild(row);
+    });
+}
+
+function resetTaskForm() {
+    if (!dom.taskForm) return;
+    dom.taskForm.reset();
+    dom.taskForm.querySelector('input[name="id"]').value = '';
+    state.editing.task = null;
+    if (dom.taskFormTitle) {
+        dom.taskFormTitle.textContent = state.role === 'staff' ? 'Update task' : 'New task';
+    }
+    setFormStatus(dom.taskFormStatus, '');
+}
+
+async function handleTaskSubmit(event) {
+    event.preventDefault();
+    if (!dom.taskForm) return;
+
+    const formData = new FormData(dom.taskForm);
+    const taskId = Number(formData.get('id') || state.editing.task || 0);
+    const progressPayload = {
+        status: formData.get('status') || 'pending',
+        hours: Number(formData.get('hours') || 0),
+        minutes: Number(formData.get('minutes') || 0),
+        staff_notes: String(formData.get('staff_notes') || '').trim() || null,
+    };
+
+    if (state.role !== 'admin') {
+        if (!taskId) {
+            setFormStatus(dom.taskFormStatus, 'Choose a task to update first.', true);
+            return;
+        }
+
+        try {
+            await api.put(`/api/tasks/${taskId}`, progressPayload);
+            setFormStatus(dom.taskFormStatus, 'Task updated.');
+            showToast(progressPayload.status === 'completed' ? 'Task completed' : 'Task updated');
+            await loadTasks();
+            if (state.view === 'dashboard') await loadStaffStats();
+        } catch (error) {
+            setFormStatus(dom.taskFormStatus, getErrorMessage(error, 'Unable to update task.'), true);
+        }
+        return;
+    }
+
+    const payload = {
+        title: String(formData.get('title') || '').trim(),
+        description: String(formData.get('description') || '').trim() || null,
+        assigned_to_user_id: Number(formData.get('assigned_to_user_id')),
+        job_id: formData.get('job_id') ? Number(formData.get('job_id')) : null,
+        priority: formData.get('priority') || 'normal',
+        due_date: formData.get('due_date') || null,
+        ...progressPayload,
+    };
+
+    if (!payload.title || !payload.assigned_to_user_id) {
+        setFormStatus(dom.taskFormStatus, 'Title and staff user are required.', true);
+        return;
+    }
+
+    try {
+        if (state.editing.task) {
+            await api.put(`/api/tasks/${state.editing.task}`, payload);
+            setFormStatus(dom.taskFormStatus, 'Task updated.');
+        } else {
+            await api.post('/api/tasks', payload);
+            setFormStatus(dom.taskFormStatus, 'Task created.');
+        }
+        resetTaskForm();
+        await loadTasks();
+    } catch (error) {
+        setFormStatus(dom.taskFormStatus, getErrorMessage(error, 'Unable to save task.'), true);
+    }
+}
+
+async function handleTaskAction(event) {
+    const button = event.target.closest('[data-action]');
+    if (!button) return;
+    const taskId = Number(button.dataset.id);
+    const task = state.tasks.find((item) => Number(item.id) === taskId);
+    if (!task) return;
+
+    if (button.dataset.action === 'update-task' && dom.taskForm) {
+        state.editing.task = task.id;
+        dom.taskForm.querySelector('input[name="id"]').value = task.id;
+        dom.taskForm.querySelector('select[name="status"]').value = task.status || 'pending';
+        dom.taskForm.querySelector('input[name="hours"]').value = Number(task.hours || 0);
+        dom.taskForm.querySelector('select[name="minutes"]').value = String(Number(task.minutes || 0));
+        dom.taskForm.querySelector('textarea[name="staff_notes"]').value = task.staff_notes || '';
+        if (dom.taskFormTitle) dom.taskFormTitle.textContent = `Update ${task.title}`;
+        setFormStatus(dom.taskFormStatus, task.job ? `Linked job: #${task.job.id} - ${task.job.description || ''}` : 'No linked job.');
+        return;
+    }
+
+    if (button.dataset.action === 'edit-task' && state.role === 'admin' && dom.taskForm) {
+        state.editing.task = task.id;
+        dom.taskForm.querySelector('input[name="id"]').value = task.id;
+        dom.taskForm.querySelector('input[name="title"]').value = task.title || '';
+        dom.taskForm.querySelector('textarea[name="description"]').value = task.description || '';
+        dom.taskForm.querySelector('select[name="assigned_to_user_id"]').value = String(task.assigned_to_user_id || '');
+        dom.taskForm.querySelector('select[name="job_id"]').value = task.job_id ? String(task.job_id) : '';
+        dom.taskForm.querySelector('select[name="priority"]').value = task.priority || 'normal';
+        dom.taskForm.querySelector('input[name="due_date"]').value = task.due_date || '';
+        dom.taskForm.querySelector('select[name="status"]').value = task.status || 'pending';
+        dom.taskForm.querySelector('input[name="hours"]').value = Number(task.hours || 0);
+        dom.taskForm.querySelector('select[name="minutes"]').value = String(Number(task.minutes || 0));
+        dom.taskForm.querySelector('textarea[name="staff_notes"]').value = task.staff_notes || '';
+        if (dom.taskFormTitle) dom.taskFormTitle.textContent = `Edit ${task.title}`;
+        setFormStatus(dom.taskFormStatus, 'Editing task.');
+        return;
+    }
+
+    if (button.dataset.action === 'delete-task' && state.role === 'admin') {
+        if (!window.confirm('Delete this task?')) return;
+        try {
+            await api.delete(`/api/tasks/${task.id}`);
+            await loadTasks();
+        } catch (error) {
+            showToast('Unable to delete task', true);
+        }
     }
 }
 
@@ -2985,6 +3465,7 @@ function renderJobs() {
             <span>${formatCurrency(Number(job.cost))}</span>
             <span>${escapeHtml(job.status)}</span>
             <div class="row-actions">
+                <button class="btn btn-outline btn-small" data-action="create-task" data-id="${job.id}">Create task</button>
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${job.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${job.id}">Delete</button>
             </div>
@@ -3048,6 +3529,19 @@ async function handleJobAction(event) {
         dom.jobForm.querySelector('input[name="cost"]').value = job.cost || '';
         dom.jobForm.querySelector('select[name="status"]').value = job.status || 'draft';
         setFormStatus(dom.jobFormStatus, 'Editing job.');
+    }
+
+    if (action === 'create-task' && job && state.role === 'admin') {
+        setActiveView('tasks');
+        setTimeout(() => {
+            if (dom.taskJobSelect) dom.taskJobSelect.value = String(job.id);
+            if (dom.taskForm?.querySelector('input[name="title"]')) {
+                dom.taskForm.querySelector('input[name="title"]').value = job.description || '';
+            }
+            if (dom.taskForm?.querySelector('textarea[name="description"]')) {
+                dom.taskForm.querySelector('textarea[name="description"]').value = job.notes || '';
+            }
+        }, 100);
     }
 
     if (action === 'delete' && id) {
@@ -4639,13 +5133,15 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
-    const adminOnlyViews = ['monthly-finance', 'proposal-form-edit'];
+    const adminOnlyViews = ['customers', 'jobs', 'subscriptions', 'costs', 'proposals', 'invoices', 'monthly-finance', 'proposal-form-edit', 'staff-tracking'];
+    const staffOnlyViews = ['tasks', 'monthly-tasks'];
 
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
             if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
             if (adminOnlyViews.includes(item.dataset.view) && state.role !== 'admin') return;
+            if (item.dataset.view === 'monthly-tasks' && state.role !== 'staff') return;
             setActiveView(item.dataset.view);
             setNavOpen(false);
         });
@@ -4658,6 +5154,9 @@ function initializeNavigation() {
                     return;
                 }
                 if (adminOnlyViews.includes(button.dataset.goView) && state.role !== 'admin') {
+                    return;
+                }
+                if (button.dataset.goView === 'monthly-tasks' && state.role !== 'staff') {
                     return;
                 }
                 if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
@@ -5065,6 +5564,46 @@ if (dom.subscriptionsClear) {
     });
 }
 
+if (dom.taskForm) {
+    dom.taskForm.addEventListener('submit', handleTaskSubmit);
+}
+
+if (dom.taskFormCancel) {
+    dom.taskFormCancel.addEventListener('click', resetTaskForm);
+}
+
+if (dom.tasksTable) {
+    dom.tasksTable.addEventListener('click', handleTaskAction);
+}
+
+if (dom.tasksRefresh) {
+    dom.tasksRefresh.addEventListener('click', loadTasks);
+}
+
+if (dom.tasksFilterStatus) {
+    dom.tasksFilterStatus.addEventListener('change', () => {
+        state.filters.tasks.status = dom.tasksFilterStatus.value;
+        loadTasks();
+    });
+}
+
+if (dom.tasksFilterStaff) {
+    dom.tasksFilterStaff.addEventListener('change', () => {
+        state.filters.tasks.staff = dom.tasksFilterStaff.value;
+        loadTasks();
+    });
+}
+
+if (dom.tasksClear) {
+    dom.tasksClear.addEventListener('click', () => {
+        if (dom.tasksFilterStatus) dom.tasksFilterStatus.value = 'all';
+        if (dom.tasksFilterStaff) dom.tasksFilterStaff.value = 'all';
+        state.filters.tasks.status = 'all';
+        state.filters.tasks.staff = 'all';
+        loadTasks();
+    });
+}
+
 if (dom.proposalForm) {
     dom.proposalForm.addEventListener('submit', handleProposalSubmit);
 }
@@ -5195,6 +5734,24 @@ if (dom.monthlyFinanceMonths) {
 
 if (dom.monthlyFinanceRefresh) {
     dom.monthlyFinanceRefresh.addEventListener('click', loadMonthlyFinance);
+}
+
+if (dom.monthlyTasksMonths) {
+    dom.monthlyTasksMonths.addEventListener('click', (event) => {
+        const monthButton = event.target.closest('[data-month-start]');
+        if (!monthButton) return;
+        state.monthlyTasksSelectedMonth = monthButton.dataset.monthStart || null;
+        renderMonthlyTaskMonths();
+        renderMonthlyTaskCards();
+    });
+}
+
+if (dom.monthlyTasksRefresh) {
+    dom.monthlyTasksRefresh.addEventListener('click', loadMonthlyTasks);
+}
+
+if (dom.staffTrackingRefresh) {
+    dom.staffTrackingRefresh.addEventListener('click', loadStaffTracking);
 }
 
 if (dom.monthlyFinanceSettingsToggle) {

@@ -373,6 +373,14 @@ body[data-role="admin"] .view.admin-only-view.active {
     display: block;
 }
 
+.view.staff-member-only-view {
+    display: none;
+}
+
+body[data-role="staff"] .view.staff-member-only-view.active {
+    display: block;
+}
+
 .detail-grid {
     display: grid;
     gap: 20px;
@@ -543,6 +551,10 @@ body[data-role="admin"] .view.admin-only-view.active {
 }
 
 .content-grid.proposals-layout {
+    grid-template-columns: 1fr;
+}
+
+.content-grid.tasks-layout {
     grid-template-columns: 1fr;
 }
 
@@ -819,6 +831,28 @@ body[data-role="admin"] .admin-inline-only {
     grid-template-columns: 0.55fr 1.3fr 1fr 0.6fr 0.7fr 0.9fr 0.8fr;
 }
 
+.table-row.tasks {
+    grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) minmax(80px, 0.6fr) minmax(85px, 0.7fr) minmax(80px, 0.6fr) minmax(140px, 1.1fr) minmax(70px, 0.55fr) minmax(150px, auto);
+    align-items: center;
+}
+
+#tasks-table {
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+#tasks-table .table-row.tasks {
+    min-width: 930px;
+}
+
+.table-row.tasks .row-actions {
+    justify-content: flex-end;
+}
+
+.table-row.tasks .btn-small {
+    white-space: nowrap;
+}
+
 .table-row.subscription-months {
     grid-template-columns: minmax(84px, 1fr) minmax(70px, 0.8fr) minmax(70px, 0.8fr) minmax(110px, auto);
     align-items: center;
@@ -1070,6 +1104,14 @@ body[data-role="admin"] .admin-only {
 
 body[data-role="admin"] .staff-only,
 body[data-role="staff"] .staff-only {
+    display: block;
+}
+
+.staff-member-only {
+    display: none;
+}
+
+body[data-role="staff"] .staff-member-only {
     display: block;
 }
 
