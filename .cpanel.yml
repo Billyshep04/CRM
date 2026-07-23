@@ -7,3 +7,7 @@ deployment:
     - /bin/chmod -R 775 $DEPLOYPATH/storage $DEPLOYPATH/bootstrap/cache
     - /bin/rm -f $DEPLOYPATH/bootstrap/cache/*.php
     - php $DEPLOYPATH/artisan optimize:clear || true
+    - php $DEPLOYPATH/artisan migrate --force
+    - php $DEPLOYPATH/artisan db:seed --class=RolePermissionSeeder --force
+    - php $DEPLOYPATH/artisan db:seed --class=LeadScoringProfileSeeder --force
+    - php $DEPLOYPATH/artisan queue:restart || true
