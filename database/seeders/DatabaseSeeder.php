@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->call(RolePermissionSeeder::class);
+        $this->call(LeadScoringProfileSeeder::class);
 
         $adminRole = Role::query()->where('slug', 'admin')->first();
         $staffRole = Role::query()->where('slug', 'staff')->first();
@@ -65,7 +66,7 @@ class DatabaseSeeder extends Seeder
             [
                 'name' => 'Example Customer',
                 'email' => $customer->email,
-                'billing_address' => '123 Main Street' . PHP_EOL . 'Springfield, USA',
+                'billing_address' => '123 Main Street'.PHP_EOL.'Springfield, USA',
                 'notes' => 'Seeded customer record for portal access.',
                 'created_by_user_id' => $admin->id,
             ]

@@ -74,6 +74,26 @@ class RolePermissionSeeder extends Seeder
                 'slug' => 'view_portal',
                 'description' => 'View customer portal data.',
             ],
+            [
+                'name' => 'Run website audits',
+                'slug' => 'run_website_audits',
+                'description' => 'Run and review LeadForge website audits.',
+            ],
+            [
+                'name' => 'Manage lead scoring',
+                'slug' => 'manage_lead_scoring',
+                'description' => 'Manage businesses, scoring profiles, and lead scores.',
+            ],
+            [
+                'name' => 'Manage revenue opportunities',
+                'slug' => 'manage_revenue_opportunities',
+                'description' => 'Manage recurring-revenue, upsell, and retention opportunities.',
+            ],
+            [
+                'name' => 'Discover external leads',
+                'slug' => 'discover_external_leads',
+                'description' => 'Search external business providers and import CRM leads.',
+            ],
         ];
 
         foreach ($permissions as $permissionData) {
@@ -94,6 +114,10 @@ class RolePermissionSeeder extends Seeder
                 'manage_jobs',
                 'manage_subscriptions',
                 'manage_invoices',
+                'run_website_audits',
+                'manage_lead_scoring',
+                'manage_revenue_opportunities',
+                'discover_external_leads',
             ])
             ->pluck('id');
         $customerPermissions = Permission::query()

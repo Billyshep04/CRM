@@ -1,25 +1,31 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminInvoiceSettingController;
 use App\Http\Controllers\AdminMailSettingController;
 use App\Http\Controllers\AdminProposalFormController;
 use App\Http\Controllers\AdminStaffUserController;
-use App\Http\Controllers\AccountController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BrandSettingController;
+use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\CostController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobController;
+use App\Http\Controllers\LeadDiscoveryController;
+use App\Http\Controllers\LeadScoreController;
+use App\Http\Controllers\LeadScoringProfileController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ProposalController;
+use App\Http\Controllers\RevenueOpportunityController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
 use App\Http\Controllers\UserPreferenceController;
+use App\Http\Controllers\WebsiteAuditController;
 use App\Http\Controllers\WebsiteController;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [PasswordResetController::class, 'request']);
@@ -38,6 +44,23 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('brand', [BrandSettingController::class, 'show']);
 
     Route::middleware('role:admin,staff')->group(function (): void {
+        Route::get('lead-discovery', [LeadDiscoveryController::class, 'index']);
+        Route::post('lead-discovery', [LeadDiscoveryController::class, 'store']);
+        Route::get('lead-discovery/{leadDiscoveryRun}', [LeadDiscoveryController::class, 'show']);
+        Route::delete('lead-discovery/{leadDiscoveryRun}', [LeadDiscoveryController::class, 'destroy']);
+        Route::get('revenue-opportunities/summary', [RevenueOpportunityController::class, 'summary']);
+        Route::post('revenue-opportunities/recommend', [RevenueOpportunityController::class, 'recommend']);
+        Route::post('revenue-opportunities/{revenueOpportunity}/follow-up', [RevenueOpportunityController::class, 'scheduleFollowUp']);
+        Route::apiResource('revenue-opportunities', RevenueOpportunityController::class);
+        Route::apiResource('businesses', BusinessController::class)->only(['index', 'store', 'show', 'update']);
+        Route::patch('businesses/{business}/contacted', [BusinessController::class, 'markContacted']);
+        Route::post('businesses/{business}/convert', [BusinessController::class, 'convert']);
+        Route::delete('businesses/{business}', [BusinessController::class, 'destroy']);
+        Route::get('businesses/{business}/lead-scores', [LeadScoreController::class, 'index']);
+        Route::post('businesses/{business}/lead-scores', [LeadScoreController::class, 'store']);
+        Route::get('website-audits', [WebsiteAuditController::class, 'index']);
+        Route::post('website-audits', [WebsiteAuditController::class, 'store']);
+        Route::get('website-audits/{websiteAudit}', [WebsiteAuditController::class, 'show']);
         Route::apiResource('customers', CustomerController::class);
         Route::post('subscription-months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPaymentById']);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);
@@ -60,6 +83,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::middleware('role:admin')->group(function (): void {
+        Route::get('lead-scoring-profiles', [LeadScoringProfileController::class, 'index']);
+        Route::post('lead-scoring-profiles', [LeadScoringProfileController::class, 'store']);
+        Route::put('lead-scoring-profiles/{leadScoringProfile}', [LeadScoringProfileController::class, 'update']);
         Route::apiResource('jobs', JobController::class);
         Route::get('jobs/{job}/photos', [JobController::class, 'photos']);
         Route::post('jobs/{job}/photos', [JobController::class, 'uploadPhotos']);

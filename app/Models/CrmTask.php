@@ -22,6 +22,7 @@ class CrmTask extends Model
         'assigned_to_user_id',
         'created_by_user_id',
         'job_id',
+        'revenue_opportunity_id',
         'title',
         'description',
         'priority',
@@ -31,11 +32,13 @@ class CrmTask extends Model
         'minutes',
         'staff_notes',
         'completed_at',
+        'reminder_sent_at',
     ];
 
     protected $casts = [
         'due_date' => 'date',
         'completed_at' => 'datetime',
+        'reminder_sent_at' => 'datetime',
         'hours' => 'integer',
         'minutes' => 'integer',
     ];
@@ -53,6 +56,11 @@ class CrmTask extends Model
     public function job(): BelongsTo
     {
         return $this->belongsTo(Job::class);
+    }
+
+    public function revenueOpportunity(): BelongsTo
+    {
+        return $this->belongsTo(RevenueOpportunity::class);
     }
 
     public function scopeCompletedBetween(Builder $query, mixed $start, mixed $end): Builder

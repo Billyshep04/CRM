@@ -21,16 +21,16 @@ class TaskController extends Controller
 {
     public function index(Request $request)
     {
-        if (!$this->ensureTasksTableExists()) {
+        if (! $this->ensureTasksTableExists()) {
             return CrmTaskResource::collection($this->emptyPaginator($request));
         }
 
         $user = $request->user();
         $query = CrmTask::query()
-            ->with(['assignedTo.roles', 'job.customer'])
+            ->with(['assignedTo.roles', 'job.customer', 'revenueOpportunity.customer'])
             ->latest('id');
 
-        if (!$user?->hasRole('admin')) {
+        if (! $user?->hasRole('admin')) {
             $query->where('assigned_to_user_id', $user?->id);
         }
 
@@ -68,14 +68,14 @@ class TaskController extends Controller
             'minutes' => 0,
         ]);
 
-        return new CrmTaskResource($task->load(['assignedTo.roles', 'job.customer']));
+        return new CrmTaskResource($task->load(['assignedTo.roles', 'job.customer', 'revenueOpportunity.customer']));
     }
 
     public function show(Request $request, CrmTask $task)
     {
         $this->authorizeTaskAccess($request, $task);
 
-        return new CrmTaskResource($task->load(['assignedTo.roles', 'job.customer']));
+        return new CrmTaskResource($task->load(['assignedTo.roles', 'job.customer', 'revenueOpportunity.customer']));
     }
 
     public function update(Request $request, CrmTask $task)
@@ -116,11 +116,11 @@ class TaskController extends Controller
 
         }
 
-        if (!$wasCompleted && $task->fresh()?->status === 'completed') {
+        if (! $wasCompleted && $task->fresh()?->status === 'completed') {
             $this->sendCompletionEmail($task->fresh());
         }
 
-        return new CrmTaskResource($task->fresh()->load(['assignedTo.roles', 'job.customer']));
+        return new CrmTaskResource($task->fresh()->load(['assignedTo.roles', 'job.customer', 'revenueOpportunity.customer']));
     }
 
     public function destroy(Request $request, CrmTask $task)
@@ -133,13 +133,13 @@ class TaskController extends Controller
 
     public function dashboard(Request $request): JsonResponse
     {
-        if (!$this->ensureTasksTableExists()) {
+        if (! $this->ensureTasksTableExists()) {
             return response()->json($this->emptyDashboard());
         }
 
         $user = $request->user();
         $query = CrmTask::query();
-        if (!$user?->hasRole('admin')) {
+        if (! $user?->hasRole('admin')) {
             $query->where('assigned_to_user_id', $user?->id);
         }
 
@@ -166,12 +166,12 @@ class TaskController extends Controller
 
     public function monthly(Request $request): JsonResponse
     {
-        if (!$this->ensureTasksTableExists()) {
+        if (! $this->ensureTasksTableExists()) {
             return response()->json($this->emptyMonthlyPayload());
         }
 
         $staffId = $request->query('staff_id') ? (int) $request->query('staff_id') : null;
-        if ($staffId && !$request->user()?->hasRole('admin')) {
+        if ($staffId && ! $request->user()?->hasRole('admin')) {
             abort(403);
         }
 
@@ -184,7 +184,7 @@ class TaskController extends Controller
     {
         $this->assertAdmin($request);
 
-        if (!$this->ensureTasksTableExists()) {
+        if (! $this->ensureTasksTableExists()) {
             return response()->json(['data' => []]);
         }
 
@@ -224,6 +224,7 @@ class TaskController extends Controller
         return $request->validate([
             'assigned_to_user_id' => [$required, 'integer', 'exists:users,id'],
             'job_id' => ['nullable', 'integer', 'exists:jobs,id'],
+            'revenue_opportunity_id' => ['nullable', 'integer', 'exists:revenue_opportunities,id'],
             'title' => [$required, 'string', 'max:255'],
             'description' => ['nullable', 'string'],
             'priority' => ['nullable', Rule::in(['low', 'normal', 'high', 'urgent'])],
@@ -244,7 +245,7 @@ class TaskController extends Controller
 
     private function assertAdmin(Request $request): void
     {
-        if (!$request->user()?->hasRole('admin')) {
+        if (! $request->user()?->hasRole('admin')) {
             abort(403);
         }
     }

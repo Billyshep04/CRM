@@ -66,4 +66,9 @@ class Customer extends Model
     {
         return $this->hasMany(Proposal::class);
     }
+
+    public function revenueOpportunities(): HasMany
+    {
+        return $this->hasMany(RevenueOpportunity::class);
+    }
 }

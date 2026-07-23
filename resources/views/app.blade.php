@@ -105,6 +105,8 @@
                 <nav class="nav-stack">
                     <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
                     <a href="#" class="nav-item admin-only" data-view="customers">Customers</a>
+                    <a href="#" class="nav-item staff-only" data-view="lead-discovery">Lead Discovery</a>
+                    <a href="#" class="nav-item staff-only" data-view="revenue-opportunities">Revenue Opportunities</a>
                     <a href="#" class="nav-item admin-only" data-view="jobs">Jobs</a>
                     <a href="#" class="nav-item admin-only" data-view="subscriptions">Subscriptions</a>
                     <a href="#" class="nav-item admin-only" data-view="costs">Costs</a>
@@ -187,6 +189,21 @@
                             <div class="card-value" data-stat="subscriptions">--</div>
                             <div class="card-meta">Recurring monthly</div>
                         </div>
+                        <div class="card opportunity-metric-card">
+                            <div class="card-label">Potential MRR</div>
+                            <div class="card-value" id="dashboard-potential-mrr">--</div>
+                            <div class="card-meta">Open recurring-revenue opportunities</div>
+                        </div>
+                        <div class="card opportunity-metric-card">
+                            <div class="card-label">Pipeline value</div>
+                            <div class="card-value" id="dashboard-opportunity-value">--</div>
+                            <div class="card-meta">Potential project revenue</div>
+                        </div>
+                        <div class="card opportunity-metric-card">
+                            <div class="card-label">Open opportunities</div>
+                            <div class="card-value" id="dashboard-opportunity-count">--</div>
+                            <div class="card-meta">Hosting, SEO, care plans and upsells</div>
+                        </div>
                     </section>
 
                     <section class="content-grid">
@@ -238,6 +255,78 @@
                                 <button class="btn btn-outline" data-go-view="jobs">Create job</button>
                                 <button class="btn btn-outline" data-go-view="subscriptions">Start subscription</button>
                             </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view" data-view="lead-discovery">
+                    <section class="content-grid lead-discovery-layout">
+                        <div class="card">
+                            <div class="card-header"><div><div class="card-title">Discover businesses</div><div class="card-subtitle">Search Google Places and import businesses as CRM leads.</div></div></div>
+                            <form id="lead-discovery-form" class="form-stack">
+                                <label class="field"><span>Business type or search</span><input name="query" placeholder="e.g. plumbers, restaurants, accountants" maxlength="200" required></label>
+                                <label class="field"><span>Location</span><input name="location" placeholder="e.g. Norwich, Norfolk" maxlength="200" required></label>
+                                <label class="field"><span>Maximum results</span><select name="limit"><option value="10">10</option><option value="20" selected>20</option><option value="40">40</option><option value="60">60</option></select></label>
+                                <label class="check-row"><input type="checkbox" name="auto_audit" checked><span>Queue website audits automatically</span></label>
+                                <div id="lead-discovery-status" class="form-hint"></div>
+                                <button class="btn btn-primary" type="submit">Discover new leads</button>
+                            </form>
+                        </div>
+                        <div class="card wide discovered-leads-card">
+                            <div class="card-header"><div><div class="card-title">Discovered leads</div><div class="card-subtitle">External businesses ready for review and conversion.</div></div><button class="btn btn-outline" id="lead-discovery-refresh" type="button">Refresh</button></div>
+                            <div class="table" id="discovered-leads-table">
+                                <div class="table-row table-header discovered-leads"><span>Business</span><span>Website</span><span>Google</span><span>Contacted</span><span>Actions</span></div>
+                                <div class="table-row table-empty discovered-leads"><span>No leads loaded.</span><span></span><span></span><span></span><span></span></div>
+                            </div>
+                        </div>
+                        <div class="card wide discovery-runs-card">
+                            <div class="card-header"><div><div class="card-title">Discovery activity</div><div class="card-subtitle">Queued searches and import results.</div></div></div>
+                            <div class="table" id="lead-discovery-runs">
+                                <div class="table-row table-header discovery-runs"><span>Search</span><span>Status</span><span>Found</span><span>New</span><span>Updated</span><span>Started</span><span>Actions</span></div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view" data-view="revenue-opportunities">
+                    <section class="panel-grid opportunity-summary-grid">
+                        <div class="card highlight"><div class="card-label">Potential MRR</div><div class="card-value" id="opportunity-potential-mrr">--</div><div class="card-meta">Open monthly revenue</div></div>
+                        <div class="card"><div class="card-label">Weighted MRR</div><div class="card-value" id="opportunity-weighted-mrr">--</div><div class="card-meta">Adjusted by confidence</div></div>
+                        <div class="card"><div class="card-label">Project pipeline</div><div class="card-value" id="opportunity-project-value">--</div><div class="card-meta">Potential one-off work</div></div>
+                        <div class="card"><div class="card-label">Renewals due</div><div class="card-value" id="opportunity-renewals">--</div><div class="card-meta">Next 30 days</div></div>
+                    </section>
+                    <section class="content-grid opportunity-layout">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div><div class="card-title">Revenue opportunities</div><div class="card-subtitle">Turn customer needs into recurring and project revenue.</div></div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline admin-inline-only" id="opportunities-recommend" type="button">Find opportunities</button>
+                                    <button class="btn btn-outline" id="opportunities-refresh" type="button">Refresh</button>
+                                </div>
+                            </div>
+                            <div class="filters opportunity-filters">
+                                <label class="field"><span>Status</span><select id="opportunities-filter-status"><option value="all">All open</option><option value="identified">Identified</option><option value="qualified">Qualified</option><option value="proposed">Proposed</option><option value="won">Won</option><option value="lost">Lost</option><option value="deferred">Deferred</option></select></label>
+                                <label class="field"><span>Service</span><select id="opportunities-filter-type"><option value="all">All services</option><option value="hosting">Hosting</option><option value="seo">SEO</option><option value="care_plan">Care plan</option><option value="website_management">Website management</option><option value="new_website">New website</option><option value="upsell">Upsell</option><option value="retention">Retention</option></select></label>
+                            </div>
+                            <div class="table" id="opportunities-table">
+                                <div class="table-row table-header opportunities"><span>Customer</span><span>Opportunity</span><span>Status</span><span>Project</span><span>MRR</span><span>Next action</span><span>Actions</span></div>
+                                <div class="table-row table-empty opportunities"><span>Loading opportunities...</span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header"><div><div class="card-title" id="opportunity-form-title">New opportunity</div><div class="card-subtitle">Record a growth or retention opportunity.</div></div></div>
+                            <form id="opportunity-form" class="form-stack">
+                                <label class="field"><span>Customer</span><select name="customer_id" id="opportunity-customer-select" required></select></label>
+                                <label class="field"><span>Service</span><select name="type" required><option value="hosting">Website Hosting</option><option value="seo">SEO Package</option><option value="care_plan">Website Care Plan</option><option value="website_management">Website Management</option><option value="new_website">New Website Build</option><option value="upsell">Upsell</option><option value="retention">Customer Retention</option></select></label>
+                                <label class="field"><span>Title</span><input name="title" maxlength="200" required></label>
+                                <div class="form-grid"><label class="field"><span>Project value</span><input name="estimated_project_value" type="number" min="0" step="0.01" value="0"></label><label class="field"><span>Monthly revenue</span><input name="estimated_monthly_revenue" type="number" min="0" step="0.01" value="0"></label></div>
+                                <div class="form-grid"><label class="field"><span>Confidence</span><input name="confidence" type="number" min="0" max="100" value="50"></label><label class="field"><span>Status</span><select name="status"><option value="identified">Identified</option><option value="qualified">Qualified</option><option value="proposed">Proposed</option><option value="won">Won</option><option value="lost">Lost</option><option value="deferred">Deferred</option></select></label></div>
+                                <label class="field"><span>Next action</span><input name="next_action_at" type="date"></label>
+                                <label class="field"><span>Recommendation</span><textarea name="recommendation" rows="3"></textarea></label>
+                                <label class="field"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+                                <div id="opportunity-form-status" class="form-hint"></div>
+                                <div class="row-actions"><button class="btn btn-primary" type="submit">Save opportunity</button><button class="btn btn-outline" id="opportunity-form-cancel" type="button">Cancel</button></div>
+                            </form>
                         </div>
                     </section>
                 </section>
@@ -1684,6 +1773,21 @@
                     </section>
                 </section>
             </main>
+        </div>
+
+        <div class="crm-modal-backdrop" id="opportunity-follow-up-modal" hidden>
+            <section class="crm-modal" role="dialog" aria-modal="true" aria-labelledby="opportunity-follow-up-title">
+                <div class="crm-modal-header">
+                    <div><div class="card-title" id="opportunity-follow-up-title">Schedule follow-up</div><div class="card-subtitle" id="opportunity-follow-up-subtitle">Choose when the administrator should be reminded.</div></div>
+                    <button class="crm-modal-close" id="opportunity-follow-up-close" type="button" aria-label="Close">×</button>
+                </div>
+                <form id="opportunity-follow-up-form" class="form-stack">
+                    <label class="field"><span>Follow-up date</span><input type="date" name="due_date" id="opportunity-follow-up-date" required></label>
+                    <label class="field"><span>Notes</span><textarea name="notes" rows="5" placeholder="What should you discuss or prepare for this follow-up?"></textarea></label>
+                    <div id="opportunity-follow-up-status" class="form-hint"></div>
+                    <button class="btn btn-primary" type="submit">Save follow-up</button>
+                </form>
+            </section>
         </div>
 
         <div id="app-toast" class="toast" role="status" aria-live="polite"></div>

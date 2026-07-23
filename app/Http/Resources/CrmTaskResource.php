@@ -14,6 +14,7 @@ class CrmTaskResource extends JsonResource
             'assigned_to_user_id' => $this->assigned_to_user_id,
             'created_by_user_id' => $this->created_by_user_id,
             'job_id' => $this->job_id,
+            'revenue_opportunity_id' => $this->revenue_opportunity_id,
             'title' => $this->title,
             'description' => $this->description,
             'priority' => $this->priority,
@@ -24,6 +25,7 @@ class CrmTaskResource extends JsonResource
             'total_minutes' => $this->totalMinutes(),
             'staff_notes' => $this->staff_notes,
             'completed_at' => $this->completed_at,
+            'reminder_sent_at' => $this->reminder_sent_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'assigned_to' => $this->whenLoaded('assignedTo', fn () => [
@@ -37,6 +39,7 @@ class CrmTaskResource extends JsonResource
                 'email' => $this->createdBy?->email,
             ]),
             'job' => new JobResource($this->whenLoaded('job')),
+            'revenue_opportunity' => new RevenueOpportunityResource($this->whenLoaded('revenueOpportunity')),
         ];
     }
 }

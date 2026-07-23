@@ -32,6 +32,34 @@ const dom = {
     dashboardProfit: document.getElementById('dashboard-profit'),
     dashboardProfitChart: document.getElementById('dashboard-profit-chart'),
     dashboardProfitChartRange: document.getElementById('dashboard-profit-chart-range'),
+    dashboardPotentialMrr: document.getElementById('dashboard-potential-mrr'),
+    dashboardOpportunityValue: document.getElementById('dashboard-opportunity-value'),
+    dashboardOpportunityCount: document.getElementById('dashboard-opportunity-count'),
+    opportunityPotentialMrr: document.getElementById('opportunity-potential-mrr'),
+    opportunityWeightedMrr: document.getElementById('opportunity-weighted-mrr'),
+    opportunityProjectValue: document.getElementById('opportunity-project-value'),
+    opportunityRenewals: document.getElementById('opportunity-renewals'),
+    opportunitiesTable: document.getElementById('opportunities-table'),
+    opportunitiesRefresh: document.getElementById('opportunities-refresh'),
+    opportunitiesRecommend: document.getElementById('opportunities-recommend'),
+    opportunitiesFilterStatus: document.getElementById('opportunities-filter-status'),
+    opportunitiesFilterType: document.getElementById('opportunities-filter-type'),
+    opportunityForm: document.getElementById('opportunity-form'),
+    opportunityFormTitle: document.getElementById('opportunity-form-title'),
+    opportunityFormStatus: document.getElementById('opportunity-form-status'),
+    opportunityFormCancel: document.getElementById('opportunity-form-cancel'),
+    opportunityCustomerSelect: document.getElementById('opportunity-customer-select'),
+    opportunityFollowUpModal: document.getElementById('opportunity-follow-up-modal'),
+    opportunityFollowUpForm: document.getElementById('opportunity-follow-up-form'),
+    opportunityFollowUpDate: document.getElementById('opportunity-follow-up-date'),
+    opportunityFollowUpSubtitle: document.getElementById('opportunity-follow-up-subtitle'),
+    opportunityFollowUpStatus: document.getElementById('opportunity-follow-up-status'),
+    opportunityFollowUpClose: document.getElementById('opportunity-follow-up-close'),
+    leadDiscoveryForm: document.getElementById('lead-discovery-form'),
+    leadDiscoveryStatus: document.getElementById('lead-discovery-status'),
+    leadDiscoveryRefresh: document.getElementById('lead-discovery-refresh'),
+    discoveredLeadsTable: document.getElementById('discovered-leads-table'),
+    leadDiscoveryRuns: document.getElementById('lead-discovery-runs'),
     monthlyFinanceMonths: document.getElementById('monthly-finance-months'),
     monthlyFinanceRefresh: document.getElementById('monthly-finance-refresh'),
     monthlyFinanceSelectedMonth: document.getElementById('monthly-finance-selected-month'),
@@ -269,6 +297,9 @@ const state = {
     staffTracking: [],
     subscriptionMonths: [],
     invoices: [],
+    revenueOpportunities: [],
+    discoveredLeads: [],
+    leadDiscoveryRuns: [],
     staffUsers: [],
     monthlyFinance: [],
     monthlyFinanceSelectedMonth: null,
@@ -306,6 +337,7 @@ const state = {
             status: 'all',
             staff: 'all',
         },
+        revenueOpportunities: { status: 'all', type: 'all' },
     },
     pagination: {
         customers: { page: 1, lastPage: 1 },
@@ -327,6 +359,8 @@ const state = {
         task: null,
         invoice: null,
         website: null,
+        revenueOpportunity: null,
+        opportunityFollowUp: null,
     },
     invoiceBillables: {
         jobsByCustomer: {},
@@ -342,6 +376,14 @@ const viewMeta = {
     customers: {
         title: 'Customers',
         subtitle: 'Manage customer profiles and portal access.',
+    },
+    'revenue-opportunities': {
+        title: 'Revenue Opportunities',
+        subtitle: 'Grow recurring revenue, retain customers, and manage upsells.',
+    },
+    'lead-discovery': {
+        title: 'Lead Discovery',
+        subtitle: 'Find external businesses, audit their websites, and build a qualified lead pipeline.',
     },
     jobs: {
         title: 'Jobs',
@@ -526,6 +568,15 @@ function setActiveView(view) {
     }
     if (view === 'jobs') {
         ensureCustomersLoaded().then(loadJobs);
+    }
+    if (view === 'revenue-opportunities') {
+        ensureCustomersLoaded().then(() => {
+            populateOpportunityCustomerSelect();
+            loadRevenueOpportunities();
+        });
+    }
+    if (view === 'lead-discovery') {
+        loadLeadDiscoveryData();
     }
     if (view === 'tasks') {
         Promise.all([loadStaffUsers(), ensureJobsLoaded()])
@@ -1013,6 +1064,7 @@ function renderInvoiceRows(container, invoices, emptyMessage) {
 }
 
 async function loadStaffStats() {
+    loadOpportunitySummary();
     if (state.role === 'staff') {
         const result = await api.get('/api/tasks/dashboard');
         const data = result?.data ?? {};
@@ -2424,7 +2476,7 @@ async function handleStaffUserSubmit(event) {
 }
 
 function populateCustomerSelects(customers) {
-    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect];
+    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect, dom.opportunityCustomerSelect];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value;
@@ -2470,6 +2522,306 @@ function populateCustomerFilterSelects(customers) {
 function getCustomerName(id) {
     const source = state.customerOptions.length ? state.customerOptions : state.customers;
     return source.find((customer) => customer.id === id)?.name || 'Unknown';
+}
+
+function populateOpportunityCustomerSelect() {
+    populateCustomerSelects(state.customerOptions.length ? state.customerOptions : state.customers);
+}
+
+async function loadOpportunitySummary() {
+    try {
+        const response = await api.get('/api/revenue-opportunities/summary');
+        const data = response?.data ?? {};
+        if (dom.dashboardPotentialMrr) dom.dashboardPotentialMrr.textContent = formatCurrency(Number(data.potential_mrr || 0));
+        if (dom.dashboardOpportunityValue) dom.dashboardOpportunityValue.textContent = formatCurrency(Number(data.pipeline_project_value || 0));
+        if (dom.dashboardOpportunityCount) dom.dashboardOpportunityCount.textContent = String(data.open_count || 0);
+        if (dom.opportunityPotentialMrr) dom.opportunityPotentialMrr.textContent = formatCurrency(Number(data.potential_mrr || 0));
+        if (dom.opportunityWeightedMrr) dom.opportunityWeightedMrr.textContent = formatCurrency(Number(data.weighted_mrr || 0));
+        if (dom.opportunityProjectValue) dom.opportunityProjectValue.textContent = formatCurrency(Number(data.pipeline_project_value || 0));
+        if (dom.opportunityRenewals) dom.opportunityRenewals.textContent = String(data.renewals_due_30_days || 0);
+    } catch (error) {
+        [dom.dashboardPotentialMrr, dom.dashboardOpportunityValue, dom.dashboardOpportunityCount].forEach((element) => {
+            if (element) element.textContent = '--';
+        });
+    }
+}
+
+async function loadLeadDiscoveryData() {
+    if (!dom.discoveredLeadsTable || !dom.leadDiscoveryRuns) return;
+    try {
+        const [leadsResponse, runsResponse] = await Promise.all([
+            api.get('/api/businesses', { params: { source: 'google_places', per_page: 100 } }),
+            api.get('/api/lead-discovery', { params: { per_page: 20 } }),
+        ]);
+        state.discoveredLeads = leadsResponse?.data?.data || [];
+        state.leadDiscoveryRuns = runsResponse?.data?.data || [];
+        renderDiscoveredLeads();
+        renderDiscoveryRuns();
+        if (state.view === 'lead-discovery' && state.leadDiscoveryRuns.some((run) => ['pending', 'running'].includes(run.status))) {
+            window.setTimeout(loadLeadDiscoveryData, 3000);
+        }
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to load discovered leads.'), true);
+    }
+}
+
+function renderDiscoveredLeads() {
+    resetTable(dom.discoveredLeadsTable);
+    if (!state.discoveredLeads.length) {
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty discovered-leads';
+        row.innerHTML = '<span>No external leads discovered yet.</span><span></span><span></span><span></span><span></span>';
+        dom.discoveredLeadsTable.appendChild(row);
+        return;
+    }
+    state.discoveredLeads.forEach((lead) => {
+        const row = document.createElement('div');
+        row.className = 'table-row discovered-leads';
+        const website = lead.website_url ? `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener">${escapeHtml(new URL(lead.website_url).hostname)}</a>` : '<span class="text-muted">No website</span>';
+        const converted = lead.status === 'converted' || lead.customer_id;
+        row.innerHTML = `<span><strong>${escapeHtml(lead.name)}</strong><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span><label class="lead-contacted-toggle"><input type="checkbox" data-lead-contacted="${escapeHtml(lead.id)}" ${lead.contacted ? 'checked' : ''}><span>${lead.contacted ? 'Yes' : 'No'}</span></label></span><span class="lead-row-actions"><button class="btn btn-primary" type="button" data-lead-convert="${escapeHtml(lead.id)}" ${converted ? 'disabled' : ''}>${converted ? 'Converted' : 'Convert'}</button><button class="btn btn-danger" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
+        dom.discoveredLeadsTable.appendChild(row);
+    });
+}
+
+function renderDiscoveryRuns() {
+    resetTable(dom.leadDiscoveryRuns);
+    if (!state.leadDiscoveryRuns.length) {
+        const row = document.createElement('div');
+        row.className = 'table-row table-empty discovery-runs';
+        row.innerHTML = '<span>No discovery searches yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.leadDiscoveryRuns.appendChild(row);
+        return;
+    }
+    state.leadDiscoveryRuns.forEach((run) => {
+        const row = document.createElement('div');
+        row.className = 'table-row discovery-runs';
+        const failure = run.failure_message ? `<small>${escapeHtml(run.failure_message)}</small>` : '';
+        row.innerHTML = `<span><strong>${escapeHtml(run.query)}</strong><small>${escapeHtml(run.location)}</small></span><span><span class="badge">${escapeHtml(run.status)}</span>${failure}</span><span>${run.results_found}</span><span>${run.leads_created}</span><span>${run.leads_updated}</span><span>${formatDate(run.started_at || run.created_at)}</span><span><button class="btn btn-danger" type="button" data-discovery-delete="${escapeHtml(run.id)}">Delete</button></span>`;
+        dom.leadDiscoveryRuns.appendChild(row);
+    });
+}
+
+async function handleDiscoveredLeadAction(event) {
+    const checkbox = event.target.closest('[data-lead-contacted]');
+    const convertButton = event.target.closest('[data-lead-convert]');
+    const deleteButton = event.target.closest('[data-lead-delete]');
+    if (checkbox && event.type !== 'change') return;
+    try {
+        if (checkbox) {
+            checkbox.disabled = true;
+            await api.patch(`/api/businesses/${checkbox.dataset.leadContacted}/contacted`, { contacted: checkbox.checked });
+            showToast(checkbox.checked ? 'Lead marked as contacted.' : 'Contacted mark removed.');
+        } else if (convertButton) {
+            if (!window.confirm('Convert this lead into a CRM customer?')) return;
+            convertButton.disabled = true;
+            await api.post(`/api/businesses/${convertButton.dataset.leadConvert}/convert`);
+            state.customers = [];
+            state.customerOptions = [];
+            showToast('Lead converted to a customer.');
+        } else if (deleteButton) {
+            if (!window.confirm('Delete this lead? This will remove it from the lead list.')) return;
+            deleteButton.disabled = true;
+            await api.delete(`/api/businesses/${deleteButton.dataset.leadDelete}`);
+            showToast('Lead deleted.');
+        } else return;
+        await loadLeadDiscoveryData();
+    } catch (error) {
+        if (checkbox) checkbox.checked = !checkbox.checked;
+        showToast(getErrorMessage(error, 'Unable to update the lead.'), true);
+        await loadLeadDiscoveryData();
+    }
+}
+
+async function handleDiscoveryRunAction(event) {
+    const button = event.target.closest('[data-discovery-delete]');
+    if (!button || !window.confirm('Delete this discovery activity? Imported leads will be kept.')) return;
+    button.disabled = true;
+    try {
+        await api.delete(`/api/lead-discovery/${button.dataset.discoveryDelete}`);
+        showToast('Discovery activity deleted.');
+        await loadLeadDiscoveryData();
+    } catch (error) {
+        button.disabled = false;
+        showToast(getErrorMessage(error, 'Unable to delete discovery activity.'), true);
+    }
+}
+
+async function handleLeadDiscoverySubmit(event) {
+    event.preventDefault();
+    const form = new FormData(dom.leadDiscoveryForm);
+    const submit = dom.leadDiscoveryForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    setFormStatus(dom.leadDiscoveryStatus, 'Queueing business search...');
+    try {
+        await api.post('/api/lead-discovery', {
+            query: form.get('query'), location: form.get('location'), limit: Number(form.get('limit')),
+            auto_audit: form.get('auto_audit') === 'on',
+        });
+        setFormStatus(dom.leadDiscoveryStatus, 'Search queued. Keep the queue worker running; results will appear automatically.');
+        showToast('External lead discovery queued.');
+        await loadLeadDiscoveryData();
+    } catch (error) {
+        setFormStatus(dom.leadDiscoveryStatus, getErrorMessage(error, 'Unable to start lead discovery.'), true);
+    } finally {
+        submit.disabled = false;
+    }
+}
+
+async function loadRevenueOpportunities() {
+    if (!dom.opportunitiesTable) return;
+    resetTable(dom.opportunitiesTable);
+    const loading = document.createElement('div');
+    loading.className = 'table-row table-empty opportunities';
+    loading.innerHTML = '<span>Loading opportunities...</span><span></span><span></span><span></span><span></span><span></span><span></span>';
+    dom.opportunitiesTable.appendChild(loading);
+    try {
+        const query = buildQuery({
+            per_page: 100,
+            status: state.filters.revenueOpportunities.status === 'all' ? null : state.filters.revenueOpportunities.status,
+            type: state.filters.revenueOpportunities.type === 'all' ? null : state.filters.revenueOpportunities.type,
+        });
+        const response = await api.get(`/api/revenue-opportunities${query}`);
+        state.revenueOpportunities = response?.data?.data ?? [];
+        renderRevenueOpportunities();
+        await loadOpportunitySummary();
+    } catch (error) {
+        resetTable(dom.opportunitiesTable);
+        const empty = document.createElement('div');
+        empty.className = 'table-row table-empty opportunities';
+        empty.innerHTML = '<span>Unable to load opportunities.</span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.opportunitiesTable.appendChild(empty);
+    }
+}
+
+function renderRevenueOpportunities() {
+    if (!dom.opportunitiesTable) return;
+    resetTable(dom.opportunitiesTable);
+    if (!state.revenueOpportunities.length) {
+        const empty = document.createElement('div');
+        empty.className = 'table-row table-empty opportunities';
+        empty.innerHTML = '<span>No opportunities found.</span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        dom.opportunitiesTable.appendChild(empty);
+        return;
+    }
+    state.revenueOpportunities.forEach((opportunity) => {
+        const row = document.createElement('div');
+        row.className = 'table-row opportunities';
+        row.innerHTML = `
+            <span>${escapeHtml(opportunity.customer?.name || getCustomerName(opportunity.customer_id))}</span>
+            <span><strong>${escapeHtml(opportunity.type_label)}</strong><small>${escapeHtml(opportunity.title)}</small></span>
+            <span><span class="pill ${opportunity.status === 'won' ? 'success' : 'outline'}">${escapeHtml(opportunity.status)}</span></span>
+            <span>${formatCurrency(Number(opportunity.estimated_project_value || 0))}</span>
+            <span>${formatCurrency(Number(opportunity.estimated_monthly_revenue || 0))}</span>
+            <span>${formatDate(opportunity.next_action_at)}</span>
+            <div class="row-actions"><button class="btn btn-outline btn-small" data-action="edit" data-id="${opportunity.id}">Edit</button>${opportunity.status !== 'won' ? `<button class="btn btn-primary btn-small" data-action="won" data-id="${opportunity.id}">Won</button>` : ''}<button class="btn btn-outline btn-small" data-action="follow-up" data-id="${opportunity.id}">Follow up</button><button class="btn btn-outline btn-small opportunity-delete" data-action="delete" data-id="${opportunity.id}">Delete</button></div>
+        `;
+        dom.opportunitiesTable.appendChild(row);
+    });
+}
+
+function resetOpportunityForm() {
+    if (!dom.opportunityForm) return;
+    dom.opportunityForm.reset();
+    state.editing.revenueOpportunity = null;
+    if (dom.opportunityFormTitle) dom.opportunityFormTitle.textContent = 'New opportunity';
+    setFormStatus(dom.opportunityFormStatus, '');
+    populateOpportunityCustomerSelect();
+}
+
+function editRevenueOpportunity(opportunity) {
+    if (!dom.opportunityForm || !opportunity) return;
+    state.editing.revenueOpportunity = opportunity.id;
+    if (dom.opportunityFormTitle) dom.opportunityFormTitle.textContent = 'Edit opportunity';
+    ['customer_id', 'type', 'title', 'estimated_project_value', 'estimated_monthly_revenue', 'confidence', 'status', 'recommendation', 'notes'].forEach((name) => {
+        const field = dom.opportunityForm.elements.namedItem(name);
+        if (field) field.value = opportunity[name] ?? '';
+    });
+    const nextAction = dom.opportunityForm.elements.namedItem('next_action_at');
+    if (nextAction) nextAction.value = opportunity.next_action_at ? String(opportunity.next_action_at).slice(0, 10) : '';
+}
+
+async function handleOpportunitySubmit(event) {
+    event.preventDefault();
+    const formData = new FormData(dom.opportunityForm);
+    const payload = {
+        customer_id: Number(formData.get('customer_id')), type: formData.get('type'), title: String(formData.get('title') || '').trim(),
+        estimated_project_value: Number(formData.get('estimated_project_value') || 0), estimated_monthly_revenue: Number(formData.get('estimated_monthly_revenue') || 0),
+        confidence: Number(formData.get('confidence') || 0), status: formData.get('status'),
+        next_action_at: formData.get('next_action_at') || null, recommendation: String(formData.get('recommendation') || '').trim() || null,
+        notes: String(formData.get('notes') || '').trim() || null,
+    };
+    try {
+        if (state.editing.revenueOpportunity) await api.put(`/api/revenue-opportunities/${state.editing.revenueOpportunity}`, payload);
+        else await api.post('/api/revenue-opportunities', payload);
+        showToast(state.editing.revenueOpportunity ? 'Opportunity updated.' : 'Opportunity created.');
+        resetOpportunityForm();
+        await loadRevenueOpportunities();
+    } catch (error) {
+        setFormStatus(dom.opportunityFormStatus, getErrorMessage(error, 'Unable to save opportunity.'), true);
+    }
+}
+
+async function handleOpportunityAction(event) {
+    const button = event.target.closest('[data-action][data-id]');
+    if (!button) return;
+    const opportunity = state.revenueOpportunities.find((item) => item.id === button.dataset.id);
+    if (!opportunity) return;
+    if (button.dataset.action === 'edit') return editRevenueOpportunity(opportunity);
+    if (button.dataset.action === 'follow-up') return openOpportunityFollowUp(opportunity);
+    try {
+        if (button.dataset.action === 'won') await api.put(`/api/revenue-opportunities/${opportunity.id}`, { status: 'won' });
+        if (button.dataset.action === 'delete') {
+            if (!window.confirm(`Delete the ${opportunity.type_label} opportunity for ${opportunity.customer?.name || 'this customer'}?`)) return;
+            await api.delete(`/api/revenue-opportunities/${opportunity.id}`);
+            showToast('Opportunity deleted.');
+        }
+        await loadRevenueOpportunities();
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to update opportunity.'), true);
+    }
+}
+
+function openOpportunityFollowUp(opportunity) {
+    if (!dom.opportunityFollowUpModal || !dom.opportunityFollowUpForm) return;
+    state.editing.opportunityFollowUp = opportunity.id;
+    dom.opportunityFollowUpForm.reset();
+    const suggestedDate = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    if (dom.opportunityFollowUpDate) {
+        dom.opportunityFollowUpDate.min = new Date().toISOString().slice(0, 10);
+        dom.opportunityFollowUpDate.value = opportunity.next_action_at ? String(opportunity.next_action_at).slice(0, 10) : suggestedDate;
+    }
+    if (dom.opportunityFollowUpSubtitle) dom.opportunityFollowUpSubtitle.textContent = `${opportunity.customer?.name || 'Customer'} · ${opportunity.type_label}`;
+    setFormStatus(dom.opportunityFollowUpStatus, 'An administrator email will be sent on the selected date.');
+    dom.opportunityFollowUpModal.hidden = false;
+    window.setTimeout(() => dom.opportunityFollowUpDate?.focus(), 0);
+}
+
+function closeOpportunityFollowUp() {
+    if (dom.opportunityFollowUpModal) dom.opportunityFollowUpModal.hidden = true;
+    state.editing.opportunityFollowUp = null;
+    setFormStatus(dom.opportunityFollowUpStatus, '');
+}
+
+async function handleOpportunityFollowUpSubmit(event) {
+    event.preventDefault();
+    const opportunityId = state.editing.opportunityFollowUp;
+    if (!opportunityId) return;
+    const data = new FormData(dom.opportunityFollowUpForm);
+    const submit = dom.opportunityFollowUpForm.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+        await api.post(`/api/revenue-opportunities/${opportunityId}/follow-up`, {
+            due_date: data.get('due_date'), notes: String(data.get('notes') || '').trim() || null,
+        });
+        closeOpportunityFollowUp();
+        showToast('Follow-up saved. The administrator will be emailed on that date.');
+        await loadRevenueOpportunities();
+    } catch (error) {
+        setFormStatus(dom.opportunityFollowUpStatus, getErrorMessage(error, 'Unable to save the follow-up.'), true);
+    } finally {
+        submit.disabled = false;
+    }
 }
 
 function isViewingArchivedCustomers() {
@@ -5641,6 +5993,46 @@ if (dom.proposalsRefresh) {
 
 if (dom.proposalsLoadMore) {
     dom.proposalsLoadMore.addEventListener('click', () => loadProposals(true));
+}
+
+if (dom.opportunityForm) dom.opportunityForm.addEventListener('submit', handleOpportunitySubmit);
+if (dom.opportunityFollowUpForm) dom.opportunityFollowUpForm.addEventListener('submit', handleOpportunityFollowUpSubmit);
+if (dom.opportunityFollowUpClose) dom.opportunityFollowUpClose.addEventListener('click', closeOpportunityFollowUp);
+if (dom.opportunityFollowUpModal) dom.opportunityFollowUpModal.addEventListener('click', (event) => { if (event.target === dom.opportunityFollowUpModal) closeOpportunityFollowUp(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && dom.opportunityFollowUpModal && !dom.opportunityFollowUpModal.hidden) closeOpportunityFollowUp(); });
+if (dom.leadDiscoveryForm) dom.leadDiscoveryForm.addEventListener('submit', handleLeadDiscoverySubmit);
+if (dom.leadDiscoveryRefresh) dom.leadDiscoveryRefresh.addEventListener('click', loadLeadDiscoveryData);
+if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('change', handleDiscoveredLeadAction);
+if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('click', handleDiscoveredLeadAction);
+if (dom.leadDiscoveryRuns) dom.leadDiscoveryRuns.addEventListener('click', handleDiscoveryRunAction);
+if (dom.opportunityFormCancel) dom.opportunityFormCancel.addEventListener('click', resetOpportunityForm);
+if (dom.opportunitiesTable) dom.opportunitiesTable.addEventListener('click', handleOpportunityAction);
+if (dom.opportunitiesRefresh) dom.opportunitiesRefresh.addEventListener('click', loadRevenueOpportunities);
+if (dom.opportunitiesRecommend) {
+    dom.opportunitiesRecommend.addEventListener('click', async () => {
+        dom.opportunitiesRecommend.disabled = true;
+        try {
+            const response = await api.post('/api/revenue-opportunities/recommend');
+            showToast(`${response?.data?.created ?? 0} new opportunities found.`);
+            await loadRevenueOpportunities();
+        } catch (error) {
+            showToast(getErrorMessage(error, 'Unable to find opportunities.'), true);
+        } finally {
+            dom.opportunitiesRecommend.disabled = false;
+        }
+    });
+}
+if (dom.opportunitiesFilterStatus) {
+    dom.opportunitiesFilterStatus.addEventListener('change', () => {
+        state.filters.revenueOpportunities.status = dom.opportunitiesFilterStatus.value;
+        loadRevenueOpportunities();
+    });
+}
+if (dom.opportunitiesFilterType) {
+    dom.opportunitiesFilterType.addEventListener('change', () => {
+        state.filters.revenueOpportunities.type = dom.opportunitiesFilterType.value;
+        loadRevenueOpportunities();
+    });
 }
 
 if (dom.proposalsFilterStatus) {
