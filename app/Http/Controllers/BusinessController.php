@@ -3,13 +3,17 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Leads\ConvertLeadToCustomer;
+use App\Actions\WebsiteAudits\StartWebsiteAudit;
 use App\Http\Resources\BusinessResource;
 use App\Http\Resources\CustomerResource;
+use App\Http\Resources\LeadIntelligenceResource;
+use App\Http\Resources\WebsiteAuditResource;
 use App\Models\Business;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class BusinessController extends Controller
 {
@@ -39,6 +43,25 @@ class BusinessController extends Controller
     public function show(Business $business): BusinessResource
     {
         return new BusinessResource($business->load('currentLeadScore'));
+    }
+
+    public function intelligence(Business $business): LeadIntelligenceResource
+    {
+        $business->load([
+            'currentLeadScore',
+            'websiteAudits' => fn ($query) => $query->with(['findings', 'seoAudit', 'performanceAudit', 'accessibilityAudit', 'securityAudit'])
+                ->latest('created_at')->limit(10),
+        ]);
+
+        return new LeadIntelligenceResource($business);
+    }
+
+    public function audit(Request $request, Business $business, StartWebsiteAudit $action): JsonResponse
+    {
+        abort_unless($business->website_url, 422, 'This lead does not have a website URL.');
+        $audit = $action->execute($business->website_url, null, $business->id, $request->user()->id);
+
+        return (new WebsiteAuditResource($audit))->response()->setStatusCode(Response::HTTP_ACCEPTED);
     }
 
     public function update(Request $request, Business $business): BusinessResource

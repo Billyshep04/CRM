@@ -10,6 +10,7 @@ class AuditFindingResource extends JsonResource
     public function toArray(Request $request): array
     {
         return [
+            'id' => $this->id,
             'key' => $this->check_key,
             'category' => $this->category,
             'severity' => $this->severity->value,

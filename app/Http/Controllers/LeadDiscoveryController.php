@@ -34,7 +34,12 @@ class LeadDiscoveryController extends Controller
             'provider' => config('lead-discovery.provider'), 'query' => $data['query'], 'location' => $data['location'],
             'requested_limit' => $data['limit'] ?? 20, 'auto_audit' => $data['auto_audit'] ?? config('lead-discovery.auto_audit', true), 'status' => 'pending',
         ]);
-        DiscoverExternalLeads::dispatch($run->id)->afterCommit();
+        if (config('lead-discovery.run_synchronously', false)) {
+            DiscoverExternalLeads::dispatchSync($run->id);
+            $run->refresh();
+        } else {
+            DiscoverExternalLeads::dispatch($run->id)->afterCommit();
+        }
 
         return (new LeadDiscoveryRunResource($run))->response()->setStatusCode(Response::HTTP_ACCEPTED);
     }

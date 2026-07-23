@@ -3,6 +3,7 @@
 return [
     'provider' => env('LEAD_DISCOVERY_PROVIDER', 'google_places'),
     'queue' => env('LEAD_DISCOVERY_QUEUE', 'discovery'),
+    'run_synchronously' => env('LEAD_DISCOVERY_RUN_SYNCHRONOUSLY', false),
     'auto_audit' => env('LEAD_DISCOVERY_AUTO_AUDIT', true),
     'google_places' => [
         'api_key' => env('GOOGLE_PLACES_API_KEY'),

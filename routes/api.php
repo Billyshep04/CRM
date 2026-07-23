@@ -6,6 +6,7 @@ use App\Http\Controllers\AdminMailSettingController;
 use App\Http\Controllers\AdminProposalFormController;
 use App\Http\Controllers\AdminStaffUserController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\AuditFindingController;
 use App\Http\Controllers\BrandSettingController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\CostController;
@@ -53,6 +54,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('revenue-opportunities/{revenueOpportunity}/follow-up', [RevenueOpportunityController::class, 'scheduleFollowUp']);
         Route::apiResource('revenue-opportunities', RevenueOpportunityController::class);
         Route::apiResource('businesses', BusinessController::class)->only(['index', 'store', 'show', 'update']);
+        Route::get('businesses/{business}/intelligence', [BusinessController::class, 'intelligence']);
+        Route::post('businesses/{business}/audit', [BusinessController::class, 'audit']);
         Route::patch('businesses/{business}/contacted', [BusinessController::class, 'markContacted']);
         Route::post('businesses/{business}/convert', [BusinessController::class, 'convert']);
         Route::delete('businesses/{business}', [BusinessController::class, 'destroy']);
@@ -61,6 +64,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('website-audits', [WebsiteAuditController::class, 'index']);
         Route::post('website-audits', [WebsiteAuditController::class, 'store']);
         Route::get('website-audits/{websiteAudit}', [WebsiteAuditController::class, 'show']);
+        Route::patch('audit-findings/{auditFinding}', [AuditFindingController::class, 'update']);
         Route::apiResource('customers', CustomerController::class);
         Route::post('subscription-months/{subscriptionMonth}/payment', [SubscriptionController::class, 'updateMonthPaymentById']);
         Route::get('subscriptions/{subscription}/months', [SubscriptionController::class, 'months']);

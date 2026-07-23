@@ -60,6 +60,22 @@ const dom = {
     leadDiscoveryRefresh: document.getElementById('lead-discovery-refresh'),
     discoveredLeadsTable: document.getElementById('discovered-leads-table'),
     leadDiscoveryRuns: document.getElementById('lead-discovery-runs'),
+    leadDetailTitle: document.getElementById('lead-detail-title'),
+    leadDetailCategory: document.getElementById('lead-detail-category'),
+    leadDetailWebsite: document.getElementById('lead-detail-website'),
+    leadDetailPhone: document.getElementById('lead-detail-phone'),
+    leadDetailAddress: document.getElementById('lead-detail-address'),
+    leadDetailGoogle: document.getElementById('lead-detail-google'),
+    leadDetailScores: document.getElementById('lead-detail-scores'),
+    leadDetailAuditDate: document.getElementById('lead-detail-audit-date'),
+    leadDetailFacts: document.getElementById('lead-detail-facts'),
+    leadDetailFindings: document.getElementById('lead-detail-findings'),
+    leadDetailHistory: document.getElementById('lead-detail-history'),
+    leadDetailContacted: document.getElementById('lead-detail-contacted'),
+    leadDetailConvert: document.getElementById('lead-detail-convert'),
+    leadDetailAudit: document.getElementById('lead-detail-audit'),
+    leadDetailDelete: document.getElementById('lead-detail-delete'),
+    leadDetailBack: document.getElementById('lead-detail-back'),
     monthlyFinanceMonths: document.getElementById('monthly-finance-months'),
     monthlyFinanceRefresh: document.getElementById('monthly-finance-refresh'),
     monthlyFinanceSelectedMonth: document.getElementById('monthly-finance-selected-month'),
@@ -312,6 +328,7 @@ const state = {
     portalJobs: [],
     portalSubscriptions: [],
     currentCustomer: null,
+    currentLead: null,
     filters: {
         customers: {
             search: '',
@@ -384,6 +401,10 @@ const viewMeta = {
     'lead-discovery': {
         title: 'Lead Discovery',
         subtitle: 'Find external businesses, audit their websites, and build a qualified lead pipeline.',
+    },
+    'lead-detail': {
+        title: 'Lead Intelligence',
+        subtitle: 'Business details, website issues, recommendations, and audit history.',
     },
     jobs: {
         title: 'Jobs',
@@ -542,7 +563,7 @@ function setActiveView(view) {
 
     const meta = viewMeta[view] || viewMeta.dashboard;
     state.view = view;
-    const navView = view === 'customer-detail' ? 'customers' : view;
+    const navView = view === 'customer-detail' ? 'customers' : (view === 'lead-detail' ? 'lead-discovery' : view);
 
     dom.views.forEach((section) => {
         section.classList.toggle('active', section.dataset.view === view);
@@ -578,6 +599,7 @@ function setActiveView(view) {
     if (view === 'lead-discovery') {
         loadLeadDiscoveryData();
     }
+    if (view === 'lead-detail' && state.currentLead?.id) loadLeadDetail(state.currentLead.id);
     if (view === 'tasks') {
         Promise.all([loadStaffUsers(), ensureJobsLoaded()])
             .then(() => {
@@ -2578,8 +2600,7 @@ function renderDiscoveredLeads() {
         const row = document.createElement('div');
         row.className = 'table-row discovered-leads';
         const website = lead.website_url ? `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener">${escapeHtml(new URL(lead.website_url).hostname)}</a>` : '<span class="text-muted">No website</span>';
-        const converted = lead.status === 'converted' || lead.customer_id;
-        row.innerHTML = `<span><strong>${escapeHtml(lead.name)}</strong><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span><label class="lead-contacted-toggle"><input type="checkbox" data-lead-contacted="${escapeHtml(lead.id)}" ${lead.contacted ? 'checked' : ''}><span>${lead.contacted ? 'Yes' : 'No'}</span></label></span><span class="lead-row-actions"><button class="btn btn-primary" type="button" data-lead-convert="${escapeHtml(lead.id)}" ${converted ? 'disabled' : ''}>${converted ? 'Converted' : 'Convert'}</button><button class="btn btn-danger" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
+        row.innerHTML = `<span><button class="lead-business-link" type="button" data-lead-view="${escapeHtml(lead.id)}">${escapeHtml(lead.name)}</button><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span><label class="lead-contacted-toggle"><input type="checkbox" data-lead-contacted="${escapeHtml(lead.id)}" ${lead.contacted ? 'checked' : ''}><span>${lead.contacted ? 'Yes' : 'No'}</span></label></span><span class="lead-row-actions"><button class="btn btn-danger lead-row-delete" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
         dom.discoveredLeadsTable.appendChild(row);
     });
 }
@@ -2604,21 +2625,17 @@ function renderDiscoveryRuns() {
 
 async function handleDiscoveredLeadAction(event) {
     const checkbox = event.target.closest('[data-lead-contacted]');
-    const convertButton = event.target.closest('[data-lead-convert]');
     const deleteButton = event.target.closest('[data-lead-delete]');
+    const viewButton = event.target.closest('[data-lead-view]');
     if (checkbox && event.type !== 'change') return;
     try {
-        if (checkbox) {
+        if (viewButton) {
+            openLeadDetail(viewButton.dataset.leadView);
+            return;
+        } else if (checkbox) {
             checkbox.disabled = true;
             await api.patch(`/api/businesses/${checkbox.dataset.leadContacted}/contacted`, { contacted: checkbox.checked });
             showToast(checkbox.checked ? 'Lead marked as contacted.' : 'Contacted mark removed.');
-        } else if (convertButton) {
-            if (!window.confirm('Convert this lead into a CRM customer?')) return;
-            convertButton.disabled = true;
-            await api.post(`/api/businesses/${convertButton.dataset.leadConvert}/convert`);
-            state.customers = [];
-            state.customerOptions = [];
-            showToast('Lead converted to a customer.');
         } else if (deleteButton) {
             if (!window.confirm('Delete this lead? This will remove it from the lead list.')) return;
             deleteButton.disabled = true;
@@ -2645,6 +2662,117 @@ async function handleDiscoveryRunAction(event) {
         button.disabled = false;
         showToast(getErrorMessage(error, 'Unable to delete discovery activity.'), true);
     }
+}
+
+function openLeadDetail(leadId) {
+    if (!leadId) return;
+    state.currentLead = { id: leadId };
+    setActiveView('lead-detail');
+}
+
+async function loadLeadDetail(leadId) {
+    try {
+        const response = await api.get(`/api/businesses/${leadId}/intelligence`);
+        const intelligence = response?.data?.data || {};
+        state.currentLead = intelligence.lead || { id: leadId };
+        state.currentLead.intelligence = intelligence;
+        renderLeadDetail(intelligence);
+        if ((intelligence.audit_history || []).some((audit) => ['pending', 'running'].includes(audit.status)) && state.view === 'lead-detail') {
+            window.setTimeout(() => loadLeadDetail(leadId), 5000);
+        }
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to load lead intelligence.'), true);
+    }
+}
+
+function renderLeadDetail(intelligence) {
+    const lead = intelligence.lead || {};
+    const audit = intelligence.latest_audit || null;
+    if (dom.leadDetailTitle) dom.leadDetailTitle.textContent = lead.name || 'Lead';
+    if (dom.leadDetailCategory) dom.leadDetailCategory.textContent = lead.primary_category ? lead.primary_category.replaceAll('_', ' ') : 'Discovered business';
+    if (dom.leadDetailWebsite) dom.leadDetailWebsite.innerHTML = lead.website_url ? `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener">${escapeHtml(lead.website_url)}</a>` : '--';
+    if (dom.leadDetailPhone) dom.leadDetailPhone.textContent = lead.phone || '--';
+    if (dom.leadDetailAddress) dom.leadDetailAddress.textContent = lead.address || '--';
+    if (dom.leadDetailGoogle) dom.leadDetailGoogle.innerHTML = lead.google_maps_url ? `<a href="${escapeHtml(lead.google_maps_url)}" target="_blank" rel="noopener">${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ · ${escapeHtml(lead.google_review_count || 0)} reviews` : 'Open Google Maps'}</a>` : '--';
+    if (dom.leadDetailContacted) dom.leadDetailContacted.textContent = lead.contacted ? 'Contacted ✓' : 'Mark contacted';
+    if (dom.leadDetailConvert) { dom.leadDetailConvert.disabled = Boolean(lead.customer_id); dom.leadDetailConvert.textContent = lead.customer_id ? 'Converted' : 'Convert to customer'; }
+    if (dom.leadDetailAudit) dom.leadDetailAudit.disabled = !lead.website_url;
+
+    dom.leadDetailScores?.querySelectorAll('[data-score]').forEach((element) => {
+        const value = audit?.scores?.[element.dataset.score];
+        element.textContent = value === null || value === undefined ? '--' : `${Math.round(Number(value))}/100`;
+    });
+    if (dom.leadDetailAuditDate) dom.leadDetailAuditDate.textContent = audit ? `${audit.status} · ${formatDateWithYear(audit.completed_at || audit.created_at)}` : 'No audit has been completed yet.';
+    renderLeadAuditFacts(audit);
+    renderLeadFindings(audit?.findings || []);
+    renderLeadAuditHistory(intelligence.audit_history || []);
+    if (dom.pageTitle) dom.pageTitle.textContent = lead.name || 'Lead Intelligence';
+    if (dom.pageSubtitle) dom.pageSubtitle.textContent = 'Website issues, recommendations, and sales opportunities.';
+}
+
+function renderLeadAuditFacts(audit) {
+    if (!dom.leadDetailFacts) return;
+    if (!audit) { dom.leadDetailFacts.innerHTML = '<div class="table-empty">Run a website audit to generate detailed intelligence.</div>'; return; }
+    const seo = audit.seo || {};
+    const performance = audit.performance || {};
+    const security = audit.security || {};
+    const facts = [
+        ['Meta title', seo.meta_title || 'Missing'], ['Meta description', seo.meta_description || 'Missing'],
+        ['Broken links', seo.broken_link_count ?? '--'], ['Images missing alt text', seo.images_missing_alt ?? '--'],
+        ['Sitemap', seo.has_sitemap ? 'Found' : 'Missing'], ['Robots.txt', seo.has_robots_txt ? 'Found' : 'Missing'],
+        ['Page size', performance.page_size_bytes ? `${(Number(performance.page_size_bytes) / 1048576).toFixed(2)} MB` : '--'],
+        ['Response time', performance.response_time_ms ? `${performance.response_time_ms} ms` : '--'],
+        ['HTTPS', security.uses_https ? 'Enabled' : 'Missing'], ['SSL certificate', security.ssl_valid ? 'Valid' : 'Issue detected'],
+        ['Server technology', security.server_technology || 'Not detected'], ['Schema items', seo.schema_item_count ?? '--'],
+    ];
+    dom.leadDetailFacts.innerHTML = facts.map(([label, value]) => `<div class="lead-audit-fact"><span class="meta-label">${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('');
+}
+
+function renderLeadFindings(findings) {
+    if (!dom.leadDetailFindings) return;
+    const issues = findings.filter((finding) => !['passed', 'pass'].includes(String(finding.status).toLowerCase()));
+    if (!issues.length) { dom.leadDetailFindings.innerHTML = '<div class="table-empty">No actionable issues were found in the latest completed audit.</div>'; return; }
+    const rank = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
+    issues.sort((a, b) => (rank[a.severity] ?? 5) - (rank[b.severity] ?? 5));
+    dom.leadDetailFindings.innerHTML = issues.map((finding) => `<article class="lead-finding severity-${escapeHtml(finding.severity)}"><div class="lead-finding-head"><div><strong>${escapeHtml(finding.title)}</strong><div class="lead-finding-category">${escapeHtml(finding.category)} issue</div></div><input class="lead-finding-checkbox" type="checkbox" data-finding-resolved="${escapeHtml(finding.id)}" aria-label="Mark ${escapeHtml(finding.title)} as resolved" ${finding.status === 'resolved' ? 'checked' : ''}></div>${finding.description ? `<p><strong>Why it matters:</strong> ${escapeHtml(finding.description)}</p>` : ''}${finding.recommendation ? `<p class="recommendation"><strong>Recommended improvement:</strong> ${escapeHtml(finding.recommendation)}</p>` : ''}</article>`).join('');
+}
+
+async function handleLeadFindingChange(event) {
+    const checkbox = event.target.closest('[data-finding-resolved]');
+    if (!checkbox) return;
+    checkbox.disabled = true;
+    try {
+        await api.patch(`/api/audit-findings/${checkbox.dataset.findingResolved}`, { resolved: checkbox.checked });
+    } catch (error) {
+        checkbox.checked = !checkbox.checked;
+        showToast(getErrorMessage(error, 'Unable to update this issue.'), true);
+    } finally {
+        checkbox.disabled = false;
+    }
+}
+
+function renderLeadAuditHistory(history) {
+    if (!dom.leadDetailHistory) return;
+    resetTable(dom.leadDetailHistory);
+    if (!history.length) { const row = document.createElement('div'); row.className = 'table-row table-empty lead-audit-history'; row.innerHTML = '<span>No audit history yet.</span><span></span><span></span><span></span><span></span><span></span><span></span>'; dom.leadDetailHistory.appendChild(row); return; }
+    history.forEach((audit) => {
+        const row = document.createElement('div'); row.className = 'table-row lead-audit-history';
+        row.innerHTML = `<span>${formatDateWithYear(audit.completed_at || audit.created_at)}</span><span><span class="pill outline">${escapeHtml(audit.status)}</span></span>${['overall','seo','performance','accessibility','security'].map((key) => `<span>${audit.scores?.[key] ?? '--'}</span>`).join('')}`;
+        dom.leadDetailHistory.appendChild(row);
+    });
+}
+
+async function handleLeadDetailAction(action) {
+    const lead = state.currentLead;
+    if (!lead?.id) return;
+    try {
+        if (action === 'back') return setActiveView('lead-discovery');
+        if (action === 'contacted') await api.patch(`/api/businesses/${lead.id}/contacted`, { contacted: !lead.contacted });
+        if (action === 'convert') { if (!window.confirm('Convert this lead into a CRM customer?')) return; await api.post(`/api/businesses/${lead.id}/convert`); state.customers = []; state.customerOptions = []; showToast('Lead converted to a customer.'); }
+        if (action === 'audit') { await api.post(`/api/businesses/${lead.id}/audit`); showToast('Website audit queued.'); }
+        if (action === 'delete') { if (!window.confirm('Delete this lead?')) return; await api.delete(`/api/businesses/${lead.id}`); state.currentLead = null; showToast('Lead deleted.'); return setActiveView('lead-discovery'); }
+        await loadLeadDetail(lead.id);
+    } catch (error) { showToast(getErrorMessage(error, 'Unable to update the lead.'), true); }
 }
 
 async function handleLeadDiscoverySubmit(event) {
@@ -6005,6 +6133,12 @@ if (dom.leadDiscoveryRefresh) dom.leadDiscoveryRefresh.addEventListener('click',
 if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('change', handleDiscoveredLeadAction);
 if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('click', handleDiscoveredLeadAction);
 if (dom.leadDiscoveryRuns) dom.leadDiscoveryRuns.addEventListener('click', handleDiscoveryRunAction);
+if (dom.leadDetailBack) dom.leadDetailBack.addEventListener('click', () => handleLeadDetailAction('back'));
+if (dom.leadDetailContacted) dom.leadDetailContacted.addEventListener('click', () => handleLeadDetailAction('contacted'));
+if (dom.leadDetailConvert) dom.leadDetailConvert.addEventListener('click', () => handleLeadDetailAction('convert'));
+if (dom.leadDetailAudit) dom.leadDetailAudit.addEventListener('click', () => handleLeadDetailAction('audit'));
+if (dom.leadDetailDelete) dom.leadDetailDelete.addEventListener('click', () => handleLeadDetailAction('delete'));
+if (dom.leadDetailFindings) dom.leadDetailFindings.addEventListener('change', handleLeadFindingChange);
 if (dom.opportunityFormCancel) dom.opportunityFormCancel.addEventListener('click', resetOpportunityForm);
 if (dom.opportunitiesTable) dom.opportunitiesTable.addEventListener('click', handleOpportunityAction);
 if (dom.opportunitiesRefresh) dom.opportunitiesRefresh.addEventListener('click', loadRevenueOpportunities);

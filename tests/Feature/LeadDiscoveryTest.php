@@ -9,6 +9,7 @@ use App\Models\Business;
 use App\Models\LeadDiscoveryRun;
 use App\Models\Role;
 use App\Models\User;
+use App\Models\WebsiteAudit;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -103,6 +104,32 @@ class LeadDiscoveryTest extends TestCase
         $this->actingAs($admin)->deleteJson("/api/lead-discovery/{$run->public_id}")->assertOk();
         $this->assertSoftDeleted('lead_discovery_runs', ['id' => $run->id]);
         $this->assertDatabaseHas('businesses', ['id' => $lead->id, 'deleted_at' => null]);
+    }
+
+    public function test_lead_intelligence_returns_latest_audit_findings_and_history(): void
+    {
+        $admin = $this->admin();
+        $lead = Business::query()->create([
+            'public_id' => (string) Str::ulid(), 'owner_user_id' => $admin->id, 'name' => 'Audit Target',
+            'status' => 'new', 'source' => 'google_places', 'website_url' => 'https://audit-target.test',
+        ]);
+        $audit = WebsiteAudit::query()->create([
+            'public_id' => (string) Str::ulid(), 'business_id' => $lead->id, 'requested_by_user_id' => $admin->id,
+            'version' => 1, 'status' => 'completed', 'requested_url' => $lead->website_url,
+            'overall_score' => 48, 'seo_score' => 35, 'performance_score' => 55,
+            'accessibility_score' => 60, 'security_score' => 42, 'structured_results' => [], 'completed_at' => now(),
+        ]);
+        $audit->findings()->create([
+            'category' => 'seo', 'check_key' => 'meta_description', 'severity' => 'high', 'status' => 'failed',
+            'title' => 'Meta description is missing', 'description' => 'Search results have no useful summary.',
+            'recommendation' => 'Write a service-and-location focused meta description.',
+        ]);
+
+        $this->actingAs($admin)->getJson("/api/businesses/{$lead->public_id}/intelligence")
+            ->assertOk()->assertJsonPath('data.lead.name', 'Audit Target')
+            ->assertJsonPath('data.latest_audit.scores.seo', '35.00')
+            ->assertJsonPath('data.latest_audit.findings.0.title', 'Meta description is missing')
+            ->assertJsonCount(1, 'data.audit_history');
     }
 
     private function admin(): User

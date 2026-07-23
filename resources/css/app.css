@@ -952,19 +952,44 @@ body[data-role="admin"] .admin-inline-only {
 .content-grid.lead-discovery-layout > .discovery-runs-card { grid-column: 1 / -1; width: 100%; }
 .discovered-leads-card { height: 620px; min-height: 620px; display: flex; flex-direction: column; overflow: hidden; }
 .discovered-leads-card #discovered-leads-table { flex: 1; min-height: 0; overflow: auto; padding-right: 4px; }
-.table-row.discovered-leads { grid-template-columns: minmax(190px, 1.4fr) minmax(150px, 1fr) minmax(100px, 0.65fr) minmax(90px, 0.55fr) minmax(190px, 1.2fr); }
+.table-row.discovered-leads { grid-template-columns: minmax(190px, 1.4fr) minmax(150px, 1fr) minmax(100px, 0.65fr) minmax(90px, 0.55fr) minmax(80px, 0.4fr); }
 .table-row.discovery-runs { grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(70px, 0.5fr)) minmax(120px, 0.8fr) minmax(90px, 0.5fr); }
 #discovered-leads-table, #lead-discovery-runs { overflow-x: auto; }
 #discovered-leads-table .table-row { min-width: 760px; }
 #lead-discovery-runs .table-row { min-width: 920px; }
 .lead-contacted-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
 .lead-contacted-toggle input { width: 18px; height: 18px; accent-color: var(--primary); }
-.lead-row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.lead-business-link { appearance: none; border: 0; background: transparent; color: var(--text); padding: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.lead-business-link:hover, .lead-business-link:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.lead-row-actions { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
 .lead-row-actions .btn { padding: 7px 10px; font-size: 0.78rem; }
+.lead-row-actions .lead-row-delete { display: inline-flex; align-items: center; justify-content: center; height: 30px; max-height: 30px; min-height: 0; align-self: flex-start; padding: 4px 10px; line-height: 1; text-align: center; }
 .lead-row-actions .btn-danger, #lead-discovery-runs .btn-danger { background: transparent; border: 1px solid #dc2626; color: #dc2626; padding: 7px 10px; }
 .lead-row-actions .btn-danger:hover, #lead-discovery-runs .btn-danger:hover { background: #dc2626; color: #fff; }
 
 @media (max-width: 980px) { .lead-discovery-layout { grid-template-columns: 1fr; } .discovery-runs-card { grid-column: auto; } }
+
+.lead-detail-grid { gap: 22px; }
+.lead-detail-hero { background: linear-gradient(135deg, rgba(43,164,214,.12), rgba(53,193,144,.08)); }
+.lead-detail-meta { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 18px; }
+.lead-score-grid { grid-template-columns: repeat(5, minmax(0,1fr)); }
+.lead-audit-facts { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; }
+.lead-audit-fact { padding: 14px; border-radius: 14px; background: var(--surface-muted); border: 1px solid var(--border); }
+.lead-audit-fact strong { display: block; margin-top: 5px; }
+.lead-findings { display: grid; gap: 12px; }
+.lead-finding { border: 1px solid var(--border); border-left: 5px solid #94a3b8; border-radius: 14px; padding: 16px; background: var(--surface-muted); }
+.lead-finding.severity-critical,.lead-finding.severity-high { border-left-color:#dc2626; }
+.lead-finding.severity-medium { border-left-color:#f59e0b; }
+.lead-finding.severity-low { border-left-color:#2ba4d6; }
+.lead-finding-head { display:flex; justify-content:space-between; gap:15px; margin-bottom:8px; }
+.lead-finding-checkbox { flex: 0 0 auto; width: 22px; height: 22px; margin: 2px; accent-color: #35c190; cursor: pointer; }
+.lead-finding-checkbox:disabled { cursor: wait; opacity: .65; }
+.lead-finding-category { text-transform:capitalize; color:var(--text-muted); font-size:.8rem; }
+.lead-finding p { margin:7px 0 0; color:var(--text-muted); line-height:1.55; }
+.lead-finding .recommendation { color:var(--text); }
+.table-row.lead-audit-history { grid-template-columns: 1.2fr .8fr repeat(5,.65fr); }
+@media (max-width:1100px) { .lead-detail-meta,.lead-audit-facts { grid-template-columns:repeat(2,1fr); } .lead-score-grid { grid-template-columns:repeat(2,1fr); } }
+@media (max-width:640px) { .lead-detail-meta,.lead-audit-facts,.lead-score-grid { grid-template-columns:1fr; } }
 
 .table-row.table-empty {
     color: var(--text-muted);
@@ -1261,7 +1286,9 @@ body[data-role="staff"] .staff-member-only {
         position: fixed;
         inset: 0;
         width: 100%;
-        height: 100%;
+        height: 100vh;
+        height: 100dvh;
+        max-height: 100dvh;
         transform: translateY(-100%);
         transition: transform 0.2s ease;
         flex-direction: column;
@@ -1271,7 +1298,11 @@ body[data-role="staff"] .staff-member-only {
         border-bottom: none;
         background: var(--bg-elevated);
         z-index: 50;
-        padding: 32px 24px 24px;
+        padding: max(32px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom));
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
     }
 
     .nav-stack {
@@ -1279,15 +1310,16 @@ body[data-role="staff"] .staff-member-only {
         width: 100%;
         gap: 12px;
         margin-top: 20px;
+        padding-bottom: 12px;
     }
 
-    body[data-role="customer"] .nav-logout {
+    .nav-logout {
         display: block;
         width: 100%;
     }
 
     .sidebar-footer {
-        width: 100%;
+        display: none;
     }
 
     body[data-nav="open"] .sidebar {
@@ -1310,13 +1342,24 @@ body[data-role="staff"] .staff-member-only {
     }
 
     .topbar {
-        flex-direction: column;
+        flex-direction: row;
         align-items: flex-start;
     }
 
-    .user-menu {
+    .topbar-left {
         width: 100%;
-        justify-content: space-between;
+        min-width: 0;
+        align-items: flex-start;
+    }
+
+    .menu-toggle {
+        flex: 0 0 44px;
+        position: relative;
+        z-index: 1;
+    }
+
+    .topbar-right {
+        display: none;
     }
 
     .line-item {

@@ -288,6 +288,54 @@
                     </section>
                 </section>
 
+                <section class="view staff-view" data-view="lead-detail">
+                    <section class="detail-grid lead-detail-grid">
+                        <div class="card wide lead-detail-hero">
+                            <div class="card-header">
+                                <div><div class="card-title" id="lead-detail-title">Lead</div><div class="card-subtitle" id="lead-detail-category">Business intelligence</div></div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="lead-detail-contacted" type="button">Mark contacted</button>
+                                    <button class="btn btn-primary" id="lead-detail-convert" type="button">Convert to customer</button>
+                                    <button class="btn btn-outline" id="lead-detail-audit" type="button">Re-run audit</button>
+                                    <button class="btn btn-outline opportunity-delete" id="lead-detail-delete" type="button">Delete</button>
+                                    <button class="btn btn-outline" id="lead-detail-back" type="button">Back to leads</button>
+                                </div>
+                            </div>
+                            <div class="lead-detail-meta">
+                                <div><div class="meta-label">Website</div><div class="meta-value" id="lead-detail-website">--</div></div>
+                                <div><div class="meta-label">Phone</div><div class="meta-value" id="lead-detail-phone">--</div></div>
+                                <div><div class="meta-label">Address</div><div class="meta-value" id="lead-detail-address">--</div></div>
+                                <div><div class="meta-label">Google presence</div><div class="meta-value" id="lead-detail-google">--</div></div>
+                            </div>
+                        </div>
+
+                        <div class="panel-grid lead-score-grid" id="lead-detail-scores">
+                            <div class="card"><div class="card-label">Overall health</div><div class="card-value" data-score="overall">--</div><div class="card-meta">Latest website audit</div></div>
+                            <div class="card"><div class="card-label">SEO</div><div class="card-value" data-score="seo">--</div><div class="card-meta">Search visibility</div></div>
+                            <div class="card"><div class="card-label">Performance</div><div class="card-value" data-score="performance">--</div><div class="card-meta">Speed and page weight</div></div>
+                            <div class="card"><div class="card-label">Accessibility</div><div class="card-value" data-score="accessibility">--</div><div class="card-meta">Usability and inclusion</div></div>
+                            <div class="card"><div class="card-label">Security</div><div class="card-value" data-score="security">--</div><div class="card-meta">HTTPS and protection</div></div>
+                        </div>
+
+                        <div class="card wide" id="lead-detail-audit-summary">
+                            <div class="card-header"><div><div class="card-title">Website audit overview</div><div class="card-subtitle" id="lead-detail-audit-date">No audit available</div></div></div>
+                            <div class="lead-audit-facts" id="lead-detail-facts"></div>
+                        </div>
+
+                        <div class="card wide">
+                            <div class="card-header"><div><div class="card-title">Issues and recommendations</div><div class="card-subtitle">What is wrong, why it matters, and how it could be improved.</div></div></div>
+                            <div class="lead-findings" id="lead-detail-findings"><div class="table-empty">No audit findings available.</div></div>
+                        </div>
+
+                        <div class="card wide">
+                            <div class="card-header"><div><div class="card-title">Audit history</div><div class="card-subtitle">Website health over time.</div></div></div>
+                            <div class="table" id="lead-detail-history">
+                                <div class="table-row table-header lead-audit-history"><span>Date</span><span>Status</span><span>Overall</span><span>SEO</span><span>Performance</span><span>Accessibility</span><span>Security</span></div>
+                            </div>
+                        </div>
+                    </section>
+                </section>
+
                 <section class="view staff-view" data-view="revenue-opportunities">
                     <section class="panel-grid opportunity-summary-grid">
                         <div class="card highlight"><div class="card-label">Potential MRR</div><div class="card-value" id="opportunity-potential-mrr">--</div><div class="card-meta">Open monthly revenue</div></div>
