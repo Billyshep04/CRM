@@ -9,12 +9,15 @@ use App\Http\Resources\SubscriptionResource;
 use App\Http\Resources\WebsiteResource;
 use App\Jobs\SendProposalAcceptedNotification;
 use App\Models\Customer;
+use App\Models\CustomerFormRequest;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Proposal;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
+use App\Services\CustomerFormNotificationService;
+use App\Services\CustomerFormSubmissionValidator;
 use App\Services\InvoiceJobStatusSyncService;
 use App\Services\InvoicePdfService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
@@ -22,6 +25,7 @@ use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -139,6 +143,73 @@ class PortalController extends Controller
         return WebsiteResource::collection(
             $query->paginate($perPage)
         );
+    }
+
+    public function forms(Request $request)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        return response()->json([
+            'data' => CustomerFormRequest::query()
+                ->whereIn('customer_id', $customerIds)
+                ->latest('sent_at')
+                ->get(),
+        ]);
+    }
+
+    public function form(Request $request, CustomerFormRequest $customerFormRequest)
+    {
+        $this->authorizeCustomerForm($request, $customerFormRequest);
+
+        return response()->json(['data' => $customerFormRequest]);
+    }
+
+    public function submitForm(
+        Request $request,
+        CustomerFormRequest $customerFormRequest,
+        CustomerFormSubmissionValidator $submissionValidator,
+        CustomerFormNotificationService $notifications
+    ) {
+        $this->authorizeCustomerForm($request, $customerFormRequest);
+
+        $payload = $request->validate([
+            'answers' => ['required', 'array'],
+        ]);
+
+        $answers = $submissionValidator->validate(
+            $customerFormRequest->form_schema ?? [],
+            $payload['answers']
+        );
+
+        $completedForm = DB::transaction(function () use ($customerFormRequest, $answers): CustomerFormRequest {
+            $lockedForm = CustomerFormRequest::query()->lockForUpdate()->findOrFail($customerFormRequest->id);
+            if ($lockedForm->status === CustomerFormRequest::STATUS_COMPLETED || $lockedForm->completed_at !== null) {
+                throw ValidationException::withMessages([
+                    'form' => ['This form has already been completed and cannot be submitted again.'],
+                ]);
+            }
+
+            $lockedForm->update([
+                'answers' => $answers,
+                'status' => CustomerFormRequest::STATUS_COMPLETED,
+                'completed_at' => now(),
+            ]);
+
+            return $lockedForm->fresh('customer');
+        });
+
+        $notificationSent = true;
+        try {
+            $notifications->notifyAdmin($completedForm);
+        } catch (Throwable $exception) {
+            report($exception);
+            $notificationSent = false;
+        }
+
+        return response()->json([
+            'data' => $completedForm,
+            'notification_sent' => $notificationSent,
+        ]);
     }
 
     public function invoice(Request $request, Invoice $invoice)
@@ -399,6 +470,13 @@ class PortalController extends Controller
         }
 
         return $customerIds;
+    }
+
+    private function authorizeCustomerForm(Request $request, CustomerFormRequest $customerFormRequest): void
+    {
+        if (!in_array((int) $customerFormRequest->customer_id, $this->resolveCustomerIds($request), true)) {
+            abort(404);
+        }
     }
 
     /**

@@ -160,6 +160,17 @@ const dom = {
     proposalFormEditBack: document.getElementById('proposal-form-edit-back'),
     proposalFormEditAddQuestion: document.getElementById('proposal-form-edit-add-question'),
     proposalFormEditDelete: document.getElementById('proposal-form-edit-delete'),
+    customerFormsSettingsForm: document.getElementById('customer-forms-settings-form'),
+    customerFormsSettingsStatus: document.getElementById('customer-forms-settings-status'),
+    customerFormsEditor: document.getElementById('customer-forms-editor'),
+    customerFormsAddType: document.getElementById('customer-forms-add-type'),
+    customerFormEditTitle: document.getElementById('customer-form-edit-title'),
+    customerFormEditLabel: document.getElementById('customer-form-edit-label'),
+    customerFormEditEditor: document.getElementById('customer-form-edit-editor'),
+    customerFormEditStatus: document.getElementById('customer-form-edit-status'),
+    customerFormEditBack: document.getElementById('customer-form-edit-back'),
+    customerFormEditAddQuestion: document.getElementById('customer-form-edit-add-question'),
+    customerFormEditDelete: document.getElementById('customer-form-edit-delete'),
     staffUserForm: document.getElementById('staff-user-form'),
     staffUserFormStatus: document.getElementById('staff-user-form-status'),
     staffUsersTable: document.getElementById('staff-users-table'),
@@ -200,6 +211,11 @@ const dom = {
     customerWebsiteStatus: document.getElementById('customer-website-status'),
     customerWebsiteCancel: document.getElementById('customer-website-cancel'),
     customerWebsiteTitle: document.getElementById('customer-website-title'),
+    customerFormRequestForm: document.getElementById('customer-form-request-form'),
+    customerFormTemplate: document.getElementById('customer-form-template'),
+    customerFormRequestStatus: document.getElementById('customer-form-request-status'),
+    customerFormsTable: document.getElementById('customer-forms-table'),
+    customerFormReview: document.getElementById('customer-form-review'),
     customerDetailBack: document.getElementById('customer-detail-back'),
     customerDetailArchive: document.getElementById('customer-detail-archive'),
     customersSearch: document.getElementById('customers-search'),
@@ -297,6 +313,16 @@ const dom = {
     invoicesRefresh: document.getElementById('invoices-refresh'),
     portalProposals: document.getElementById('portal-proposals'),
     portalProposalsRefresh: document.getElementById('portal-proposals-refresh'),
+    portalFormsTable: document.getElementById('portal-forms-table'),
+    portalFormsRefresh: document.getElementById('portal-forms-refresh'),
+    portalFormPanel: document.getElementById('portal-form-panel'),
+    portalCustomerForm: document.getElementById('portal-customer-form'),
+    portalFormTitle: document.getElementById('portal-form-title'),
+    portalFormSubtitle: document.getElementById('portal-form-subtitle'),
+    portalFormFields: document.getElementById('portal-form-fields'),
+    portalFormStatus: document.getElementById('portal-form-status'),
+    portalFormSubmit: document.getElementById('portal-form-submit'),
+    portalFormClose: document.getElementById('portal-form-close'),
     staffTrackingTable: document.getElementById('staff-tracking-table'),
     staffTrackingRefresh: document.getElementById('staff-tracking-refresh'),
 };
@@ -365,10 +391,15 @@ const state = {
     mailSettings: null,
     invoiceSettings: null,
     proposalFormSettings: { types: [] },
+    customerFormSettings: { types: [] },
     portalInvoices: [],
     portalProposals: [],
     portalJobs: [],
     portalSubscriptions: [],
+    customerForms: [],
+    customerFormTemplates: [],
+    portalForms: [],
+    currentPortalForm: null,
     currentCustomer: null,
     currentLead: null,
     filters: {
@@ -417,6 +448,7 @@ const state = {
         subscription: null,
         proposal: null,
         proposalFormTypeIndex: null,
+        customerFormTypeIndex: null,
         task: null,
         invoice: null,
         website: null,
@@ -494,6 +526,10 @@ const viewMeta = {
         title: 'Edit Proposal Form',
         subtitle: 'Manage the questions for one proposal type.',
     },
+    'customer-form-edit': {
+        title: 'Edit Customer Form',
+        subtitle: 'Manage the questions customers complete in their portal.',
+    },
     'customer-detail': {
         title: 'Customer overview',
         subtitle: 'Jobs, subscriptions, and websites for this customer.',
@@ -505,6 +541,10 @@ const viewMeta = {
     'portal-proposals': {
         title: 'Proposals',
         subtitle: 'Review, approve, decline, and download your proposals.',
+    },
+    'portal-forms': {
+        title: 'Forms',
+        subtitle: 'Complete requested forms and review previous submissions.',
     },
     'portal-support': {
         title: 'Support',
@@ -600,7 +640,7 @@ function updateSyncStatus(status) {
 }
 
 function setActiveView(view) {
-    if (['monthly-finance', 'proposal-form-edit', 'staff-tracking'].includes(view) && state.role !== 'admin') {
+    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'].includes(view) && state.role !== 'admin') {
         return;
     }
 
@@ -693,6 +733,9 @@ function setActiveView(view) {
     if (view === 'portal-proposals') {
         loadPortalProposals();
     }
+    if (view === 'portal-forms') {
+        loadPortalForms();
+    }
     if (view === 'portal-admin') {
         populatePortalProfileForm(state.user);
     }
@@ -706,6 +749,7 @@ function setActiveView(view) {
             loadAdminMailSettings();
             loadAdminInvoiceSettings();
             loadAdminProposalForms();
+            loadAdminCustomerForms();
         }
     }
     if (view === 'proposal-form-edit' && state.role === 'admin') {
@@ -713,6 +757,13 @@ function setActiveView(view) {
             renderProposalFormEdit();
         } else {
             loadAdminProposalForms().then(renderProposalFormEdit);
+        }
+    }
+    if (view === 'customer-form-edit' && state.role === 'admin') {
+        if ((state.customerFormSettings.types || []).length) {
+            renderCustomerFormEdit();
+        } else {
+            loadAdminCustomerForms().then(renderCustomerFormEdit);
         }
     }
 }
@@ -2509,7 +2560,7 @@ function renderProposalFormEdit() {
     }
 }
 
-function buildProposalQuestionEditor(question = {}, questionIndex = 0) {
+function buildProposalQuestionEditor(question = {}, questionIndex = 0, removeAction = 'remove-proposal-question') {
     const row = document.createElement('div');
     row.className = 'line-item';
     row.dataset.questionIndex = String(questionIndex);
@@ -2523,7 +2574,7 @@ function buildProposalQuestionEditor(question = {}, questionIndex = 0) {
             <option value="1"${question.required ? ' selected' : ''}>Required</option>
         </select>
         <input type="text" data-question-options placeholder="Options, comma-separated" value="${escapeHtml((question.options || []).join(', '))}">
-        <button type="button" class="btn btn-ghost btn-small" data-action="remove-proposal-question">Remove</button>
+        <button type="button" class="btn btn-ghost btn-small" data-action="${removeAction}">Remove</button>
     `;
 
     return row;
@@ -2593,6 +2644,112 @@ async function handleProposalFormsSettingsSubmit(event) {
         showToast('Proposal form saved');
     } catch (error) {
         setFormStatus(dom.proposalFormEditStatus, getErrorMessage(error, 'Unable to update proposal form.'), true);
+    }
+}
+
+async function loadAdminCustomerForms() {
+    if (!dom.customerFormsEditor || state.role !== 'admin') return;
+
+    try {
+        const response = await api.get('/api/admin/customer-forms');
+        state.customerFormSettings = response?.data?.data ?? { types: [] };
+        renderCustomerFormsEditor();
+    } catch (error) {
+        setFormStatus(dom.customerFormsSettingsStatus, 'Unable to load customer forms.', true);
+    }
+}
+
+function renderCustomerFormsEditor() {
+    if (!dom.customerFormsEditor || state.role !== 'admin') return;
+    dom.customerFormsEditor.innerHTML = '';
+
+    if (!(state.customerFormSettings.types || []).length) {
+        dom.customerFormsEditor.innerHTML = '<div class="form-hint">No customer forms yet. Click Add form to create one.</div>';
+        return;
+    }
+
+    state.customerFormSettings.types.forEach((type, typeIndex) => {
+        const row = document.createElement('button');
+        row.type = 'button';
+        row.className = 'btn btn-outline';
+        row.dataset.action = 'edit-customer-form-type';
+        row.dataset.typeIndex = String(typeIndex);
+        row.style.justifyContent = 'space-between';
+        row.innerHTML = `<span>${escapeHtml(type.label || 'Untitled customer form')}</span><span>${escapeHtml(String((type.questions || []).length))} questions</span>`;
+        dom.customerFormsEditor.appendChild(row);
+    });
+}
+
+function renderCustomerFormEdit() {
+    if (!dom.customerFormEditEditor || state.role !== 'admin') return;
+    const typeIndex = Number(state.editing.customerFormTypeIndex);
+    const formType = state.customerFormSettings.types?.[typeIndex];
+    if (!formType) {
+        setActiveView('admin');
+        return;
+    }
+
+    if (dom.customerFormEditTitle) dom.customerFormEditTitle.textContent = `Edit ${formType.label || 'customer form'}`;
+    if (dom.customerFormEditLabel) dom.customerFormEditLabel.value = formType.label || '';
+    setFormStatus(dom.customerFormEditStatus, '');
+    dom.customerFormEditEditor.innerHTML = '';
+
+    (formType.questions || []).forEach((question, questionIndex) => {
+        dom.customerFormEditEditor.appendChild(buildProposalQuestionEditor(question, questionIndex, 'remove-customer-form-question'));
+    });
+    if (!(formType.questions || []).length) {
+        dom.customerFormEditEditor.innerHTML = '<div class="form-hint">No questions yet. Click Add question to create one.</div>';
+    }
+}
+
+function collectCustomerFormsEditorPayload() {
+    const types = [...(state.customerFormSettings.types || [])];
+    const typeIndex = Number(state.editing.customerFormTypeIndex);
+    const existingType = types[typeIndex] || {};
+    const label = dom.customerFormEditLabel?.value?.trim() || '';
+    const questions = [];
+
+    dom.customerFormEditEditor?.querySelectorAll('[data-question-index]').forEach((questionRow, questionIndex) => {
+        const questionLabel = questionRow.querySelector('[data-question-label]')?.value?.trim() || '';
+        if (!questionLabel) return;
+        const options = String(questionRow.querySelector('[data-question-options]')?.value || '')
+            .split(',').map((option) => option.trim()).filter(Boolean);
+        questions.push({
+            label: questionLabel,
+            key: existingType.questions?.[questionIndex]?.key || '',
+            type: questionRow.querySelector('[data-question-type]')?.value || 'text',
+            required: questionRow.querySelector('[data-question-required]')?.value === '1',
+            options,
+            sort_order: questionIndex,
+        });
+    });
+
+    if (types[typeIndex]) {
+        types[typeIndex] = { label, slug: existingType.slug || '', sort_order: typeIndex, questions };
+    }
+
+    return { types };
+}
+
+async function handleCustomerFormsSettingsSubmit(event) {
+    event.preventDefault();
+    if (!dom.customerFormsSettingsForm || state.role !== 'admin') return;
+    const payload = collectCustomerFormsEditorPayload();
+    const typeIndex = Number(state.editing.customerFormTypeIndex);
+    if (!payload.types[typeIndex]?.label) {
+        setFormStatus(dom.customerFormEditStatus, 'Customer form name is required.', true);
+        return;
+    }
+
+    try {
+        const response = await api.put('/api/admin/customer-forms', payload);
+        state.customerFormSettings = response?.data?.data ?? { types: [] };
+        renderCustomerFormsEditor();
+        renderCustomerFormEdit();
+        setFormStatus(dom.customerFormEditStatus, 'Customer form updated.');
+        showToast('Customer form saved');
+    } catch (error) {
+        setFormStatus(dom.customerFormEditStatus, getErrorMessage(error, 'Unable to update customer form.'), true);
     }
 }
 
@@ -3691,6 +3848,127 @@ function renderCustomerWebsites(websites = []) {
     });
 }
 
+function customerFormAnswerDisplay(question, answers = {}) {
+    const key = String(question?.key || '');
+    const value = answers?.[key];
+    if (question?.type === 'checkbox') return value ? 'Yes' : 'No';
+    if (value === null || value === undefined || value === '') return 'Not provided';
+    return String(value);
+}
+
+function renderCustomerFormReview(formRequest) {
+    if (!dom.customerFormReview) return;
+    if (!formRequest) {
+        dom.customerFormReview.hidden = true;
+        dom.customerFormReview.innerHTML = '';
+        return;
+    }
+
+    const questions = Array.isArray(formRequest.form_schema) ? formRequest.form_schema : [];
+    const answers = formRequest.answers || {};
+    const answerRows = questions.map((question) => `
+        <div class="customer-form-answer">
+            <div class="customer-form-answer-label">${escapeHtml(question.label || question.key || 'Field')}</div>
+            <div class="customer-form-answer-value">${escapeHtml(
+                formRequest.status === 'completed'
+                    ? customerFormAnswerDisplay(question, answers)
+                    : 'Awaiting customer response'
+            )}</div>
+        </div>
+    `).join('');
+
+    dom.customerFormReview.innerHTML = `
+        <div class="card-header">
+            <div>
+                <div class="card-title">${escapeHtml(formRequest.template_name || 'Customer form')}</div>
+                <div class="card-subtitle">${formRequest.status === 'completed' ? `Completed ${escapeHtml(formatDateWithYear(formRequest.completed_at))}` : 'Pending customer completion'}</div>
+            </div>
+            <button class="btn btn-outline btn-small" type="button" data-action="close-customer-form-review">Close</button>
+        </div>
+        <div class="customer-form-review-grid">${answerRows || '<div class="form-hint">No fields in this form.</div>'}</div>
+    `;
+    dom.customerFormReview.hidden = false;
+}
+
+function populateCustomerFormTemplates(templates = []) {
+    if (!dom.customerFormTemplate) return;
+    dom.customerFormTemplate.innerHTML = '<option value="">Select a form</option>';
+    templates.forEach((template) => {
+        const option = document.createElement('option');
+        option.value = template.slug;
+        option.textContent = `${template.label} (${template.questions_count || 0} fields)`;
+        dom.customerFormTemplate.appendChild(option);
+    });
+}
+
+function renderCustomerForms(forms = []) {
+    if (!dom.customerFormsTable) return;
+    resetTable(dom.customerFormsTable);
+
+    if (!forms.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty customer-forms';
+        emptyRow.innerHTML = '<span>No forms sent yet.</span><span></span><span></span><span></span><span></span>';
+        dom.customerFormsTable.appendChild(emptyRow);
+        return;
+    }
+
+    forms.forEach((formRequest) => {
+        const row = document.createElement('div');
+        row.className = 'table-row customer-forms';
+        row.innerHTML = `
+            <span>${escapeHtml(formRequest.template_name || 'Customer form')}</span>
+            <span>${escapeHtml(formRequest.status === 'completed' ? 'Completed' : 'Pending')}</span>
+            <span>${escapeHtml(formatDateWithYear(formRequest.sent_at))}</span>
+            <span>${escapeHtml(formatDateWithYear(formRequest.completed_at) || '--')}</span>
+            <div class="row-actions"><button class="btn btn-outline btn-small" type="button" data-action="view-customer-form" data-id="${formRequest.id}">View</button></div>
+        `;
+        dom.customerFormsTable.appendChild(row);
+    });
+}
+
+async function loadCustomerForms(customerId) {
+    if (!customerId) return;
+    try {
+        const response = await api.get(`/api/customers/${customerId}/forms`);
+        state.customerForms = response?.data?.data ?? [];
+        state.customerFormTemplates = response?.data?.templates ?? [];
+        populateCustomerFormTemplates(state.customerFormTemplates);
+        renderCustomerForms(state.customerForms);
+    } catch (error) {
+        state.customerForms = [];
+        renderCustomerForms([]);
+        setFormStatus(dom.customerFormRequestStatus, getErrorMessage(error, 'Unable to load customer forms.'), true);
+    }
+}
+
+async function handleCustomerFormRequestSubmit(event) {
+    event.preventDefault();
+    const customerId = state.currentCustomer?.id;
+    const templateSlug = dom.customerFormTemplate?.value || '';
+    if (!customerId || !templateSlug) {
+        setFormStatus(dom.customerFormRequestStatus, 'Select a form template first.', true);
+        return;
+    }
+
+    setFormStatus(dom.customerFormRequestStatus, 'Sending form...');
+    try {
+        const response = await api.post(`/api/customers/${customerId}/forms`, {
+            template_slug: templateSlug,
+        });
+        dom.customerFormRequestForm?.reset();
+        const warning = response?.data?.warning;
+        setFormStatus(
+            dom.customerFormRequestStatus,
+            warning || 'Form sent and added to the customer portal.',
+            Boolean(warning)
+        );
+        await loadCustomerForms(customerId);
+    } catch (error) {
+        setFormStatus(dom.customerFormRequestStatus, getErrorMessage(error, 'Unable to send customer form.'), true);
+    }
+}
+
 async function loadCustomerDetail(customerId) {
     if (!customerId) return;
     setFormStatus(dom.customerWebsiteStatus, '');
@@ -3730,6 +4008,8 @@ async function loadCustomerDetail(customerId) {
         renderCustomerJobs(jobs);
         renderCustomerSubscriptions(subscriptions);
         renderCustomerWebsites(websites);
+        renderCustomerFormReview(null);
+        loadCustomerForms(customer.id);
     } catch (error) {
         setFormStatus(dom.customerWebsiteStatus, 'Unable to load customer.', true);
     }
@@ -5341,6 +5621,137 @@ async function handlePortalProposalAction(event) {
     }
 }
 
+function renderPortalForms(forms = [], emptyMessage = 'No forms available.') {
+    if (!dom.portalFormsTable) return;
+    resetTable(dom.portalFormsTable);
+
+    if (!forms.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty portal-forms';
+        emptyRow.innerHTML = `<span>${escapeHtml(emptyMessage)}</span><span></span><span></span><span></span><span></span>`;
+        dom.portalFormsTable.appendChild(emptyRow);
+        return;
+    }
+
+    forms.forEach((formRequest) => {
+        const completed = formRequest.status === 'completed';
+        const row = document.createElement('div');
+        row.className = 'table-row portal-forms';
+        row.innerHTML = `
+            <span>${escapeHtml(formRequest.template_name || 'Customer form')}</span>
+            <span>${completed ? 'Completed' : 'Pending'}</span>
+            <span>${escapeHtml(formatDateWithYear(formRequest.sent_at))}</span>
+            <span>${escapeHtml(formatDateWithYear(formRequest.completed_at) || '--')}</span>
+            <div class="row-actions"><button class="btn ${completed ? 'btn-outline' : 'btn-primary'} btn-small" type="button" data-action="open-portal-form" data-id="${formRequest.id}">${completed ? 'View' : 'Complete'}</button></div>
+        `;
+        dom.portalFormsTable.appendChild(row);
+    });
+}
+
+async function loadPortalForms() {
+    if (!dom.portalFormsTable) return;
+    try {
+        const response = await api.get('/api/portal/forms');
+        state.portalForms = response?.data?.data ?? [];
+        renderPortalForms(state.portalForms);
+    } catch (error) {
+        state.portalForms = [];
+        renderPortalForms([], getErrorMessage(error, 'Unable to load forms.'));
+    }
+}
+
+function renderPortalFormFields(formRequest) {
+    if (!dom.portalFormFields || !dom.portalFormPanel || !dom.portalCustomerForm) return;
+    const completed = formRequest.status === 'completed';
+    const questions = Array.isArray(formRequest.form_schema) ? formRequest.form_schema : [];
+    const answers = formRequest.answers || {};
+
+    dom.portalFormFields.innerHTML = questions.map((question) => {
+        const key = String(question.key || '');
+        const label = `${escapeHtml(question.label || key)}${question.required ? ' *' : ''}`;
+        const value = answers[key] ?? '';
+        const disabled = completed ? ' disabled' : '';
+        const common = `data-form-answer-key="${escapeHtml(key)}"${question.required ? ' required' : ''}${disabled}`;
+
+        if (question.type === 'textarea') {
+            return `<label class="field"><span>${label}</span><textarea rows="5" ${common}>${escapeHtml(value)}</textarea></label>`;
+        }
+        if (question.type === 'select') {
+            const options = (question.options || []).map((option) => `
+                <option value="${escapeHtml(option)}"${String(value) === String(option) ? ' selected' : ''}>${escapeHtml(option)}</option>
+            `).join('');
+            return `<label class="field"><span>${label}</span><select ${common}><option value="">Select an option</option>${options}</select></label>`;
+        }
+        if (question.type === 'checkbox') {
+            return `<label class="check-row"><input type="checkbox" ${common}${value ? ' checked' : ''}><span>${label}</span></label>`;
+        }
+
+        const inputType = ['number', 'date'].includes(question.type) ? question.type : 'text';
+        const step = inputType === 'number' ? ' step="any"' : '';
+        return `<label class="field"><span>${label}</span><input type="${inputType}" value="${escapeHtml(value)}"${step} ${common}></label>`;
+    }).join('');
+
+    state.currentPortalForm = formRequest;
+    if (dom.portalFormTitle) dom.portalFormTitle.textContent = formRequest.template_name || 'Customer form';
+    if (dom.portalFormSubtitle) {
+        dom.portalFormSubtitle.textContent = completed
+            ? `Completed ${formatDateWithYear(formRequest.completed_at)}`
+            : 'Complete all required fields and submit once.';
+    }
+    if (dom.portalFormSubmit) dom.portalFormSubmit.hidden = completed;
+    setFormStatus(dom.portalFormStatus, completed ? 'This form has been completed and is read-only.' : '');
+    dom.portalFormPanel.hidden = false;
+}
+
+function closePortalFormModal() {
+    state.currentPortalForm = null;
+    if (dom.portalFormPanel) dom.portalFormPanel.hidden = true;
+    if (dom.portalFormFields) dom.portalFormFields.innerHTML = '';
+    setFormStatus(dom.portalFormStatus, '');
+}
+
+async function openPortalForm(formId) {
+    if (!formId) return;
+    try {
+        const response = await api.get(`/api/portal/forms/${formId}`);
+        const formRequest = response?.data?.data;
+        if (formRequest) renderPortalFormFields(formRequest);
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to open form.'), true);
+    }
+}
+
+async function handlePortalCustomerFormSubmit(event) {
+    event.preventDefault();
+    const formRequest = state.currentPortalForm;
+    if (!formRequest || formRequest.status === 'completed' || !dom.portalFormFields) return;
+    if (!window.confirm('Are you sure you are happy to submit?')) return;
+
+    const answers = {};
+    dom.portalFormFields.querySelectorAll('[data-form-answer-key]').forEach((field) => {
+        const key = field.dataset.formAnswerKey;
+        answers[key] = field.type === 'checkbox' ? field.checked : field.value;
+    });
+
+    if (dom.portalFormSubmit) dom.portalFormSubmit.disabled = true;
+    setFormStatus(dom.portalFormStatus, 'Submitting form...');
+    try {
+        const response = await api.post(`/api/portal/forms/${formRequest.id}/submit`, { answers });
+        const completedForm = response?.data?.data;
+        if (completedForm) {
+            const index = state.portalForms.findIndex((item) => item.id === completedForm.id);
+            if (index >= 0) state.portalForms[index] = completedForm;
+            renderPortalForms(state.portalForms);
+            renderPortalFormFields(completedForm);
+        }
+        showToast('Form submitted');
+    } catch (error) {
+        setFormStatus(dom.portalFormStatus, getErrorMessage(error, 'Unable to submit form.'), true);
+    } finally {
+        if (dom.portalFormSubmit) dom.portalFormSubmit.disabled = false;
+    }
+}
+
 function clearInvoiceLineItems() {
     if (dom.invoiceLineItems) {
         dom.invoiceLineItems.innerHTML = '';
@@ -5943,13 +6354,13 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
-    const adminOnlyViews = ['customers', 'jobs', 'subscriptions', 'costs', 'proposals', 'invoices', 'monthly-finance', 'proposal-form-edit', 'staff-tracking'];
+    const adminOnlyViews = ['customers', 'jobs', 'subscriptions', 'costs', 'proposals', 'invoices', 'monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'];
     const staffOnlyViews = ['tasks', 'monthly-tasks'];
 
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
-            if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
+            if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
             if (adminOnlyViews.includes(item.dataset.view) && state.role !== 'admin') return;
             if (item.dataset.view === 'monthly-tasks' && state.role !== 'staff') return;
             setActiveView(item.dataset.view);
@@ -5969,7 +6380,7 @@ function initializeNavigation() {
                 if (button.dataset.goView === 'monthly-tasks' && state.role !== 'staff') {
                     return;
                 }
-                if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
+                if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -6047,6 +6458,85 @@ if (dom.invoiceSettingsForm) {
 
 if (dom.proposalFormsSettingsForm) {
     dom.proposalFormsSettingsForm.addEventListener('submit', handleProposalFormsSettingsSubmit);
+}
+
+if (dom.customerFormsSettingsForm) {
+    dom.customerFormsSettingsForm.addEventListener('submit', handleCustomerFormsSettingsSubmit);
+}
+
+if (dom.customerFormsAddType) {
+    dom.customerFormsAddType.addEventListener('click', () => {
+        const nextIndex = (state.customerFormSettings.types || []).length;
+        state.customerFormSettings.types = [
+            ...(state.customerFormSettings.types || []),
+            { label: 'New customer form', slug: '', questions: [] },
+        ];
+        state.editing.customerFormTypeIndex = nextIndex;
+        setActiveView('customer-form-edit');
+    });
+}
+
+if (dom.customerFormsEditor) {
+    dom.customerFormsEditor.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action="edit-customer-form-type"]');
+        if (!button) return;
+        const typeIndex = Number(button.dataset.typeIndex);
+        if (Number.isNaN(typeIndex)) return;
+        state.editing.customerFormTypeIndex = typeIndex;
+        setActiveView('customer-form-edit');
+    });
+}
+
+if (dom.customerFormEditBack) {
+    dom.customerFormEditBack.addEventListener('click', () => {
+        state.editing.customerFormTypeIndex = null;
+        setActiveView('admin');
+    });
+}
+
+if (dom.customerFormEditAddQuestion) {
+    dom.customerFormEditAddQuestion.addEventListener('click', () => {
+        state.customerFormSettings = collectCustomerFormsEditorPayload();
+        const typeIndex = Number(state.editing.customerFormTypeIndex);
+        if (Number.isNaN(typeIndex) || !state.customerFormSettings.types[typeIndex]) return;
+        state.customerFormSettings.types[typeIndex].questions = [
+            ...(state.customerFormSettings.types[typeIndex].questions || []),
+            { label: 'New question', type: 'text', required: false, options: [] },
+        ];
+        renderCustomerFormEdit();
+    });
+}
+
+if (dom.customerFormEditDelete) {
+    dom.customerFormEditDelete.addEventListener('click', async () => {
+        const typeIndex = Number(state.editing.customerFormTypeIndex);
+        if (Number.isNaN(typeIndex) || !state.customerFormSettings.types[typeIndex]) return;
+        if (!window.confirm('Delete this customer form?')) return;
+        state.customerFormSettings.types.splice(typeIndex, 1);
+        try {
+            const response = await api.put('/api/admin/customer-forms', { types: state.customerFormSettings.types });
+            state.customerFormSettings = response?.data?.data ?? { types: [] };
+            state.editing.customerFormTypeIndex = null;
+            renderCustomerFormsEditor();
+            showToast('Customer form deleted');
+            setActiveView('admin');
+        } catch (error) {
+            setFormStatus(dom.customerFormEditStatus, getErrorMessage(error, 'Unable to delete customer form.'), true);
+        }
+    });
+}
+
+if (dom.customerFormEditEditor) {
+    dom.customerFormEditEditor.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action="remove-customer-form-question"]');
+        if (!button) return;
+        state.customerFormSettings = collectCustomerFormsEditorPayload();
+        const typeIndex = Number(state.editing.customerFormTypeIndex);
+        const questionIndex = Number(button.closest('[data-question-index]')?.dataset.questionIndex);
+        if (Number.isNaN(typeIndex) || Number.isNaN(questionIndex)) return;
+        state.customerFormSettings.types[typeIndex].questions.splice(questionIndex, 1);
+        renderCustomerFormEdit();
+    });
 }
 
 if (dom.proposalFormsAddType) {
@@ -6219,6 +6709,27 @@ if (dom.customerWebsiteCancel) {
 
 if (dom.customerWebsitesList) {
     dom.customerWebsitesList.addEventListener('click', handleCustomerWebsiteAction);
+}
+
+if (dom.customerFormRequestForm) {
+    dom.customerFormRequestForm.addEventListener('submit', handleCustomerFormRequestSubmit);
+}
+
+if (dom.customerFormsTable) {
+    dom.customerFormsTable.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action="view-customer-form"]');
+        if (!button) return;
+        const formRequest = state.customerForms.find((item) => item.id === Number(button.dataset.id));
+        renderCustomerFormReview(formRequest || null);
+    });
+}
+
+if (dom.customerFormReview) {
+    dom.customerFormReview.addEventListener('click', (event) => {
+        if (event.target.closest('[data-action="close-customer-form-review"]')) {
+            renderCustomerFormReview(null);
+        }
+    });
 }
 
 if (dom.customerDetailBack) {
@@ -6725,6 +7236,31 @@ if (dom.portalProposalsRefresh) {
 
 if (dom.portalProposals) {
     dom.portalProposals.addEventListener('click', handlePortalProposalAction);
+}
+
+if (dom.portalFormsRefresh) {
+    dom.portalFormsRefresh.addEventListener('click', loadPortalForms);
+}
+
+if (dom.portalFormsTable) {
+    dom.portalFormsTable.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-action="open-portal-form"]');
+        if (button) openPortalForm(Number(button.dataset.id));
+    });
+}
+
+if (dom.portalCustomerForm) {
+    dom.portalCustomerForm.addEventListener('submit', handlePortalCustomerFormSubmit);
+}
+
+if (dom.portalFormClose) {
+    dom.portalFormClose.addEventListener('click', closePortalFormModal);
+}
+
+if (dom.portalFormPanel) {
+    dom.portalFormPanel.addEventListener('click', (event) => {
+        if (event.target === dom.portalFormPanel) closePortalFormModal();
+    });
 }
 
 initializeInvoiceForm();

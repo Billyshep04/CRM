@@ -9,6 +9,10 @@ class ProposalFormSettings
 {
     private const FILE_PATH = 'app/private/proposal_form_settings.json';
 
+    public function __construct(private readonly FormTemplateNormalizer $normalizer)
+    {
+    }
+
     public function adminPayload(): array
     {
         $stored = $this->read();
@@ -23,60 +27,7 @@ class ProposalFormSettings
      */
     public function update(array $types): array
     {
-        $normalized = [];
-
-        foreach ($types as $index => $type) {
-            $label = trim((string) ($type['label'] ?? ''));
-            if ($label === '') {
-                continue;
-            }
-
-            $slug = trim((string) ($type['slug'] ?? ''));
-            if ($slug === '') {
-                $slug = Str::slug($label);
-            }
-
-            $questions = [];
-            foreach (($type['questions'] ?? []) as $questionIndex => $question) {
-                $questionLabel = trim((string) ($question['label'] ?? ''));
-                if ($questionLabel === '') {
-                    continue;
-                }
-
-                $questionKey = trim((string) ($question['key'] ?? ''));
-                if ($questionKey === '') {
-                    $questionKey = Str::slug($questionLabel, '_');
-                }
-
-                $fieldType = (string) ($question['type'] ?? 'text');
-                if (!in_array($fieldType, ['text', 'textarea', 'number', 'date', 'select', 'checkbox'], true)) {
-                    $fieldType = 'text';
-                }
-
-                $questions[] = [
-                    'key' => $questionKey,
-                    'label' => $questionLabel,
-                    'type' => $fieldType,
-                    'required' => (bool) ($question['required'] ?? false),
-                    'options' => array_values(array_filter(array_map(
-                        static fn ($option): string => trim((string) $option),
-                        $question['options'] ?? []
-                    ))),
-                    'sort_order' => (int) ($question['sort_order'] ?? $questionIndex),
-                ];
-            }
-
-            usort($questions, static fn (array $a, array $b): int => $a['sort_order'] <=> $b['sort_order']);
-
-            $normalized[] = [
-                'slug' => $slug,
-                'label' => $label,
-                'sort_order' => (int) ($type['sort_order'] ?? $index),
-                'questions' => $questions,
-            ];
-        }
-
-        usort($normalized, static fn (array $a, array $b): int => $a['sort_order'] <=> $b['sort_order']);
+        $normalized = $this->normalizer->normalize($types);
 
         Storage::disk('local')->put(self::FILE_PATH, json_encode([
             'types' => $normalized,

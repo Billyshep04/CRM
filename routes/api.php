@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AdminInvoiceSettingController;
+use App\Http\Controllers\AdminCustomerFormController;
 use App\Http\Controllers\AdminMailSettingController;
 use App\Http\Controllers\AdminProposalFormController;
 use App\Http\Controllers\AdminStaffUserController;
@@ -11,6 +12,7 @@ use App\Http\Controllers\BrandSettingController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\CostController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\CustomerFormController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\LeadDiscoveryController;
@@ -110,6 +112,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::patch('customers/{customer}/archive', [CustomerController::class, 'archive']);
         Route::patch('customers/{customer}/unarchive', [CustomerController::class, 'unarchive']);
+        Route::get('customers/{customer}/forms', [CustomerFormController::class, 'index']);
+        Route::post('customers/{customer}/forms', [CustomerFormController::class, 'store']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
         Route::get('admin/staff-task-summary', [TaskController::class, 'staffSummary']);
@@ -120,6 +124,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::put('admin/mail-settings', [AdminMailSettingController::class, 'update']);
         Route::get('admin/proposal-forms', [AdminProposalFormController::class, 'show']);
         Route::put('admin/proposal-forms', [AdminProposalFormController::class, 'update']);
+        Route::get('admin/customer-forms', [AdminCustomerFormController::class, 'show']);
+        Route::put('admin/customer-forms', [AdminCustomerFormController::class, 'update']);
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {
@@ -137,5 +143,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('proposals/{proposal}/download', [PortalController::class, 'downloadProposal']);
         Route::post('support', [PortalController::class, 'support']);
         Route::get('websites', [PortalController::class, 'websites']);
+        Route::get('forms', [PortalController::class, 'forms']);
+        Route::get('forms/{customerFormRequest}', [PortalController::class, 'form']);
+        Route::post('forms/{customerFormRequest}/submit', [PortalController::class, 'submitForm']);
     });
 });

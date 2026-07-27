@@ -94,6 +94,16 @@ class RolePermissionSeeder extends Seeder
                 'slug' => 'discover_external_leads',
                 'description' => 'Search external business providers and import CRM leads.',
             ],
+            [
+                'name' => 'Manage customer forms',
+                'slug' => 'manage_customer_forms',
+                'description' => 'Send customer forms and review submitted answers.',
+            ],
+            [
+                'name' => 'Complete customer forms',
+                'slug' => 'complete_customer_forms',
+                'description' => 'View and complete forms assigned through the customer portal.',
+            ],
         ];
 
         foreach ($permissions as $permissionData) {
@@ -121,7 +131,7 @@ class RolePermissionSeeder extends Seeder
             ])
             ->pluck('id');
         $customerPermissions = Permission::query()
-            ->whereIn('slug', ['view_portal'])
+            ->whereIn('slug', ['view_portal', 'complete_customer_forms'])
             ->pluck('id');
 
         if ($adminRole) {

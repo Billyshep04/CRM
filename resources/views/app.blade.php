@@ -119,6 +119,7 @@
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-proposals">Proposals</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-forms">Forms</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
@@ -595,6 +596,34 @@
                                 <div class="card-value" id="customer-subscription-count">0</div>
                                 <div class="card-meta">Currently active</div>
                             </div>
+                        </div>
+
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Customer Forms</div>
+                                    <div class="card-subtitle">Send forms to the customer and review submitted answers.</div>
+                                </div>
+                            </div>
+                            <form id="customer-form-request-form" class="filters customer-form-send-controls">
+                                <label class="field">
+                                    <span>Form template</span>
+                                    <select id="customer-form-template" name="template_slug" required>
+                                        <option value="">Select a form</option>
+                                    </select>
+                                </label>
+                                <button class="btn btn-primary" type="submit">Send Form</button>
+                            </form>
+                            <div id="customer-form-request-status" class="form-hint"></div>
+                            <div class="table" id="customer-forms-table">
+                                <div class="table-row table-header customer-forms">
+                                    <span>Form</span><span>Status</span><span>Sent</span><span>Completed</span><span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty customer-forms">
+                                    <span>No forms sent yet.</span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            <div class="customer-form-review" id="customer-form-review" hidden></div>
                         </div>
 
                         <div class="content-grid">
@@ -1534,6 +1563,18 @@
                             <div id="proposal-forms-settings-status" class="form-hint"></div>
                         </div>
 
+                        <div class="card wide admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Edit Customer forms</div>
+                                    <div class="card-subtitle">Create and edit the forms that can be sent from a customer's page.</div>
+                                </div>
+                                <button class="btn btn-outline" id="customer-forms-add-type" type="button">Add form</button>
+                            </div>
+                            <div id="customer-forms-editor" class="form-stack"></div>
+                            <div id="customer-forms-settings-status" class="form-hint"></div>
+                        </div>
+
                         <div class="card">
                             <div class="card-header">
                                 <div>
@@ -1641,6 +1682,33 @@
                                     <button type="button" class="btn btn-outline" id="proposal-form-edit-add-question">Add question</button>
                                     <button type="submit" class="btn btn-primary">Save form</button>
                                     <button type="button" class="btn btn-ghost" id="proposal-form-edit-delete">Delete form</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="customer-form-edit">
+                    <section class="content-grid">
+                        <div class="card wide admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="customer-form-edit-title">Edit customer form</div>
+                                    <div class="card-subtitle">Update the form name and questions shown to customers in their portal.</div>
+                                </div>
+                                <button class="btn btn-outline" id="customer-form-edit-back" type="button">Back to Admin</button>
+                            </div>
+                            <form id="customer-forms-settings-form" class="form-stack">
+                                <label class="field">
+                                    <span>Form name</span>
+                                    <input type="text" id="customer-form-edit-label" required>
+                                </label>
+                                <div id="customer-form-edit-editor" class="form-stack"></div>
+                                <div id="customer-form-edit-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn btn-outline" id="customer-form-edit-add-question">Add question</button>
+                                    <button type="submit" class="btn btn-primary">Save form</button>
+                                    <button type="button" class="btn btn-ghost" id="customer-form-edit-delete">Delete form</button>
                                 </div>
                             </form>
                         </div>
@@ -1770,6 +1838,45 @@
                                     <span></span>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view portal-view" data-view="portal-forms">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Forms</div>
+                                    <div class="card-subtitle">Complete forms requested by WebStamp and review previous submissions.</div>
+                                </div>
+                                <button class="btn btn-outline" id="portal-forms-refresh" type="button">Refresh</button>
+                            </div>
+                            <div class="table" id="portal-forms-table">
+                                <div class="table-row table-header portal-forms">
+                                    <span>Form</span><span>Status</span><span>Sent</span><span>Completed</span><span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty portal-forms">
+                                    <span>No forms available.</span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="crm-modal-backdrop" id="portal-form-panel" hidden>
+                            <section class="crm-modal customer-form-modal" role="dialog" aria-modal="true" aria-labelledby="portal-form-title">
+                            <div class="crm-modal-header">
+                                <div>
+                                    <div class="card-title" id="portal-form-title">Customer form</div>
+                                    <div class="card-subtitle" id="portal-form-subtitle"></div>
+                                </div>
+                                <button class="crm-modal-close" id="portal-form-close" type="button" aria-label="Close">×</button>
+                            </div>
+                            <form id="portal-customer-form" class="form-stack">
+                                <div id="portal-form-fields" class="form-stack"></div>
+                                <div id="portal-form-status" class="form-hint"></div>
+                                <button class="btn btn-primary" id="portal-form-submit" type="submit">Submit Form</button>
+                            </form>
+                            </section>
                         </div>
                     </section>
                 </section>

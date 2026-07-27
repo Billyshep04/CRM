@@ -72,4 +72,9 @@ class Customer extends Model
     {
         return $this->hasMany(RevenueOpportunity::class);
     }
+
+    public function formRequests(): HasMany
+    {
+        return $this->hasMany(CustomerFormRequest::class);
+    }
 }

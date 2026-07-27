@@ -908,6 +908,54 @@ body[data-role="admin"] .admin-inline-only {
     grid-template-columns: 1.2fr 1.4fr 0.7fr 0.7fr 0.7fr 1fr;
 }
 
+.table-row.customer-forms,
+.table-row.portal-forms {
+    grid-template-columns: minmax(150px, 1.5fr) 0.65fr 0.85fr 0.85fr minmax(100px, 0.7fr);
+    align-items: center;
+}
+
+.customer-form-send-controls {
+    grid-template-columns: minmax(220px, 1fr) auto;
+    align-items: end;
+}
+
+.customer-form-review {
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--bg-muted);
+}
+
+.customer-form-review-grid {
+    display: grid;
+    gap: 12px;
+    margin-top: 14px;
+}
+
+.customer-form-answer {
+    display: grid;
+    gap: 4px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.customer-form-answer:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.customer-form-answer-label {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.customer-form-answer-value {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
 .table-row.job-photos {
     grid-template-columns: 0.9fr 1.6fr 0.5fr 0.7fr;
 }
@@ -955,6 +1003,75 @@ body[data-role="admin"] .admin-inline-only {
 .crm-modal textarea { resize: vertical; min-height: 130px; }
 .crm-modal .btn-primary { background: #35c190; border-color: #35c190; color: #fff; }
 .crm-modal .btn-primary:hover { background: #289f76; border-color: #289f76; }
+
+.crm-modal.customer-form-modal {
+    width: min(720px, 100%);
+    background: var(--bg-elevated);
+    color: var(--text);
+}
+
+.crm-modal.customer-form-modal .card-title,
+.crm-modal.customer-form-modal .card-subtitle,
+.crm-modal.customer-form-modal .field > span,
+.crm-modal.customer-form-modal .form-hint {
+    color: var(--text);
+}
+
+.crm-modal.customer-form-modal .card-subtitle,
+.crm-modal.customer-form-modal .form-hint {
+    opacity: 1;
+    color: var(--text-muted);
+}
+
+.crm-modal.customer-form-modal .crm-modal-close {
+    border-color: var(--border);
+    background: var(--bg-muted);
+    color: var(--text);
+}
+
+#portal-form-fields .check-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 26px;
+}
+
+#portal-form-fields .check-row > span {
+    display: flex;
+    align-items: center;
+    min-height: 26px;
+    line-height: 1.35;
+}
+
+#portal-form-fields .check-row input[type="checkbox"] {
+    appearance: none;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 26px;
+    border: 2px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--bg-muted);
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: 18px 18px;
+    cursor: pointer;
+}
+
+#portal-form-fields .check-row input[type="checkbox"]:checked {
+    border-color: #22a866;
+    background-color: #22a866;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round' d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E");
+}
+
+#portal-form-fields .check-row input[type="checkbox"]:focus-visible {
+    outline: 3px solid rgba(34, 168, 102, 0.3);
+    outline-offset: 2px;
+}
+
+#portal-form-fields .check-row input[type="checkbox"]:disabled {
+    cursor: default;
+    opacity: 0.85;
+}
 .opportunity-delete { border-color: #dc2626 !important; color: #dc2626 !important; }
 .opportunity-delete:hover { background: #dc2626 !important; color: #fff !important; }
 .opportunity-bulk-delete { background: #dc2626; border-color: #dc2626; color: #fff; }
@@ -1658,6 +1775,26 @@ body[data-role="staff"] .staff-member-only {
 
     #portal-proposals .table-row.portal-proposals:not(.table-empty) > span:nth-child(5) {
         --cell-label: "Expires";
+    }
+
+    #customer-forms-table .table-row.customer-forms:not(.table-empty) > span:nth-child(1),
+    #portal-forms-table .table-row.portal-forms:not(.table-empty) > span:nth-child(1) {
+        --cell-label: "Form";
+    }
+
+    #customer-forms-table .table-row.customer-forms:not(.table-empty) > span:nth-child(2),
+    #portal-forms-table .table-row.portal-forms:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Status";
+    }
+
+    #customer-forms-table .table-row.customer-forms:not(.table-empty) > span:nth-child(3),
+    #portal-forms-table .table-row.portal-forms:not(.table-empty) > span:nth-child(3) {
+        --cell-label: "Sent";
+    }
+
+    #customer-forms-table .table-row.customer-forms:not(.table-empty) > span:nth-child(4),
+    #portal-forms-table .table-row.portal-forms:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Completed";
     }
 
     .view[data-view="portal"] .card-header {
