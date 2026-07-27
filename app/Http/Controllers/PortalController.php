@@ -41,7 +41,10 @@ class PortalController extends Controller
 
         $query = Job::query()
             ->whereIn('customer_id', $customerIds)
-            ->whereNull('archived_at')
+            ->when(
+                Schema::hasColumn('jobs', 'archived_at'),
+                static fn ($builder) => $builder->whereNull('archived_at')
+            )
             ->latest();
 
         $perPage = $request->integer('per_page', 15);

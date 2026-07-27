@@ -119,8 +119,12 @@ class CustomerController extends Controller
 
     public function show(Customer $customer)
     {
+        $supportsJobArchiving = Schema::hasColumn('jobs', 'archived_at');
         $customer->load([
-            'jobs' => static fn ($query) => $query->whereNull('archived_at'),
+            'jobs' => static fn ($query) => $query->when(
+                $supportsJobArchiving,
+                static fn ($jobQuery) => $jobQuery->whereNull('archived_at')
+            ),
             'subscriptions',
             'websites',
             'invoices',

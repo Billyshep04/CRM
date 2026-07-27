@@ -10,7 +10,7 @@ return new class extends Migration
     {
         if (!Schema::hasColumn('invoices', 'archived_at')) {
             Schema::table('invoices', function (Blueprint $table): void {
-                $table->timestamp('archived_at')->nullable()->after('paid_at')->index();
+                $table->timestamp('archived_at')->nullable()->index();
             });
         }
     }

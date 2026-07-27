@@ -13,9 +13,11 @@ use App\Services\InvoicePdfService;
 use App\Services\RecurringInvoiceService;
 use App\Services\InvoiceJobStatusSyncService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -32,12 +34,16 @@ class InvoiceController extends Controller
         );
 
         $archivedOnly = $request->boolean('archived');
+        $supportsArchiving = $this->ensureInvoiceArchiveColumnExists(true);
         $query = Invoice::query()
             ->with(['customer', 'lineItems', 'pdfFile'])
             ->when(
-                $archivedOnly,
-                static fn ($builder) => $builder->whereNotNull('archived_at'),
-                static fn ($builder) => $builder->whereNull('archived_at')
+                $supportsArchiving,
+                static fn ($builder) => $builder->when(
+                    $archivedOnly,
+                    static fn ($archiveQuery) => $archiveQuery->whereNotNull('archived_at'),
+                    static fn ($archiveQuery) => $archiveQuery->whereNull('archived_at')
+                )
             )
             ->latest();
 
@@ -274,6 +280,12 @@ class InvoiceController extends Controller
 
     public function archive(Invoice $invoice): InvoiceResource
     {
+        if (!$this->ensureInvoiceArchiveColumnExists(true)) {
+            throw ValidationException::withMessages([
+                'archive' => ['Invoice archiving is temporarily unavailable.'],
+            ]);
+        }
+
         if ($invoice->archived_at === null) {
             $invoice->forceFill(['archived_at' => now()])->save();
         }
@@ -283,11 +295,35 @@ class InvoiceController extends Controller
 
     public function unarchive(Invoice $invoice): InvoiceResource
     {
+        if (!$this->ensureInvoiceArchiveColumnExists(true)) {
+            throw ValidationException::withMessages([
+                'archive' => ['Invoice archiving is temporarily unavailable.'],
+            ]);
+        }
+
         if ($invoice->archived_at !== null) {
             $invoice->forceFill(['archived_at' => null])->save();
         }
 
         return new InvoiceResource($invoice->fresh()->load(['customer', 'lineItems', 'pdfFile']));
+    }
+
+    private function ensureInvoiceArchiveColumnExists(bool $attemptAutoCreate = false): bool
+    {
+        $supportsArchiving = Schema::hasColumn('invoices', 'archived_at');
+        if ($supportsArchiving || !$attemptAutoCreate || !Schema::hasTable('invoices')) {
+            return $supportsArchiving;
+        }
+
+        try {
+            Schema::table('invoices', function (Blueprint $table): void {
+                $table->timestamp('archived_at')->nullable();
+            });
+        } catch (Throwable) {
+            // Keep the list available even if this database user cannot alter schema.
+        }
+
+        return Schema::hasColumn('invoices', 'archived_at');
     }
 
     /**

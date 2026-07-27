@@ -21,12 +21,16 @@ class JobController extends Controller
     public function index(Request $request)
     {
         $archivedOnly = $request->boolean('archived');
+        $supportsArchiving = $this->ensureJobArchiveColumnExists(true);
         $query = Job::query()
             ->with('customer')
             ->when(
-                $archivedOnly,
-                static fn ($builder) => $builder->whereNotNull('archived_at'),
-                static fn ($builder) => $builder->whereNull('archived_at')
+                $supportsArchiving,
+                static fn ($builder) => $builder->when(
+                    $archivedOnly,
+                    static fn ($archiveQuery) => $archiveQuery->whereNotNull('archived_at'),
+                    static fn ($archiveQuery) => $archiveQuery->whereNull('archived_at')
+                )
             )
             ->latest();
 
@@ -137,6 +141,12 @@ class JobController extends Controller
 
     public function archive(Job $job): JobResource
     {
+        if (!$this->ensureJobArchiveColumnExists(true)) {
+            throw ValidationException::withMessages([
+                'archive' => ['Job archiving is temporarily unavailable.'],
+            ]);
+        }
+
         if ($job->archived_at === null) {
             $job->forceFill(['archived_at' => now()])->save();
         }
@@ -146,6 +156,12 @@ class JobController extends Controller
 
     public function unarchive(Job $job): JobResource
     {
+        if (!$this->ensureJobArchiveColumnExists(true)) {
+            throw ValidationException::withMessages([
+                'archive' => ['Job archiving is temporarily unavailable.'],
+            ]);
+        }
+
         if ($job->archived_at !== null) {
             $job->forceFill(['archived_at' => null])->save();
         }
@@ -313,5 +329,23 @@ class JobController extends Controller
         $supportsJobNotes = Schema::hasColumn('jobs', 'notes');
 
         return $supportsJobNotes;
+    }
+
+    private function ensureJobArchiveColumnExists(bool $attemptAutoCreate = false): bool
+    {
+        $supportsArchiving = Schema::hasColumn('jobs', 'archived_at');
+        if ($supportsArchiving || !$attemptAutoCreate || !Schema::hasTable('jobs')) {
+            return $supportsArchiving;
+        }
+
+        try {
+            Schema::table('jobs', function (Blueprint $table): void {
+                $table->timestamp('archived_at')->nullable();
+            });
+        } catch (Throwable) {
+            // Keep the list available even if this database user cannot alter schema.
+        }
+
+        return Schema::hasColumn('jobs', 'archived_at');
     }
 }
