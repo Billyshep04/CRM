@@ -20,7 +20,7 @@
                         <tr>
                             <td style="padding:12px 16px;background:#f9fafb;border-radius:10px;font-size:13px;line-height:1.6;">
                                 <div><strong>Proposal:</strong> {{ $proposal->proposal_number }} (v{{ $proposal->version }})</div>
-                                <div><strong>Customer:</strong> {{ $customer?->name }} ({{ $customer?->email }})</div>
+                                <div><strong>Customer:</strong> {{ $customer?->name }}@if($customer?->email) (<a href="mailto:{{ $customer->email }}">{{ $customer->email }}</a>)@endif</div>
                                 <div><strong>Total:</strong> £{{ number_format((float) $proposal->total, 2) }}</div>
                                 @if ($job)
                                     <div><strong>Job:</strong> #{{ $job->id }} - {{ $job->description }}</div>

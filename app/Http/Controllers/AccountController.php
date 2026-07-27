@@ -38,6 +38,7 @@ class AccountController extends Controller
             'billing_address' => $customerProfiles->isNotEmpty()
                 ? ['required', 'string']
                 : ['nullable', 'string'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
         ]);
 
         DB::transaction(function () use ($user, $customerProfiles, $validated): void {
@@ -50,12 +51,16 @@ class AccountController extends Controller
 
             if ($customerProfiles->isNotEmpty()) {
                 foreach ($customerProfiles as $customerProfile) {
-                    $customerProfile->update([
+                    $customerUpdates = [
                         'user_id' => $user?->id,
                         'name' => $validated['name'],
                         'email' => $validated['email'],
                         'billing_address' => $validated['billing_address'],
-                    ]);
+                    ];
+                    if (array_key_exists('phone', $validated)) {
+                        $customerUpdates['phone'] = $validated['phone'];
+                    }
+                    $customerProfile->update($customerUpdates);
                 }
             }
         });

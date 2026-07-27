@@ -42,6 +42,8 @@ const dom = {
     opportunitiesTable: document.getElementById('opportunities-table'),
     opportunitiesRefresh: document.getElementById('opportunities-refresh'),
     opportunitiesRecommend: document.getElementById('opportunities-recommend'),
+    opportunitiesBulkEdit: document.getElementById('opportunities-bulk-edit'),
+    opportunitiesBulkDelete: document.getElementById('opportunities-bulk-delete'),
     opportunitiesFilterStatus: document.getElementById('opportunities-filter-status'),
     opportunitiesFilterType: document.getElementById('opportunities-filter-type'),
     opportunityForm: document.getElementById('opportunity-form'),
@@ -158,6 +160,7 @@ const dom = {
     portalProfileStatus: document.getElementById('portal-profile-status'),
     portalProfileName: document.getElementById('portal-profile-name'),
     portalProfileEmail: document.getElementById('portal-profile-email'),
+    portalProfilePhone: document.getElementById('portal-profile-phone'),
     portalProfileBillingAddress: document.getElementById('portal-profile-billing-address'),
     portalSupportForm: document.getElementById('portal-support-form'),
     portalSupportStatus: document.getElementById('portal-support-status'),
@@ -166,6 +169,7 @@ const dom = {
     toast: document.getElementById('app-toast'),
     customerDetailTitle: document.getElementById('customer-detail-title'),
     customerDetailEmail: document.getElementById('customer-detail-email'),
+    customerDetailPhone: document.getElementById('customer-detail-phone'),
     customerDetailBilling: document.getElementById('customer-detail-billing'),
     customerDetailNotes: document.getElementById('customer-detail-notes'),
     customerTotalSpent: document.getElementById('customer-total-spent'),
@@ -188,6 +192,7 @@ const dom = {
     jobsFilterCustomer: document.getElementById('jobs-filter-customer'),
     jobsClear: document.getElementById('jobs-clear'),
     jobsLoadMore: document.getElementById('jobs-load-more'),
+    jobsArchivedToggle: document.getElementById('jobs-archived-toggle'),
     costsLoadMore: document.getElementById('costs-load-more'),
     subscriptionsFilterStatus: document.getElementById('subscriptions-filter-status'),
     subscriptionsFilterCustomer: document.getElementById('subscriptions-filter-customer'),
@@ -201,6 +206,7 @@ const dom = {
     invoicesFilterCustomer: document.getElementById('invoices-filter-customer'),
     invoicesClear: document.getElementById('invoices-clear'),
     invoicesLoadMore: document.getElementById('invoices-load-more'),
+    invoicesArchivedToggle: document.getElementById('invoices-archived-toggle'),
     customersTable: document.getElementById('customers-table'),
     customerForm: document.getElementById('customer-form'),
     customerFormTitle: document.getElementById('customer-form-title'),
@@ -317,6 +323,8 @@ const state = {
     subscriptionMonths: [],
     invoices: [],
     revenueOpportunities: [],
+    opportunityBulkEdit: false,
+    selectedOpportunityIds: new Set(),
     discoveredLeads: [],
     showingContactedLeads: false,
     leadDiscoveryRuns: [],
@@ -341,6 +349,7 @@ const state = {
         jobs: {
             status: 'all',
             customer: 'all',
+            archived: false,
         },
         subscriptions: {
             status: 'all',
@@ -353,6 +362,7 @@ const state = {
         invoices: {
             status: 'all',
             customer: 'all',
+            archived: false,
         },
         tasks: {
             status: 'all',
@@ -518,6 +528,9 @@ function populatePortalProfileForm(user) {
     if (dom.portalProfileEmail) {
         dom.portalProfileEmail.value = customerProfile?.email || user.email || '';
     }
+    if (dom.portalProfilePhone) {
+        dom.portalProfilePhone.value = customerProfile?.phone || '';
+    }
     if (dom.portalProfileBillingAddress) {
         dom.portalProfileBillingAddress.value = customerProfile?.billing_address || '';
     }
@@ -677,6 +690,21 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+function formatEmailLink(value, fallback = '--') {
+    const email = String(value ?? '').trim();
+    if (!email) return escapeHtml(fallback);
+    const safeEmail = escapeHtml(email);
+    return `<a class="email-link" href="mailto:${safeEmail}">${safeEmail}</a>`;
+}
+
+function formatPhoneLink(value, fallback = '--') {
+    const phone = String(value ?? '').trim();
+    if (!phone) return escapeHtml(fallback);
+    const dialNumber = phone.replace(/[^\d+]/g, '').replace(/(?!^)\+/g, '');
+    if (!dialNumber) return escapeHtml(phone);
+    return `<a class="phone-link" href="tel:${escapeHtml(dialNumber)}">${escapeHtml(phone)}</a>`;
 }
 
 function formatCurrency(amount) {
@@ -1516,7 +1544,7 @@ function renderStaffTracking() {
         const row = document.createElement('div');
         row.className = 'table-row staff-tracking';
         row.innerHTML = `
-            <span>${escapeHtml(staff.name || staff.email || '')}</span>
+            <span>${staff.name ? escapeHtml(staff.name) : formatEmailLink(staff.email, '')}</span>
             <span>${escapeHtml(String(staff.pending_tasks || 0))}</span>
             <span>${escapeHtml(String(staff.completed_this_month || 0))}</span>
             <span>${Number(staff.hours_this_month || 0).toFixed(2)}h</span>
@@ -1924,6 +1952,7 @@ async function handlePortalProfileSubmit(event) {
     const payload = {
         name: String(formData.get('name') || '').trim(),
         email: String(formData.get('email') || '').trim(),
+        phone: String(formData.get('phone') || '').trim() || null,
         billing_address: String(formData.get('billing_address') || '').trim(),
     };
 
@@ -2443,7 +2472,7 @@ function renderStaffUsers() {
         row.className = 'table-row staff-users';
         row.innerHTML = `
             <span>${escapeHtml(user.name || '')}</span>
-            <span>${escapeHtml(user.email || '')}</span>
+            <span>${formatEmailLink(user.email, '')}</span>
             <span>${formatDate(user.created_at)}</span>
         `;
         dom.staffUsersTable.appendChild(row);
@@ -2847,18 +2876,79 @@ function renderRevenueOpportunities() {
     }
     state.revenueOpportunities.forEach((opportunity) => {
         const row = document.createElement('div');
-        row.className = 'table-row opportunities';
+        const selected = state.selectedOpportunityIds.has(opportunity.id);
+        row.className = `table-row opportunities${state.opportunityBulkEdit ? ' opportunity-bulk-row' : ''}${selected ? ' selected' : ''}`;
+        if (state.opportunityBulkEdit) row.dataset.opportunitySelectRow = opportunity.id;
+        const customer = escapeHtml(opportunity.customer?.name || getCustomerName(opportunity.customer_id));
+        const customerCell = state.opportunityBulkEdit
+            ? `<label class="opportunity-select-control"><input type="checkbox" data-opportunity-select="${opportunity.id}" ${selected ? 'checked' : ''}><span>${customer}</span></label>`
+            : customer;
+        const actions = state.opportunityBulkEdit
+            ? '<span class="text-muted">Click row to select</span>'
+            : `<div class="row-actions"><button class="btn btn-outline btn-small" data-action="edit" data-id="${opportunity.id}">Edit</button>${opportunity.status !== 'won' ? `<button class="btn btn-primary btn-small" data-action="won" data-id="${opportunity.id}">Won</button>` : ''}<button class="btn btn-outline btn-small" data-action="follow-up" data-id="${opportunity.id}">Follow up</button><button class="btn btn-outline btn-small opportunity-delete" data-action="delete" data-id="${opportunity.id}">Delete</button></div>`;
         row.innerHTML = `
-            <span>${escapeHtml(opportunity.customer?.name || getCustomerName(opportunity.customer_id))}</span>
+            <span>${customerCell}</span>
             <span><strong>${escapeHtml(opportunity.type_label)}</strong><small>${escapeHtml(opportunity.title)}</small></span>
             <span><span class="pill ${opportunity.status === 'won' ? 'success' : 'outline'}">${escapeHtml(opportunity.status)}</span></span>
             <span>${formatCurrency(Number(opportunity.estimated_project_value || 0))}</span>
             <span>${formatCurrency(Number(opportunity.estimated_monthly_revenue || 0))}</span>
             <span>${formatDate(opportunity.next_action_at)}</span>
-            <div class="row-actions"><button class="btn btn-outline btn-small" data-action="edit" data-id="${opportunity.id}">Edit</button>${opportunity.status !== 'won' ? `<button class="btn btn-primary btn-small" data-action="won" data-id="${opportunity.id}">Won</button>` : ''}<button class="btn btn-outline btn-small" data-action="follow-up" data-id="${opportunity.id}">Follow up</button><button class="btn btn-outline btn-small opportunity-delete" data-action="delete" data-id="${opportunity.id}">Delete</button></div>
+            ${actions}
         `;
         dom.opportunitiesTable.appendChild(row);
     });
+    updateOpportunityBulkControls();
+}
+
+function updateOpportunityBulkControls() {
+    const count = state.selectedOpportunityIds.size;
+    if (dom.opportunitiesBulkEdit) dom.opportunitiesBulkEdit.textContent = state.opportunityBulkEdit ? 'Cancel' : 'Bulk Edit';
+    if (dom.opportunitiesBulkDelete) {
+        dom.opportunitiesBulkDelete.hidden = !state.opportunityBulkEdit;
+        dom.opportunitiesBulkDelete.disabled = count === 0;
+        dom.opportunitiesBulkDelete.textContent = `Delete selected (${count})`;
+    }
+}
+
+function setOpportunityBulkEdit(enabled) {
+    state.opportunityBulkEdit = enabled;
+    state.selectedOpportunityIds.clear();
+    renderRevenueOpportunities();
+}
+
+function setOpportunitySelected(id, selected) {
+    if (selected) state.selectedOpportunityIds.add(id);
+    else state.selectedOpportunityIds.delete(id);
+    const checkbox = dom.opportunitiesTable?.querySelector(`[data-opportunity-select="${id}"]`);
+    const row = dom.opportunitiesTable?.querySelector(`[data-opportunity-select-row="${id}"]`);
+    if (checkbox) checkbox.checked = selected;
+    if (row) row.classList.toggle('selected', selected);
+    updateOpportunityBulkControls();
+}
+
+function handleOpportunitySelection(event) {
+    if (!state.opportunityBulkEdit) return;
+    const checkbox = event.target.closest('[data-opportunity-select]');
+    if (!checkbox) return;
+    setOpportunitySelected(checkbox.dataset.opportunitySelect, checkbox.checked);
+}
+
+async function deleteSelectedOpportunities() {
+    const ids = [...state.selectedOpportunityIds];
+    if (!ids.length) return;
+    const label = ids.length === 1 ? 'revenue opportunity' : 'revenue opportunities';
+    if (!window.confirm(`Delete ${ids.length} selected ${label}? This cannot be undone.`)) return;
+    dom.opportunitiesBulkDelete.disabled = true;
+    try {
+        const response = await api.delete('/api/revenue-opportunities/bulk', { data: { ids } });
+        showToast(response?.data?.message || `${ids.length} revenue opportunities deleted.`);
+        state.opportunityBulkEdit = false;
+        state.selectedOpportunityIds.clear();
+        await loadRevenueOpportunities();
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to delete the selected opportunities.'), true);
+        updateOpportunityBulkControls();
+    }
 }
 
 function resetOpportunityForm() {
@@ -2904,6 +2994,12 @@ async function handleOpportunitySubmit(event) {
 }
 
 async function handleOpportunityAction(event) {
+    if (state.opportunityBulkEdit) {
+        if (event.target.closest('[data-opportunity-select]')) return;
+        const row = event.target.closest('[data-opportunity-select-row]');
+        if (row) setOpportunitySelected(row.dataset.opportunitySelectRow, !state.selectedOpportunityIds.has(row.dataset.opportunitySelectRow));
+        return;
+    }
     const button = event.target.closest('[data-action][data-id]');
     if (!button) return;
     const opportunity = state.revenueOpportunities.find((item) => item.id === button.dataset.id);
@@ -2982,6 +3078,40 @@ function updateCustomerArchiveControls() {
     }
 }
 
+function isViewingArchivedJobs() {
+    return state.filters.jobs.archived === true;
+}
+
+function updateJobArchiveControls() {
+    if (!dom.jobsArchivedToggle) return;
+    const viewingArchived = isViewingArchivedJobs();
+    dom.jobsArchivedToggle.textContent = viewingArchived ? 'Active jobs' : 'Archived jobs';
+    dom.jobsArchivedToggle.classList.toggle('is-active', viewingArchived);
+}
+
+function setJobsArchivedMode(showArchived) {
+    state.filters.jobs.archived = showArchived === true;
+    updateJobArchiveControls();
+    loadJobs();
+}
+
+function isViewingArchivedInvoices() {
+    return state.filters.invoices.archived === true;
+}
+
+function updateInvoiceArchiveControls() {
+    if (!dom.invoicesArchivedToggle) return;
+    const viewingArchived = isViewingArchivedInvoices();
+    dom.invoicesArchivedToggle.textContent = viewingArchived ? 'Active invoices' : 'Archived invoices';
+    dom.invoicesArchivedToggle.classList.toggle('is-active', viewingArchived);
+}
+
+function setInvoicesArchivedMode(showArchived) {
+    state.filters.invoices.archived = showArchived === true;
+    updateInvoiceArchiveControls();
+    loadInvoices();
+}
+
 async function loadCustomerOptions() {
     try {
         const perPage = 200;
@@ -3018,7 +3148,7 @@ async function ensureCustomersLoaded() {
 
 async function ensureJobsLoaded() {
     if (state.role !== 'admin') return;
-    if (state.jobs.length) return;
+    if (state.jobs.length && state.jobs.every((job) => job?.is_archived !== true)) return;
 
     const response = await api.get('/api/jobs?per_page=200');
     state.jobs = response?.data?.data ?? [];
@@ -3262,7 +3392,7 @@ async function loadCustomers(append = false) {
         resetTable(dom.customersTable);
         const loadingRow = document.createElement('div');
         loadingRow.className = 'table-row table-empty customers';
-        loadingRow.innerHTML = '<span>Loading customers...</span><span></span><span></span><span></span><span></span>';
+        loadingRow.innerHTML = '<span>Loading customers...</span><span></span><span></span><span></span><span></span><span></span>';
         dom.customersTable.appendChild(loadingRow);
     }
 
@@ -3289,7 +3419,7 @@ async function loadCustomers(append = false) {
         resetTable(dom.customersTable);
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty customers';
-        emptyRow.innerHTML = '<span>Unable to load customers.</span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>Unable to load customers.</span><span></span><span></span><span></span><span></span><span></span>';
         dom.customersTable.appendChild(emptyRow);
     } finally {
         setLoadMoreLoading('customers', false);
@@ -3304,7 +3434,7 @@ function renderCustomers() {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty customers';
         const emptyMessage = isViewingArchivedCustomers() ? 'No archived customers yet.' : 'No customers yet.';
-        emptyRow.innerHTML = `<span>${emptyMessage}</span><span></span><span></span><span></span><span></span>`;
+        emptyRow.innerHTML = `<span>${emptyMessage}</span><span></span><span></span><span></span><span></span><span></span>`;
         dom.customersTable.appendChild(emptyRow);
         return;
     }
@@ -3317,7 +3447,8 @@ function renderCustomers() {
         row.dataset.id = customer.id;
         row.innerHTML = `
             <span>${escapeHtml(customer.name)}</span>
-            <span>${escapeHtml(customer.email)}</span>
+            <span>${formatEmailLink(customer.email, '')}</span>
+            <span>${formatPhoneLink(customer.phone, '')}</span>
             <span>${escapeHtml(truncate(customer.billing_address, 38))}</span>
             <span>
                 <span class="metric-pill">Spent <span>${formatCurrency(totalSpent)}</span></span>
@@ -3432,7 +3563,8 @@ async function loadCustomerDetail(customerId) {
         updateCustomerArchiveControls();
 
         if (dom.customerDetailTitle) dom.customerDetailTitle.textContent = customer.name || 'Customer';
-        if (dom.customerDetailEmail) dom.customerDetailEmail.textContent = customer.email || '';
+        if (dom.customerDetailEmail) dom.customerDetailEmail.innerHTML = formatEmailLink(customer.email, 'No email address');
+        if (dom.customerDetailPhone) dom.customerDetailPhone.innerHTML = formatPhoneLink(customer.phone, 'No phone number');
         if (dom.customerDetailBilling) dom.customerDetailBilling.textContent = customer.billing_address || '--';
         if (dom.customerDetailNotes) dom.customerDetailNotes.textContent = customer.notes || '--';
         if (dom.pageTitle) dom.pageTitle.textContent = customer.name || 'Customer';
@@ -3504,6 +3636,7 @@ async function handleCustomerSubmit(event) {
     const payload = {
         name: String(formData.get('name') || '').trim(),
         email: String(formData.get('email') || '').trim(),
+        phone: String(formData.get('phone') || '').trim() || null,
         billing_address: String(formData.get('billing_address') || '').trim(),
         notes: String(formData.get('notes') || '').trim() || null,
     };
@@ -3555,6 +3688,7 @@ async function handleCustomerAction(event) {
         dom.customerForm.querySelector('input[name="id"]').value = customer.id;
         dom.customerForm.querySelector('input[name="name"]').value = customer.name || '';
         dom.customerForm.querySelector('input[name="email"]').value = customer.email || '';
+        dom.customerForm.querySelector('input[name="phone"]').value = customer.phone || '';
         dom.customerForm.querySelector('textarea[name="billing_address"]').value = customer.billing_address || '';
         dom.customerForm.querySelector('textarea[name="notes"]').value = customer.notes || '';
         setFormStatus(dom.customerFormStatus, 'Editing customer.');
@@ -3896,6 +4030,7 @@ async function handleJobPhotoAction(event) {
 async function loadJobs(append = false) {
     if (!dom.jobsTable) return;
     setFormStatus(dom.jobFormStatus, '');
+    updateJobArchiveControls();
     setLoadMoreLoading('jobs', true);
     if (!append) {
         resetPagination('jobs');
@@ -3913,6 +4048,7 @@ async function loadJobs(append = false) {
             page,
             status: state.filters.jobs.status,
             customer_id: state.filters.jobs.customer,
+            archived: isViewingArchivedJobs() ? 1 : undefined,
         });
         const response = await api.get(`/api/jobs${query}`);
         const items = response?.data?.data ?? [];
@@ -3943,7 +4079,7 @@ function renderJobs() {
     if (!state.jobs.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty jobs';
-        emptyRow.innerHTML = '<span>No jobs yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = `<span>${isViewingArchivedJobs() ? 'No archived jobs yet.' : 'No jobs yet.'}</span><span></span><span></span><span></span><span></span><span></span>`;
         dom.jobsTable.appendChild(emptyRow);
         return;
     }
@@ -3951,6 +4087,9 @@ function renderJobs() {
     state.jobs.forEach((job) => {
         const row = document.createElement('div');
         row.className = 'table-row jobs';
+        const archiveAction = job.is_archived
+            ? `<button class="btn btn-outline btn-small" data-action="unarchive" data-id="${job.id}">Unarchive</button>`
+            : `<button class="btn btn-outline btn-small" data-action="archive" data-id="${job.id}">Archive</button>`;
         row.innerHTML = `
             <span>#${job.id}</span>
             <span>${escapeHtml(truncate(job.description, 40))}</span>
@@ -3958,8 +4097,9 @@ function renderJobs() {
             <span>${formatCurrency(Number(job.cost))}</span>
             <span>${escapeHtml(job.status)}</span>
             <div class="row-actions">
-                <button class="btn btn-outline btn-small" data-action="create-task" data-id="${job.id}">Create task</button>
+                ${job.is_archived ? '' : `<button class="btn btn-outline btn-small" data-action="create-task" data-id="${job.id}">Create task</button>`}
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${job.id}">Edit</button>
+                ${archiveAction}
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${job.id}">Delete</button>
             </div>
         `;
@@ -4035,6 +4175,19 @@ async function handleJobAction(event) {
                 dom.taskForm.querySelector('textarea[name="description"]').value = job.notes || '';
             }
         }, 100);
+    }
+
+    if ((action === 'archive' || action === 'unarchive') && job) {
+        const label = action === 'archive' ? 'Archive' : 'Unarchive';
+        if (!window.confirm(`${label} this job?`)) return;
+        try {
+            await api.patch(`/api/jobs/${id}/${action}`);
+            clearInvoiceBillableCache('job');
+            showToast(`Job ${action}d.`);
+            await loadJobs();
+        } catch (error) {
+            setFormStatus(dom.jobFormStatus, getErrorMessage(error, `Unable to ${action} job.`), true);
+        }
     }
 
     if (action === 'delete' && id) {
@@ -5321,6 +5474,7 @@ function collectInvoiceLineItems() {
 async function loadInvoices(append = false) {
     if (!dom.invoicesTable) return;
     setFormStatus(dom.invoiceFormStatus, '');
+    updateInvoiceArchiveControls();
     setLoadMoreLoading('invoices', true);
     if (!append) {
         resetPagination('invoices');
@@ -5338,6 +5492,7 @@ async function loadInvoices(append = false) {
             page,
             status: state.filters.invoices.status,
             customer_id: state.filters.invoices.customer,
+            archived: isViewingArchivedInvoices() ? 1 : undefined,
         });
         const response = await api.get(`/api/invoices${query}`);
         const items = response?.data?.data ?? [];
@@ -5362,7 +5517,7 @@ function renderInvoices() {
     if (!state.invoices.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty invoices';
-        emptyRow.innerHTML = '<span>No invoices yet.</span><span></span><span></span><span></span><span></span><span></span>';
+        emptyRow.innerHTML = `<span>${isViewingArchivedInvoices() ? 'No archived invoices yet.' : 'No invoices yet.'}</span><span></span><span></span><span></span><span></span><span></span>`;
         dom.invoicesTable.appendChild(emptyRow);
         return;
     }
@@ -5374,6 +5529,9 @@ function renderInvoices() {
         const displayStatus = invoice.effective_status || invoice.status || 'draft';
         const nextStatus = isPaid ? 'unpaid' : 'paid';
         const paymentActionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
+        const archiveAction = invoice.is_archived
+            ? `<button class="btn btn-outline btn-small" data-action="unarchive" data-id="${invoice.id}">Unarchive</button>`
+            : `<button class="btn btn-outline btn-small" data-action="archive" data-id="${invoice.id}">Archive</button>`;
         row.innerHTML = `
             <span>#${escapeHtml(invoice.invoice_number)}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
@@ -5385,6 +5543,7 @@ function renderInvoices() {
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${invoice.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="send" data-id="${invoice.id}">Send</button>
                 <button class="btn btn-outline btn-small" data-action="download" data-id="${invoice.id}">Download</button>
+                ${archiveAction}
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${invoice.id}">Delete</button>
             </div>
         `;
@@ -5548,6 +5707,18 @@ async function handleInvoiceAction(event) {
 
     if (action === 'download' && invoice) {
         await downloadInvoice(id, `Invoice-${invoice.invoice_number}.pdf`);
+    }
+
+    if ((action === 'archive' || action === 'unarchive') && invoice) {
+        const label = action === 'archive' ? 'Archive' : 'Unarchive';
+        if (!window.confirm(`${label} this invoice?`)) return;
+        try {
+            await api.patch(`/api/invoices/${id}/${action}`);
+            showToast(`Invoice ${action}d.`);
+            await loadInvoices();
+        } catch (error) {
+            setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, `Unable to ${action} invoice.`), true);
+        }
     }
 
     if (action === 'delete' && id) {
@@ -5928,6 +6099,12 @@ if (dom.jobsRefresh) {
     dom.jobsRefresh.addEventListener('click', loadJobs);
 }
 
+if (dom.jobsArchivedToggle) {
+    dom.jobsArchivedToggle.addEventListener('click', () => {
+        setJobsArchivedMode(!isViewingArchivedJobs());
+    });
+}
+
 if (dom.jobPhotoJobSelect) {
     dom.jobPhotoJobSelect.addEventListener('change', () => {
         state.editing.jobPhotoJobId = Number(dom.jobPhotoJobSelect.value || 0) || null;
@@ -6001,6 +6178,8 @@ if (dom.jobsClear) {
         if (dom.jobsFilterCustomer) dom.jobsFilterCustomer.value = 'all';
         state.filters.jobs.status = 'all';
         state.filters.jobs.customer = 'all';
+        state.filters.jobs.archived = false;
+        updateJobArchiveControls();
         loadJobs();
     });
 }
@@ -6157,7 +6336,10 @@ if (dom.leadDetailDelete) dom.leadDetailDelete.addEventListener('click', () => h
 if (dom.leadDetailFindings) dom.leadDetailFindings.addEventListener('change', handleLeadFindingChange);
 if (dom.opportunityFormCancel) dom.opportunityFormCancel.addEventListener('click', resetOpportunityForm);
 if (dom.opportunitiesTable) dom.opportunitiesTable.addEventListener('click', handleOpportunityAction);
+if (dom.opportunitiesTable) dom.opportunitiesTable.addEventListener('change', handleOpportunitySelection);
 if (dom.opportunitiesRefresh) dom.opportunitiesRefresh.addEventListener('click', loadRevenueOpportunities);
+if (dom.opportunitiesBulkEdit) dom.opportunitiesBulkEdit.addEventListener('click', () => setOpportunityBulkEdit(!state.opportunityBulkEdit));
+if (dom.opportunitiesBulkDelete) dom.opportunitiesBulkDelete.addEventListener('click', deleteSelectedOpportunities);
 if (dom.opportunitiesRecommend) {
     dom.opportunitiesRecommend.addEventListener('click', async () => {
         dom.opportunitiesRecommend.disabled = true;
@@ -6235,6 +6417,12 @@ if (dom.invoicesRefresh) {
     dom.invoicesRefresh.addEventListener('click', loadInvoices);
 }
 
+if (dom.invoicesArchivedToggle) {
+    dom.invoicesArchivedToggle.addEventListener('click', () => {
+        setInvoicesArchivedMode(!isViewingArchivedInvoices());
+    });
+}
+
 if (dom.invoicesLoadMore) {
     dom.invoicesLoadMore.addEventListener('click', () => loadInvoices(true));
 }
@@ -6259,6 +6447,8 @@ if (dom.invoicesClear) {
         if (dom.invoicesFilterCustomer) dom.invoicesFilterCustomer.value = 'all';
         state.filters.invoices.status = 'all';
         state.filters.invoices.customer = 'all';
+        state.filters.invoices.archived = false;
+        updateInvoiceArchiveControls();
         loadInvoices();
     });
 }
@@ -6358,4 +6548,5 @@ initializePasswordResetMode();
 applyMonthlyFinanceBoxVisibility();
 renderSubscriptionMonths();
 updateCustomerArchiveControls();
+updateJobArchiveControls();
 loadSession();

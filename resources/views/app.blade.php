@@ -348,6 +348,8 @@
                             <div class="card-header">
                                 <div><div class="card-title">Revenue opportunities</div><div class="card-subtitle">Turn customer needs into recurring and project revenue.</div></div>
                                 <div class="card-header-actions">
+                                    <button class="btn btn-danger opportunity-bulk-delete" id="opportunities-bulk-delete" type="button" hidden>Delete selected (0)</button>
+                                    <button class="btn btn-outline" id="opportunities-bulk-edit" type="button">Bulk Edit</button>
                                     <button class="btn btn-outline admin-inline-only" id="opportunities-recommend" type="button">Find opportunities</button>
                                     <button class="btn btn-outline" id="opportunities-refresh" type="button">Refresh</button>
                                 </div>
@@ -469,7 +471,7 @@
                             <div class="filters">
                                 <label class="field">
                                     <span>Search customers</span>
-                                    <input type="text" id="customers-search" placeholder="Search by name or email">
+                                    <input type="text" id="customers-search" placeholder="Search by name, email or phone">
                                 </label>
                                 <button class="btn btn-ghost" id="customers-clear" type="button">Clear</button>
                             </div>
@@ -477,12 +479,14 @@
                                 <div class="table-row table-header customers">
                                     <span>Name</span>
                                     <span>Email</span>
+                                    <span>Phone</span>
                                     <span>Billing</span>
                                     <span>Totals</span>
                                     <span>Actions</span>
                                 </div>
                                 <div class="table-row table-empty customers">
                                     <span>Loading customers...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                     <span></span>
@@ -512,6 +516,10 @@
                                     <input type="email" name="email" required>
                                 </label>
                                 <label class="field">
+                                    <span>Phone number</span>
+                                    <input type="tel" name="phone" autocomplete="tel" maxlength="50">
+                                </label>
+                                <label class="field">
                                     <span>Billing address</span>
                                     <textarea name="billing_address" rows="3" required></textarea>
                                 </label>
@@ -537,6 +545,7 @@
                                 <div>
                                     <div class="card-title" id="customer-detail-title">Customer</div>
                                     <div class="card-subtitle" id="customer-detail-email">Email</div>
+                                    <div class="card-subtitle" id="customer-detail-phone">Phone</div>
                                 </div>
                                 <div class="card-header-actions">
                                     <button class="btn btn-outline admin-inline-only" id="customer-detail-archive" type="button">Archive</button>
@@ -683,7 +692,10 @@
                                     <div class="card-title">Jobs</div>
                                     <div class="card-subtitle">Track one-off work and invoice status.</div>
                                 </div>
-                                <button class="btn btn-outline" id="jobs-refresh">Refresh</button>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="jobs-archived-toggle" type="button">Archived jobs</button>
+                                    <button class="btn btn-outline" id="jobs-refresh">Refresh</button>
+                                </div>
                             </div>
                             <div class="filters">
                                 <label class="field">
@@ -1379,7 +1391,10 @@
                                     <div class="card-title">Invoices</div>
                                     <div class="card-subtitle">Create, send, and download invoices.</div>
                                 </div>
-                                <button class="btn btn-outline" id="invoices-refresh">Refresh</button>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="invoices-archived-toggle" type="button">Archived invoices</button>
+                                    <button class="btn btn-outline" id="invoices-refresh">Refresh</button>
+                                </div>
                             </div>
                             <div class="filters">
                                 <label class="field">
@@ -1790,6 +1805,10 @@
                                 <label class="field">
                                     <span>Email</span>
                                     <input type="email" name="email" id="portal-profile-email" required>
+                                </label>
+                                <label class="field">
+                                    <span>Phone number</span>
+                                    <input type="tel" name="phone" id="portal-profile-phone" autocomplete="tel" maxlength="50">
                                 </label>
                                 <label class="field">
                                     <span>Billing address</span>

@@ -16,7 +16,7 @@
                             <td style="font-size:14px;line-height:1.6;color:#334155;">
                                 <p>A staff task has been marked as completed.</p>
                                 <p><strong>Task:</strong> {{ $task->title }}</p>
-                                <p><strong>Staff member:</strong> {{ $staff?->name }} ({{ $staff?->email }})</p>
+                                <p><strong>Staff member:</strong> {{ $staff?->name }}@if($staff?->email) (<a href="mailto:{{ $staff->email }}">{{ $staff->email }}</a>)@endif</p>
                                 @if ($job)
                                     <p><strong>Linked job:</strong> #{{ $job->id }} — {{ $job->description }}</p>
                                 @endif

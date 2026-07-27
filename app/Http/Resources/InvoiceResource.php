@@ -29,6 +29,8 @@ class InvoiceResource extends JsonResource
             'total' => $this->total,
             'sent_at' => $this->sent_at,
             'paid_at' => $this->paid_at,
+            'archived_at' => $this->archived_at,
+            'is_archived' => $this->archived_at !== null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'customer' => new CustomerResource($this->whenLoaded('customer')),

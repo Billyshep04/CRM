@@ -20,7 +20,15 @@ class JobController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Job::query()->with('customer')->latest();
+        $archivedOnly = $request->boolean('archived');
+        $query = Job::query()
+            ->with('customer')
+            ->when(
+                $archivedOnly,
+                static fn ($builder) => $builder->whereNotNull('archived_at'),
+                static fn ($builder) => $builder->whereNull('archived_at')
+            )
+            ->latest();
 
         if ($customerId = $request->query('customer_id')) {
             $query->where('customer_id', $customerId);
@@ -125,6 +133,24 @@ class JobController extends Controller
         $job->delete();
 
         return response()->json(['message' => 'Job deleted.']);
+    }
+
+    public function archive(Job $job): JobResource
+    {
+        if ($job->archived_at === null) {
+            $job->forceFill(['archived_at' => now()])->save();
+        }
+
+        return new JobResource($job->fresh()->load('customer'));
+    }
+
+    public function unarchive(Job $job): JobResource
+    {
+        if ($job->archived_at !== null) {
+            $job->forceFill(['archived_at' => null])->save();
+        }
+
+        return new JobResource($job->fresh()->load('customer'));
     }
 
     public function photos(Job $job)

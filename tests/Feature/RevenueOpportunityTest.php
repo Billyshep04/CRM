@@ -66,6 +66,25 @@ class RevenueOpportunityTest extends TestCase
         $this->assertSoftDeleted('revenue_opportunities', ['id' => $opportunity->id]);
     }
 
+    public function test_opportunities_can_be_bulk_deleted_without_deleting_unselected_records(): void
+    {
+        $admin = $this->admin();
+        $customer = $this->customer();
+        $opportunities = collect(['SEO package', 'Care plan', 'New website'])->map(fn (string $title) => RevenueOpportunity::query()->create([
+            'public_id' => (string) Str::ulid(), 'customer_id' => $customer->id, 'owner_user_id' => $admin->id,
+            'type' => 'seo', 'status' => 'identified', 'title' => $title, 'confidence' => 50,
+            'estimated_project_value' => 0, 'estimated_monthly_revenue' => 299,
+        ]));
+
+        $this->actingAs($admin)->deleteJson('/api/revenue-opportunities/bulk', [
+            'ids' => $opportunities->take(2)->pluck('public_id')->all(),
+        ])->assertOk()->assertJsonPath('deleted', 2);
+
+        $this->assertSoftDeleted('revenue_opportunities', ['id' => $opportunities[0]->id]);
+        $this->assertSoftDeleted('revenue_opportunities', ['id' => $opportunities[1]->id]);
+        $this->assertDatabaseHas('revenue_opportunities', ['id' => $opportunities[2]->id, 'deleted_at' => null]);
+    }
+
     public function test_due_follow_up_queues_and_sends_one_administrator_reminder(): void
     {
         Queue::fake();

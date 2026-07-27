@@ -89,7 +89,11 @@ class LeadDiscoveryTest extends TestCase
         $response = $this->actingAs($admin)->postJson("/api/businesses/{$lead->public_id}/convert")
             ->assertCreated()->assertJsonPath('data.name', 'Example Builders');
         $customerId = $response->json('data.id');
-        $this->assertDatabaseHas('customers', ['id' => $customerId, 'billing_address' => '10 High Street, Exeter']);
+        $this->assertDatabaseHas('customers', [
+            'id' => $customerId,
+            'billing_address' => '10 High Street, Exeter',
+            'phone' => '01392 000000',
+        ]);
         $this->assertDatabaseHas('websites', ['customer_id' => $customerId, 'login_url' => 'https://example-builders.test']);
         $this->assertDatabaseHas('businesses', ['id' => $lead->id, 'customer_id' => $customerId, 'status' => 'converted']);
 

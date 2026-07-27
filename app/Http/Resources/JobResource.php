@@ -25,6 +25,8 @@ class JobResource extends JsonResource
             'status' => $this->status,
             'completed_at' => $this->completed_at,
             'invoiced_at' => $this->invoiced_at,
+            'archived_at' => $this->archived_at,
+            'is_archived' => $this->archived_at !== null,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             'customer' => new CustomerResource($this->whenLoaded('customer')),

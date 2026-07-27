@@ -30,6 +30,7 @@ class Invoice extends Model
         'pdf_file_id',
         'sent_at',
         'paid_at',
+        'archived_at',
     ];
 
     protected $casts = [
@@ -37,6 +38,7 @@ class Invoice extends Model
         'due_date' => 'date',
         'sent_at' => 'datetime',
         'paid_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo

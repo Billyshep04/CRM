@@ -26,11 +26,13 @@ class Job extends Model
         'status',
         'completed_at',
         'invoiced_at',
+        'archived_at',
     ];
 
     protected $casts = [
         'completed_at' => 'datetime',
         'invoiced_at' => 'datetime',
+        'archived_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo

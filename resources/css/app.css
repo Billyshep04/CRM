@@ -816,7 +816,7 @@ body[data-role="admin"] .admin-inline-only {
 }
 
 .table-row.customers {
-    grid-template-columns: 1.1fr 1.3fr 1.5fr 0.9fr 0.8fr;
+    grid-template-columns: 1.05fr 1.25fr 0.9fr 1.35fr 0.9fr 0.8fr;
 }
 
 .table-row.jobs {
@@ -947,6 +947,14 @@ body[data-role="admin"] .admin-inline-only {
 .crm-modal .btn-primary:hover { background: #289f76; border-color: #289f76; }
 .opportunity-delete { border-color: #dc2626 !important; color: #dc2626 !important; }
 .opportunity-delete:hover { background: #dc2626 !important; color: #fff !important; }
+.opportunity-bulk-delete { background: #dc2626; border-color: #dc2626; color: #fff; }
+.opportunity-bulk-delete:hover { background: #b91c1c; border-color: #b91c1c; }
+.opportunity-bulk-delete[hidden] { display: none; }
+.opportunity-bulk-row { cursor: pointer; border: 1px solid transparent; transition: border-color .15s ease, background .15s ease; }
+.opportunity-bulk-row:hover { border-color: var(--primary); }
+.opportunity-bulk-row.selected { border-color: var(--primary); background: rgba(47, 184, 240, 0.12); }
+.opportunity-select-control { display: flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 600; }
+.opportunity-select-control input { width: 18px; height: 18px; flex: 0 0 auto; accent-color: var(--primary); }
 
 .lead-discovery-layout { grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.6fr); align-items: start; }
 .content-grid.lead-discovery-layout > .discovery-runs-card { grid-column: 1 / -1; width: 100%; }
@@ -960,6 +968,8 @@ body[data-role="admin"] .admin-inline-only {
 .lead-contacted-button { min-width: 88px; padding: 7px 12px; font-size: 0.78rem; }
 .lead-business-link { appearance: none; border: 0; background: transparent; color: var(--text); padding: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .lead-business-link:hover, .lead-business-link:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+.email-link, .phone-link { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.email-link:hover, .email-link:focus-visible, .phone-link:hover, .phone-link:focus-visible { color: var(--primary); }
 .lead-row-actions { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
 .lead-row-actions .btn { padding: 7px 10px; font-size: 0.78rem; }
 .lead-row-actions .lead-row-delete { display: inline-flex; align-items: center; justify-content: center; height: 30px; max-height: 30px; min-height: 0; align-self: flex-start; padding: 4px 10px; line-height: 1; text-align: center; }
@@ -1527,7 +1537,6 @@ body[data-role="staff"] .staff-member-only {
         --cell-label: "Name";
     }
 
-    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(2),
     #staff-users-table .table-row.staff-users:not(.table-empty) > span:nth-child(2),
     #invoices-table .table-row.invoices:not(.table-empty) > span:nth-child(2),
     #subscriptions-table .table-row.subscriptions:not(.table-empty) > span:nth-child(3),
@@ -1536,13 +1545,22 @@ body[data-role="staff"] .staff-member-only {
         --cell-label: "Customer";
     }
 
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(2) {
+        --cell-label: "Email";
+    }
+
     #customers-table .table-row.customers:not(.table-empty) > span:nth-child(3) {
-        --cell-label: "Billing";
+        --cell-label: "Phone";
     }
 
     #customers-table .table-row.customers:not(.table-empty) > span:nth-child(4) {
+        --cell-label: "Billing";
+    }
+
+    #customers-table .table-row.customers:not(.table-empty) > span:nth-child(5) {
         --cell-label: "Totals";
     }
+
 
     #jobs-table .table-row.jobs:not(.table-empty) > span:nth-child(1),
     #customer-jobs-table .table-row.jobs-detail:not(.table-empty) > span:nth-child(1),
@@ -1644,7 +1662,8 @@ body[data-role="staff"] .staff-member-only {
 
 @media (max-width: 725px) {
     .table .table-row.customers > span:nth-child(2),
-    .table .table-row.customers > span:nth-child(3) {
+    .table .table-row.customers > span:nth-child(3),
+    .table .table-row.customers > span:nth-child(4) {
         display: flex;
     }
 }

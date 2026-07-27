@@ -11,6 +11,7 @@ use App\Services\RevenueOpportunities\OpportunityRecommendationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -78,6 +79,23 @@ class RevenueOpportunityController extends Controller
         $revenueOpportunity->delete();
 
         return response()->json(['message' => 'Revenue opportunity deleted.']);
+    }
+
+    public function bulkDestroy(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:100'],
+            'ids.*' => ['required', 'string', 'distinct', 'exists:revenue_opportunities,public_id'],
+        ]);
+        $opportunities = RevenueOpportunity::query()->whereIn('public_id', $data['ids'])->get();
+        $opportunities->each(fn (RevenueOpportunity $opportunity) => $this->authorizeAccess($request, $opportunity));
+
+        DB::transaction(fn () => $opportunities->each->delete());
+
+        return response()->json([
+            'message' => $opportunities->count().' revenue opportunities deleted.',
+            'deleted' => $opportunities->count(),
+        ]);
     }
 
     public function summary(Request $request): JsonResponse

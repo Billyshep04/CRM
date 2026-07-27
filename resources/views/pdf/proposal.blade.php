@@ -217,7 +217,8 @@
                             <div class="label">Proposal For</div>
                             <div class="box">
                                 <p><strong>{{ $customer?->name }}</strong></p>
-                                <p>{{ $customer?->email }}</p>
+                                <p>@if($customer?->email)<a href="mailto:{{ $customer->email }}">{{ $customer->email }}</a>@endif</p>
+                                <p>@if($customer?->phone)<a href="tel:{{ $customer->phone }}">{{ $customer->phone }}</a>@endif</p>
                                 <p>{{ $customer?->billing_address }}</p>
                             </div>
                         </td>

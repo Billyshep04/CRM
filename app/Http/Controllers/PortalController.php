@@ -16,6 +16,7 @@ use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
 use App\Services\InvoiceJobStatusSyncService;
+use App\Services\InvoicePdfService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
 use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
@@ -40,6 +41,7 @@ class PortalController extends Controller
 
         $query = Job::query()
             ->whereIn('customer_id', $customerIds)
+            ->whereNull('archived_at')
             ->latest();
 
         $perPage = $request->integer('per_page', 15);
@@ -162,7 +164,7 @@ class PortalController extends Controller
         return new ProposalResource($proposal->load(['job', 'lineItems', 'pdfFile']));
     }
 
-    public function downloadInvoice(Request $request, Invoice $invoice)
+    public function downloadInvoice(Request $request, Invoice $invoice, InvoicePdfService $pdfService)
     {
         $customerIds = $this->resolveCustomerIds($request);
 
@@ -170,11 +172,11 @@ class PortalController extends Controller
             abort(404);
         }
 
-        $invoice->loadMissing('pdfFile');
-
-        if (!$invoice->pdfFile) {
-            abort(404, 'Invoice PDF not available.');
+        $storedFile = $pdfService->generate($invoice);
+        if ($invoice->pdf_file_id !== $storedFile->id) {
+            $invoice->forceFill(['pdf_file_id' => $storedFile->id])->save();
         }
+        $invoice->setRelation('pdfFile', $storedFile);
 
         return Storage::disk($invoice->pdfFile->disk)->download(
             $invoice->pdfFile->path,

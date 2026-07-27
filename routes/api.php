@@ -51,6 +51,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('lead-discovery/{leadDiscoveryRun}', [LeadDiscoveryController::class, 'destroy']);
         Route::get('revenue-opportunities/summary', [RevenueOpportunityController::class, 'summary']);
         Route::post('revenue-opportunities/recommend', [RevenueOpportunityController::class, 'recommend']);
+        Route::delete('revenue-opportunities/bulk', [RevenueOpportunityController::class, 'bulkDestroy']);
         Route::post('revenue-opportunities/{revenueOpportunity}/follow-up', [RevenueOpportunityController::class, 'scheduleFollowUp']);
         Route::apiResource('revenue-opportunities', RevenueOpportunityController::class);
         Route::apiResource('businesses', BusinessController::class)->only(['index', 'store', 'show', 'update']);
@@ -91,6 +92,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('lead-scoring-profiles', [LeadScoringProfileController::class, 'store']);
         Route::put('lead-scoring-profiles/{leadScoringProfile}', [LeadScoringProfileController::class, 'update']);
         Route::apiResource('jobs', JobController::class);
+        Route::patch('jobs/{job}/archive', [JobController::class, 'archive']);
+        Route::patch('jobs/{job}/unarchive', [JobController::class, 'unarchive']);
         Route::get('jobs/{job}/photos', [JobController::class, 'photos']);
         Route::post('jobs/{job}/photos', [JobController::class, 'uploadPhotos']);
         Route::get('jobs/{job}/photos/download-all', [JobController::class, 'downloadAllPhotos']);
@@ -98,6 +101,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('costs', CostController::class);
         Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
         Route::apiResource('invoices', InvoiceController::class);
+        Route::patch('invoices/{invoice}/archive', [InvoiceController::class, 'archive']);
+        Route::patch('invoices/{invoice}/unarchive', [InvoiceController::class, 'unarchive']);
         Route::patch('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
         Route::post('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
         Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);

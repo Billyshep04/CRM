@@ -31,7 +31,15 @@ class InvoiceController extends Controller
             $customerId ? [(int) $customerId] : null
         );
 
-        $query = Invoice::query()->with(['customer', 'lineItems', 'pdfFile'])->latest();
+        $archivedOnly = $request->boolean('archived');
+        $query = Invoice::query()
+            ->with(['customer', 'lineItems', 'pdfFile'])
+            ->when(
+                $archivedOnly,
+                static fn ($builder) => $builder->whereNotNull('archived_at'),
+                static fn ($builder) => $builder->whereNull('archived_at')
+            )
+            ->latest();
 
         if ($customerId) {
             $query->where('customer_id', $customerId);
@@ -194,10 +202,11 @@ class InvoiceController extends Controller
 
     public function send(Invoice $invoice, InvoicePdfService $pdfService)
     {
-        if (!$invoice->pdfFile) {
-            $storedFile = $pdfService->generate($invoice);
+        $storedFile = $pdfService->generate($invoice);
+        if ($invoice->pdf_file_id !== $storedFile->id) {
             $invoice->forceFill(['pdf_file_id' => $storedFile->id])->save();
         }
+        $invoice->setRelation('pdfFile', $storedFile);
 
         $this->sendInvoiceEmailNow($invoice);
 
@@ -211,11 +220,11 @@ class InvoiceController extends Controller
 
     public function download(Invoice $invoice, InvoicePdfService $pdfService)
     {
-        if (!$invoice->pdfFile) {
-            $storedFile = $pdfService->generate($invoice);
+        $storedFile = $pdfService->generate($invoice);
+        if ($invoice->pdf_file_id !== $storedFile->id) {
             $invoice->forceFill(['pdf_file_id' => $storedFile->id])->save();
-            $invoice->setRelation('pdfFile', $storedFile);
         }
+        $invoice->setRelation('pdfFile', $storedFile);
 
         return Storage::disk($invoice->pdfFile->disk)->download(
             $invoice->pdfFile->path,
@@ -261,6 +270,24 @@ class InvoiceController extends Controller
         $invoice->delete();
 
         return response()->json(['message' => 'Invoice deleted.']);
+    }
+
+    public function archive(Invoice $invoice): InvoiceResource
+    {
+        if ($invoice->archived_at === null) {
+            $invoice->forceFill(['archived_at' => now()])->save();
+        }
+
+        return new InvoiceResource($invoice->fresh()->load(['customer', 'lineItems', 'pdfFile']));
+    }
+
+    public function unarchive(Invoice $invoice): InvoiceResource
+    {
+        if ($invoice->archived_at !== null) {
+            $invoice->forceFill(['archived_at' => null])->save();
+        }
+
+        return new InvoiceResource($invoice->fresh()->load(['customer', 'lineItems', 'pdfFile']));
     }
 
     /**

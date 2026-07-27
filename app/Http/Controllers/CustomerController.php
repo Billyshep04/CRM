@@ -52,7 +52,8 @@ class CustomerController extends Controller
             $query->where(function ($builder) use ($search): void {
                 $builder
                     ->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -98,6 +99,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:50'],
             'billing_address' => ['required', 'string'],
             'notes' => ['nullable', 'string'],
         ]);
@@ -117,7 +119,12 @@ class CustomerController extends Controller
 
     public function show(Customer $customer)
     {
-        $customer->load(['jobs', 'subscriptions', 'websites', 'invoices']);
+        $customer->load([
+            'jobs' => static fn ($query) => $query->whereNull('archived_at'),
+            'subscriptions',
+            'websites',
+            'invoices',
+        ]);
 
         return new CustomerResource($customer);
     }
@@ -127,6 +134,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
             'email' => ['sometimes', 'email', 'max:255'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'billing_address' => ['sometimes', 'string'],
             'notes' => ['nullable', 'string'],
         ]);

@@ -20,10 +20,10 @@ class ConvertLeadToCustomer
             $customer = Customer::query()->create([
                 'name' => $lead->name,
                 'email' => 'lead-'.strtolower($lead->public_id).'@placeholder.invalid',
+                'phone' => $lead->phone,
                 'billing_address' => $lead->address ?: 'Address not provided',
                 'notes' => trim(implode("\n", array_filter([
                     'Converted from Lead Discovery.',
-                    $lead->phone ? 'Phone: '.$lead->phone : null,
                     $lead->google_maps_url ? 'Google Maps: '.$lead->google_maps_url : null,
                     'Email is a placeholder and must be updated when a contact email is obtained.',
                 ]))),
