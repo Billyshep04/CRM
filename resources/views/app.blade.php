@@ -119,7 +119,10 @@
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-proposals">Proposals</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-forms">Forms</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-forms" id="portal-forms-nav">
+                        Forms
+                        <span class="portal-forms-notification" id="portal-forms-notification" aria-hidden="true" hidden></span>
+                    </a>
                     <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
                     <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
@@ -140,6 +143,7 @@
                                 <span></span>
                                 <span></span>
                             </span>
+                            <span class="mobile-menu-notification" id="mobile-menu-notification" aria-hidden="true" hidden></span>
                         </button>
                         <div>
                             <div class="page-title" id="page-title">Dashboard</div>
@@ -1056,6 +1060,44 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="card wide admin-only">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Staff users</div>
+                                    <div class="card-subtitle">Create staff accounts with full CRM access (no admin controls).</div>
+                                </div>
+                                <button class="btn btn-outline" id="staff-users-refresh" type="button">Refresh</button>
+                            </div>
+                            <form id="staff-user-form" class="form-stack">
+                                <label class="field">
+                                    <span>Name</span>
+                                    <input type="text" name="name" required>
+                                </label>
+                                <label class="field">
+                                    <span>Email</span>
+                                    <input type="email" name="email" required>
+                                </label>
+                                <label class="field">
+                                    <span>Password</span>
+                                    <input type="password" name="password" minlength="8" required>
+                                </label>
+                                <div id="staff-user-form-status" class="form-hint"></div>
+                                <button type="submit" class="btn btn-primary">Create staff user</button>
+                            </form>
+                            <div class="table" id="staff-users-table" style="margin-top: 14px;">
+                                <div class="table-row table-header staff-users">
+                                    <span>Name</span>
+                                    <span>Email</span>
+                                    <span>Created</span>
+                                </div>
+                                <div class="table-row table-empty staff-users">
+                                    <span>Loading staff users...</span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                            </div>
+                        </div>
                     </section>
                 </section>
 
@@ -1594,44 +1636,6 @@
                                 <div id="profile-form-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Save profile</button>
                             </form>
-                        </div>
-
-                        <div class="card admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Staff users</div>
-                                    <div class="card-subtitle">Create staff accounts with full CRM access (no admin controls).</div>
-                                </div>
-                                <button class="btn btn-outline" id="staff-users-refresh" type="button">Refresh</button>
-                            </div>
-                            <form id="staff-user-form" class="form-stack">
-                                <label class="field">
-                                    <span>Name</span>
-                                    <input type="text" name="name" required>
-                                </label>
-                                <label class="field">
-                                    <span>Email</span>
-                                    <input type="email" name="email" required>
-                                </label>
-                                <label class="field">
-                                    <span>Password</span>
-                                    <input type="password" name="password" minlength="8" required>
-                                </label>
-                                <div id="staff-user-form-status" class="form-hint"></div>
-                                <button type="submit" class="btn btn-primary">Create staff user</button>
-                            </form>
-                            <div class="table" id="staff-users-table" style="margin-top: 14px;">
-                                <div class="table-row table-header staff-users">
-                                    <span>Name</span>
-                                    <span>Email</span>
-                                    <span>Created</span>
-                                </div>
-                                <div class="table-row table-empty staff-users">
-                                    <span>Loading staff users...</span>
-                                    <span></span>
-                                    <span></span>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="card">

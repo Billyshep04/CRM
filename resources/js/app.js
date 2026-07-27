@@ -134,6 +134,7 @@ const dom = {
     monthlyTasksCardTaskChange: document.getElementById('monthly-tasks-card-task-change'),
     monthlyTasksCardHourChange: document.getElementById('monthly-tasks-card-hour-change'),
     mobileMenuToggle: document.getElementById('mobile-menu-toggle'),
+    mobileMenuNotification: document.getElementById('mobile-menu-notification'),
     navItems: document.querySelectorAll('.nav-item[data-view]'),
     views: document.querySelectorAll('.view'),
     quickLinks: document.querySelectorAll('[data-go-view]'),
@@ -315,6 +316,8 @@ const dom = {
     portalProposalsRefresh: document.getElementById('portal-proposals-refresh'),
     portalFormsTable: document.getElementById('portal-forms-table'),
     portalFormsRefresh: document.getElementById('portal-forms-refresh'),
+    portalFormsNav: document.getElementById('portal-forms-nav'),
+    portalFormsNotification: document.getElementById('portal-forms-notification'),
     portalFormPanel: document.getElementById('portal-form-panel'),
     portalCustomerForm: document.getElementById('portal-customer-form'),
     portalFormTitle: document.getElementById('portal-form-title'),
@@ -563,6 +566,7 @@ function setAuthState(isAuthenticated) {
 function setRole(role) {
     state.role = role;
     dom.body.dataset.role = role;
+    if (role !== 'customer') updatePortalFormsNotification([]);
 }
 
 function setNavOpen(isOpen) {
@@ -717,6 +721,7 @@ function setActiveView(view) {
     }
     if (view === 'staff-tracking' && state.role === 'admin') {
         loadStaffTracking();
+        loadStaffUsers();
     }
     if (view === 'invoices') {
         ensureCustomersLoaded().then(loadInvoices);
@@ -729,6 +734,7 @@ function setActiveView(view) {
         loadPortalJobs();
         loadPortalSubscriptions();
         loadPortalWebsites();
+        loadPortalForms();
     }
     if (view === 'portal-proposals') {
         loadPortalProposals();
@@ -745,7 +751,6 @@ function setActiveView(view) {
     if (view === 'admin') {
         populateProfileForm(state.user);
         if (state.role === 'admin') {
-            loadStaffUsers();
             loadAdminMailSettings();
             loadAdminInvoiceSettings();
             loadAdminProposalForms();
@@ -2518,13 +2523,12 @@ function renderProposalFormsEditor() {
     (state.proposalFormSettings.types || []).forEach((type, typeIndex) => {
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'btn btn-outline';
+        row.className = 'btn btn-outline form-editor-list-item';
         row.dataset.action = 'edit-proposal-form-type';
         row.dataset.typeIndex = String(typeIndex);
-        row.style.justifyContent = 'space-between';
         row.innerHTML = `
-            <span>${escapeHtml(type.label || 'Untitled proposal form')}</span>
-            <span>${escapeHtml(String((type.questions || []).length))} questions</span>
+            <span class="form-editor-list-title">${escapeHtml(type.label || 'Untitled proposal form')}</span>
+            <span class="form-editor-question-count">${escapeHtml(String((type.questions || []).length))} questions</span>
         `;
         dom.proposalFormsEditor.appendChild(row);
     });
@@ -2671,11 +2675,13 @@ function renderCustomerFormsEditor() {
     state.customerFormSettings.types.forEach((type, typeIndex) => {
         const row = document.createElement('button');
         row.type = 'button';
-        row.className = 'btn btn-outline';
+        row.className = 'btn btn-outline form-editor-list-item';
         row.dataset.action = 'edit-customer-form-type';
         row.dataset.typeIndex = String(typeIndex);
-        row.style.justifyContent = 'space-between';
-        row.innerHTML = `<span>${escapeHtml(type.label || 'Untitled customer form')}</span><span>${escapeHtml(String((type.questions || []).length))} questions</span>`;
+        row.innerHTML = `
+            <span class="form-editor-list-title">${escapeHtml(type.label || 'Untitled customer form')}</span>
+            <span class="form-editor-question-count">${escapeHtml(String((type.questions || []).length))} questions</span>
+        `;
         dom.customerFormsEditor.appendChild(row);
     });
 }
@@ -5621,8 +5627,43 @@ async function handlePortalProposalAction(event) {
     }
 }
 
+function updatePortalFormsNotification(forms = []) {
+    const pendingCount = forms.filter((formRequest) => formRequest.status === 'pending').length;
+
+    if (dom.portalFormsNotification) {
+        dom.portalFormsNotification.hidden = pendingCount === 0;
+    }
+
+    if (dom.mobileMenuNotification) {
+        dom.mobileMenuNotification.hidden = pendingCount === 0;
+    }
+
+    if (dom.portalFormsNav) {
+        if (pendingCount > 0) {
+            dom.portalFormsNav.setAttribute(
+                'aria-label',
+                `Forms, ${pendingCount} pending ${pendingCount === 1 ? 'form' : 'forms'}`
+            );
+            dom.portalFormsNav.title = `${pendingCount} pending ${pendingCount === 1 ? 'form' : 'forms'}`;
+        } else {
+            dom.portalFormsNav.removeAttribute('aria-label');
+            dom.portalFormsNav.removeAttribute('title');
+        }
+    }
+
+    if (dom.mobileMenuToggle) {
+        dom.mobileMenuToggle.setAttribute(
+            'aria-label',
+            pendingCount > 0
+                ? `Toggle menu, ${pendingCount} pending ${pendingCount === 1 ? 'form' : 'forms'}`
+                : 'Toggle menu'
+        );
+    }
+}
+
 function renderPortalForms(forms = [], emptyMessage = 'No forms available.') {
     if (!dom.portalFormsTable) return;
+    updatePortalFormsNotification(forms);
     resetTable(dom.portalFormsTable);
 
     if (!forms.length) {
