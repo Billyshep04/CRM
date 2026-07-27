@@ -81,6 +81,11 @@ class LeadDiscoveryTest extends TestCase
             ->assertOk()->assertJsonPath('data.contacted', true);
         $this->assertNotNull($lead->fresh()->contacted_at);
 
+        $this->actingAs($admin)->getJson('/api/businesses?source=google_places&contacted=1')
+            ->assertOk()->assertJsonPath('data.0.id', $lead->public_id);
+        $this->actingAs($admin)->getJson('/api/businesses?source=google_places&contacted=0')
+            ->assertOk()->assertJsonCount(0, 'data');
+
         $response = $this->actingAs($admin)->postJson("/api/businesses/{$lead->public_id}/convert")
             ->assertCreated()->assertJsonPath('data.name', 'Example Builders');
         $customerId = $response->json('data.id');

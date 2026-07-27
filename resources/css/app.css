@@ -957,8 +957,7 @@ body[data-role="admin"] .admin-inline-only {
 #discovered-leads-table, #lead-discovery-runs { overflow-x: auto; }
 #discovered-leads-table .table-row { min-width: 760px; }
 #lead-discovery-runs .table-row { min-width: 920px; }
-.lead-contacted-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
-.lead-contacted-toggle input { width: 18px; height: 18px; accent-color: var(--primary); }
+.lead-contacted-button { min-width: 88px; padding: 7px 12px; font-size: 0.78rem; }
 .lead-business-link { appearance: none; border: 0; background: transparent; color: var(--text); padding: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .lead-business-link:hover, .lead-business-link:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .lead-row-actions { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }

@@ -22,6 +22,7 @@ class BusinessController extends Controller
         $validated = $request->validate([
             'grade' => ['nullable', 'in:hot,warm,cool,cold'], 'status' => ['nullable', 'in:new,reviewing,qualified,contacted,converted,disqualified'],
             'source' => ['nullable', 'string', 'max:50'], 'search' => ['nullable', 'string', 'max:100'],
+            'contacted' => ['nullable', 'boolean'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -29,6 +30,9 @@ class BusinessController extends Controller
             ->when($validated['grade'] ?? null, fn ($query, $grade) => $query->where('lead_grade', $grade))
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($validated['source'] ?? null, fn ($query, $source) => $query->where('source', $source))
+            ->when(array_key_exists('contacted', $validated), fn ($query) => $validated['contacted']
+                ? $query->whereNotNull('contacted_at')
+                : $query->whereNull('contacted_at'))
             ->when($validated['search'] ?? null, fn ($query, $search) => $query->where(fn ($inner) => $inner->where('name', 'like', '%'.$search.'%')->orWhere('address', 'like', '%'.$search.'%')))
             ->orderByRaw('lead_score IS NULL')->orderByDesc('lead_score')->latest()->paginate($validated['per_page'] ?? 20));
     }

@@ -58,6 +58,9 @@ const dom = {
     leadDiscoveryForm: document.getElementById('lead-discovery-form'),
     leadDiscoveryStatus: document.getElementById('lead-discovery-status'),
     leadDiscoveryRefresh: document.getElementById('lead-discovery-refresh'),
+    leadDiscoveryContacted: document.getElementById('lead-discovery-contacted'),
+    discoveredLeadsTitle: document.getElementById('discovered-leads-title'),
+    discoveredLeadsSubtitle: document.getElementById('discovered-leads-subtitle'),
     discoveredLeadsTable: document.getElementById('discovered-leads-table'),
     leadDiscoveryRuns: document.getElementById('lead-discovery-runs'),
     leadDetailTitle: document.getElementById('lead-detail-title'),
@@ -315,6 +318,7 @@ const state = {
     invoices: [],
     revenueOpportunities: [],
     discoveredLeads: [],
+    showingContactedLeads: false,
     leadDiscoveryRuns: [],
     staffUsers: [],
     monthlyFinance: [],
@@ -2572,7 +2576,7 @@ async function loadLeadDiscoveryData() {
     if (!dom.discoveredLeadsTable || !dom.leadDiscoveryRuns) return;
     try {
         const [leadsResponse, runsResponse] = await Promise.all([
-            api.get('/api/businesses', { params: { source: 'google_places', per_page: 100 } }),
+            api.get('/api/businesses', { params: { source: 'google_places', contacted: state.showingContactedLeads ? 1 : 0, per_page: 100 } }),
             api.get('/api/lead-discovery', { params: { per_page: 20 } }),
         ]);
         state.discoveredLeads = leadsResponse?.data?.data || [];
@@ -2588,11 +2592,18 @@ async function loadLeadDiscoveryData() {
 }
 
 function renderDiscoveredLeads() {
+    if (dom.discoveredLeadsTitle) dom.discoveredLeadsTitle.textContent = state.showingContactedLeads ? 'Contacted leads' : 'Discovered leads';
+    if (dom.discoveredLeadsSubtitle) dom.discoveredLeadsSubtitle.textContent = state.showingContactedLeads ? 'Leads that have already been contacted.' : 'External businesses ready for review and conversion.';
+    if (dom.leadDiscoveryContacted) {
+        dom.leadDiscoveryContacted.textContent = state.showingContactedLeads ? 'Discovered leads' : 'Contacted';
+        dom.leadDiscoveryContacted.classList.toggle('btn-primary', state.showingContactedLeads);
+        dom.leadDiscoveryContacted.classList.toggle('btn-outline', !state.showingContactedLeads);
+    }
     resetTable(dom.discoveredLeadsTable);
     if (!state.discoveredLeads.length) {
         const row = document.createElement('div');
         row.className = 'table-row table-empty discovered-leads';
-        row.innerHTML = '<span>No external leads discovered yet.</span><span></span><span></span><span></span><span></span>';
+        row.innerHTML = `<span>${state.showingContactedLeads ? 'No contacted leads yet.' : 'No external leads discovered yet.'}</span><span></span><span></span><span></span><span></span>`;
         dom.discoveredLeadsTable.appendChild(row);
         return;
     }
@@ -2600,7 +2611,10 @@ function renderDiscoveredLeads() {
         const row = document.createElement('div');
         row.className = 'table-row discovered-leads';
         const website = lead.website_url ? `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener">${escapeHtml(new URL(lead.website_url).hostname)}</a>` : '<span class="text-muted">No website</span>';
-        row.innerHTML = `<span><button class="lead-business-link" type="button" data-lead-view="${escapeHtml(lead.id)}">${escapeHtml(lead.name)}</button><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span><label class="lead-contacted-toggle"><input type="checkbox" data-lead-contacted="${escapeHtml(lead.id)}" ${lead.contacted ? 'checked' : ''}><span>${lead.contacted ? 'Yes' : 'No'}</span></label></span><span class="lead-row-actions"><button class="btn btn-danger lead-row-delete" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
+        const contactedAction = state.showingContactedLeads
+            ? '<span class="text-muted">Contacted</span>'
+            : `<button class="btn btn-primary lead-contacted-button" type="button" data-lead-contacted="${escapeHtml(lead.id)}">Contacted</button>`;
+        row.innerHTML = `<span><button class="lead-business-link" type="button" data-lead-view="${escapeHtml(lead.id)}">${escapeHtml(lead.name)}</button><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span>${contactedAction}</span><span class="lead-row-actions"><button class="btn btn-danger lead-row-delete" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
         dom.discoveredLeadsTable.appendChild(row);
     });
 }
@@ -2624,18 +2638,17 @@ function renderDiscoveryRuns() {
 }
 
 async function handleDiscoveredLeadAction(event) {
-    const checkbox = event.target.closest('[data-lead-contacted]');
+    const contactedButton = event.target.closest('[data-lead-contacted]');
     const deleteButton = event.target.closest('[data-lead-delete]');
     const viewButton = event.target.closest('[data-lead-view]');
-    if (checkbox && event.type !== 'change') return;
     try {
         if (viewButton) {
             openLeadDetail(viewButton.dataset.leadView);
             return;
-        } else if (checkbox) {
-            checkbox.disabled = true;
-            await api.patch(`/api/businesses/${checkbox.dataset.leadContacted}/contacted`, { contacted: checkbox.checked });
-            showToast(checkbox.checked ? 'Lead marked as contacted.' : 'Contacted mark removed.');
+        } else if (contactedButton) {
+            contactedButton.disabled = true;
+            await api.patch(`/api/businesses/${contactedButton.dataset.leadContacted}/contacted`, { contacted: true });
+            showToast('Lead moved to contacted leads.');
         } else if (deleteButton) {
             if (!window.confirm('Delete this lead? This will remove it from the lead list.')) return;
             deleteButton.disabled = true;
@@ -2644,7 +2657,7 @@ async function handleDiscoveredLeadAction(event) {
         } else return;
         await loadLeadDiscoveryData();
     } catch (error) {
-        if (checkbox) checkbox.checked = !checkbox.checked;
+        if (contactedButton) contactedButton.disabled = false;
         showToast(getErrorMessage(error, 'Unable to update the lead.'), true);
         await loadLeadDiscoveryData();
     }
@@ -6130,7 +6143,10 @@ if (dom.opportunityFollowUpModal) dom.opportunityFollowUpModal.addEventListener(
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && dom.opportunityFollowUpModal && !dom.opportunityFollowUpModal.hidden) closeOpportunityFollowUp(); });
 if (dom.leadDiscoveryForm) dom.leadDiscoveryForm.addEventListener('submit', handleLeadDiscoverySubmit);
 if (dom.leadDiscoveryRefresh) dom.leadDiscoveryRefresh.addEventListener('click', loadLeadDiscoveryData);
-if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('change', handleDiscoveredLeadAction);
+if (dom.leadDiscoveryContacted) dom.leadDiscoveryContacted.addEventListener('click', () => {
+    state.showingContactedLeads = !state.showingContactedLeads;
+    loadLeadDiscoveryData();
+});
 if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('click', handleDiscoveredLeadAction);
 if (dom.leadDiscoveryRuns) dom.leadDiscoveryRuns.addEventListener('click', handleDiscoveryRunAction);
 if (dom.leadDetailBack) dom.leadDetailBack.addEventListener('click', () => handleLeadDetailAction('back'));
