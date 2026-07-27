@@ -164,42 +164,42 @@
 
                 <section class="view staff-view active" data-view="dashboard">
                     <section class="panel-grid">
-                        <div class="card highlight">
+                        <div class="card highlight dashboard-tile" id="dashboard-tile-revenue">
                             <div class="card-label">Revenue this month</div>
                             <div class="card-value" id="dashboard-revenue">--</div>
                             <div class="card-meta">Completed jobs this month + paid subscriptions</div>
                         </div>
-                        <div class="card">
+                        <div class="card dashboard-tile" id="dashboard-tile-costs">
                             <div class="card-label">Costs this month</div>
                             <div class="card-value" id="dashboard-costs">--</div>
                             <div class="card-meta">Total incurred costs this month</div>
                         </div>
-                        <div class="card">
+                        <div class="card dashboard-tile" id="dashboard-tile-profit">
                             <div class="card-label">Profit this month</div>
                             <div class="card-value" id="dashboard-profit">--</div>
                             <div class="card-meta">Revenue this month minus costs this month</div>
                         </div>
-                        <div class="card">
+                        <div class="card dashboard-tile" id="dashboard-tile-jobs">
                             <div class="card-label">Jobs</div>
                             <div class="card-value" data-stat="jobs">--</div>
                             <div class="card-meta">Open or invoiced</div>
                         </div>
-                        <div class="card">
+                        <div class="card dashboard-tile" id="dashboard-tile-subscriptions">
                             <div class="card-label">Subscriptions</div>
                             <div class="card-value" data-stat="subscriptions">--</div>
                             <div class="card-meta">Recurring monthly</div>
                         </div>
-                        <div class="card opportunity-metric-card">
+                        <div class="card opportunity-metric-card dashboard-tile" id="dashboard-tile-potential-mrr">
                             <div class="card-label">Potential MRR</div>
                             <div class="card-value" id="dashboard-potential-mrr">--</div>
                             <div class="card-meta">Open recurring-revenue opportunities</div>
                         </div>
-                        <div class="card opportunity-metric-card">
+                        <div class="card opportunity-metric-card dashboard-tile" id="dashboard-tile-pipeline-value">
                             <div class="card-label">Pipeline value</div>
                             <div class="card-value" id="dashboard-opportunity-value">--</div>
                             <div class="card-meta">Potential project revenue</div>
                         </div>
-                        <div class="card opportunity-metric-card">
+                        <div class="card opportunity-metric-card dashboard-tile" id="dashboard-tile-open-opportunities">
                             <div class="card-label">Open opportunities</div>
                             <div class="card-value" id="dashboard-opportunity-count">--</div>
                             <div class="card-meta">Hosting, SEO, care plans and upsells</div>
@@ -257,6 +257,21 @@
                             </div>
                         </div>
                     </section>
+
+                    <div class="dashboard-settings">
+                        <button class="btn btn-outline" id="dashboard-settings-toggle" type="button" aria-expanded="false">Settings</button>
+                        <div class="dashboard-settings-popover" id="dashboard-settings-popover" hidden>
+                            <div class="dashboard-settings-title">Show tiles</div>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-revenue" checked><span>Revenue</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-costs" checked><span>Costs</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-profit" checked><span>Profit</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-jobs" checked><span>Jobs</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-subscriptions" checked><span>Subscriptions</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-potential-mrr" checked><span>Potential MRR</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-pipeline-value" checked><span>Pipeline value</span></label>
+                            <label class="dashboard-settings-option"><input type="checkbox" id="dashboard-toggle-open-opportunities" checked><span>Open opportunities</span></label>
+                        </div>
+                    </div>
                 </section>
 
                 <section class="view staff-view" data-view="lead-discovery">

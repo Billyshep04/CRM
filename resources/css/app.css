@@ -594,11 +594,13 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     gap: 16px;
 }
 
-.monthly-finance-card.hidden {
+.monthly-finance-card.hidden,
+.dashboard-tile.hidden {
     display: none;
 }
 
-.monthly-finance-settings {
+.monthly-finance-settings,
+.dashboard-settings {
     position: fixed;
     right: 24px;
     bottom: 24px;
@@ -609,7 +611,12 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     display: none;
 }
 
-.monthly-finance-settings-popover {
+.view[data-view="dashboard"]:not(.active) .dashboard-settings {
+    display: none;
+}
+
+.monthly-finance-settings-popover,
+.dashboard-settings-popover {
     position: absolute;
     right: 0;
     bottom: calc(100% + 10px);
@@ -623,12 +630,14 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     gap: 8px;
 }
 
-.monthly-finance-settings-title {
+.monthly-finance-settings-title,
+.dashboard-settings-title {
     font-weight: 600;
     font-size: 13px;
 }
 
-.monthly-finance-settings-option {
+.monthly-finance-settings-option,
+.dashboard-settings-option {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -636,7 +645,8 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     color: var(--text);
 }
 
-.monthly-finance-settings-option input {
+.monthly-finance-settings-option input,
+.dashboard-settings-option input {
     accent-color: var(--accent);
 }
 
@@ -1339,7 +1349,8 @@ body[data-role="staff"] .staff-member-only {
         overflow: hidden;
     }
 
-    .monthly-finance-settings {
+    .monthly-finance-settings,
+    .dashboard-settings {
         right: 14px;
         bottom: 14px;
     }

@@ -17,6 +17,7 @@ class UserPreference extends Model
         'user_id',
         'theme',
         'monthly_finance_boxes',
+        'dashboard_tiles',
     ];
 
     /**
@@ -24,6 +25,7 @@ class UserPreference extends Model
      */
     protected $casts = [
         'monthly_finance_boxes' => 'array',
+        'dashboard_tiles' => 'array',
     ];
 
     public function user(): BelongsTo

@@ -106,6 +106,24 @@ const dom = {
     monthlyFinanceToggleProfit: document.getElementById('monthly-finance-toggle-profit'),
     monthlyFinanceToggleTax: document.getElementById('monthly-finance-toggle-tax'),
     monthlyFinanceToggleOwed: document.getElementById('monthly-finance-toggle-owed'),
+    dashboardSettingsToggle: document.getElementById('dashboard-settings-toggle'),
+    dashboardSettingsPopover: document.getElementById('dashboard-settings-popover'),
+    dashboardTileRevenue: document.getElementById('dashboard-tile-revenue'),
+    dashboardTileCosts: document.getElementById('dashboard-tile-costs'),
+    dashboardTileProfit: document.getElementById('dashboard-tile-profit'),
+    dashboardTileJobs: document.getElementById('dashboard-tile-jobs'),
+    dashboardTileSubscriptions: document.getElementById('dashboard-tile-subscriptions'),
+    dashboardTilePotentialMrr: document.getElementById('dashboard-tile-potential-mrr'),
+    dashboardTilePipelineValue: document.getElementById('dashboard-tile-pipeline-value'),
+    dashboardTileOpenOpportunities: document.getElementById('dashboard-tile-open-opportunities'),
+    dashboardToggleRevenue: document.getElementById('dashboard-toggle-revenue'),
+    dashboardToggleCosts: document.getElementById('dashboard-toggle-costs'),
+    dashboardToggleProfit: document.getElementById('dashboard-toggle-profit'),
+    dashboardToggleJobs: document.getElementById('dashboard-toggle-jobs'),
+    dashboardToggleSubscriptions: document.getElementById('dashboard-toggle-subscriptions'),
+    dashboardTogglePotentialMrr: document.getElementById('dashboard-toggle-potential-mrr'),
+    dashboardTogglePipelineValue: document.getElementById('dashboard-toggle-pipeline-value'),
+    dashboardToggleOpenOpportunities: document.getElementById('dashboard-toggle-open-opportunities'),
     monthlyTasksMonths: document.getElementById('monthly-tasks-months'),
     monthlyTasksRefresh: document.getElementById('monthly-tasks-refresh'),
     monthlyTasksSelectedMonth: document.getElementById('monthly-tasks-selected-month'),
@@ -305,6 +323,17 @@ const monthlyFinanceBoxDefaults = {
     owed: true,
 };
 
+const dashboardTileDefaults = {
+    revenue: true,
+    costs: true,
+    profit: true,
+    jobs: true,
+    subscriptions: true,
+    potential_mrr: true,
+    pipeline_value: true,
+    open_opportunities: true,
+};
+
 const state = {
     view: 'dashboard',
     role: 'guest',
@@ -332,6 +361,7 @@ const state = {
     monthlyFinance: [],
     monthlyFinanceSelectedMonth: null,
     monthlyFinanceBoxVisibility: { ...monthlyFinanceBoxDefaults },
+    dashboardTileVisibility: { ...dashboardTileDefaults },
     mailSettings: null,
     invoiceSettings: null,
     proposalFormSettings: { types: [] },
@@ -599,6 +629,10 @@ function setActiveView(view) {
 
     if (view !== 'monthly-finance') {
         setMonthlyFinanceSettingsOpen(false);
+    }
+
+    if (view !== 'dashboard') {
+        setDashboardSettingsOpen(false);
     }
 
     if (view === 'customers') {
@@ -944,6 +978,78 @@ function setMonthlyFinanceSettingsOpen(isOpen) {
     dom.monthlyFinanceSettingsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
 }
 
+function normalizeDashboardTileVisibility(value) {
+    const normalized = { ...dashboardTileDefaults };
+    if (!value || typeof value !== 'object') {
+        return normalized;
+    }
+
+    Object.keys(dashboardTileDefaults).forEach((key) => {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+            normalized[key] = Boolean(value[key]);
+        }
+    });
+
+    return normalized;
+}
+
+function applyDashboardTileVisibility() {
+    const visibility = normalizeDashboardTileVisibility(state.dashboardTileVisibility);
+    state.dashboardTileVisibility = visibility;
+
+    const cardMap = {
+        revenue: dom.dashboardTileRevenue,
+        costs: dom.dashboardTileCosts,
+        profit: dom.dashboardTileProfit,
+        jobs: dom.dashboardTileJobs,
+        subscriptions: dom.dashboardTileSubscriptions,
+        potential_mrr: dom.dashboardTilePotentialMrr,
+        pipeline_value: dom.dashboardTilePipelineValue,
+        open_opportunities: dom.dashboardTileOpenOpportunities,
+    };
+
+    const toggleMap = {
+        revenue: dom.dashboardToggleRevenue,
+        costs: dom.dashboardToggleCosts,
+        profit: dom.dashboardToggleProfit,
+        jobs: dom.dashboardToggleJobs,
+        subscriptions: dom.dashboardToggleSubscriptions,
+        potential_mrr: dom.dashboardTogglePotentialMrr,
+        pipeline_value: dom.dashboardTogglePipelineValue,
+        open_opportunities: dom.dashboardToggleOpenOpportunities,
+    };
+
+    Object.keys(visibility).forEach((key) => {
+        const isVisible = visibility[key] !== false;
+        const card = cardMap[key];
+        const toggle = toggleMap[key];
+        if (card) {
+            card.classList.toggle('hidden', !isVisible);
+        }
+        if (toggle) {
+            toggle.checked = isVisible;
+        }
+    });
+}
+
+function setDashboardSettingsOpen(isOpen) {
+    if (!dom.dashboardSettingsPopover || !dom.dashboardSettingsToggle) return;
+    dom.dashboardSettingsPopover.hidden = !isOpen;
+    dom.dashboardSettingsToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+async function saveDashboardTileVisibility() {
+    try {
+        const response = await api.put('/api/preferences', {
+            dashboard_tiles: state.dashboardTileVisibility,
+        });
+        state.dashboardTileVisibility = normalizeDashboardTileVisibility(response?.data?.dashboard_tiles);
+        applyDashboardTileVisibility();
+    } catch (error) {
+        showToast('Unable to save dashboard settings.', true);
+    }
+}
+
 async function saveMonthlyFinanceBoxVisibility() {
     try {
         const response = await api.put('/api/preferences', {
@@ -965,13 +1071,17 @@ async function loadPreferences() {
         state.monthlyFinanceBoxVisibility = normalizeMonthlyFinanceBoxVisibility(
             response?.data?.monthly_finance_boxes
         );
+        state.dashboardTileVisibility = normalizeDashboardTileVisibility(response?.data?.dashboard_tiles);
         localStorage.setItem(themeKey, theme);
         setTheme(theme);
         applyMonthlyFinanceBoxVisibility();
+        applyDashboardTileVisibility();
     } catch (error) {
         applyStoredTheme();
         state.monthlyFinanceBoxVisibility = { ...monthlyFinanceBoxDefaults };
+        state.dashboardTileVisibility = { ...dashboardTileDefaults };
         applyMonthlyFinanceBoxVisibility();
+        applyDashboardTileVisibility();
     }
 }
 
@@ -6499,6 +6609,14 @@ if (dom.monthlyFinanceSettingsToggle) {
     });
 }
 
+if (dom.dashboardSettingsToggle) {
+    dom.dashboardSettingsToggle.addEventListener('click', (event) => {
+        event.preventDefault();
+        const isOpen = dom.dashboardSettingsPopover ? dom.dashboardSettingsPopover.hidden : false;
+        setDashboardSettingsOpen(isOpen);
+    });
+}
+
 const monthlyFinanceToggleMap = {
     revenue: dom.monthlyFinanceToggleRevenue,
     costs: dom.monthlyFinanceToggleCosts,
@@ -6519,14 +6637,46 @@ Object.entries(monthlyFinanceToggleMap).forEach(([key, input]) => {
     });
 });
 
-document.addEventListener('click', (event) => {
-    if (!dom.monthlyFinanceSettingsPopover || !dom.monthlyFinanceSettingsToggle) return;
-    if (dom.monthlyFinanceSettingsPopover.hidden) return;
+const dashboardToggleMap = {
+    revenue: dom.dashboardToggleRevenue,
+    costs: dom.dashboardToggleCosts,
+    profit: dom.dashboardToggleProfit,
+    jobs: dom.dashboardToggleJobs,
+    subscriptions: dom.dashboardToggleSubscriptions,
+    potential_mrr: dom.dashboardTogglePotentialMrr,
+    pipeline_value: dom.dashboardTogglePipelineValue,
+    open_opportunities: dom.dashboardToggleOpenOpportunities,
+};
 
-    const popoverClicked = dom.monthlyFinanceSettingsPopover.contains(event.target);
-    const toggleClicked = dom.monthlyFinanceSettingsToggle.contains(event.target);
-    if (!popoverClicked && !toggleClicked) {
-        setMonthlyFinanceSettingsOpen(false);
+Object.entries(dashboardToggleMap).forEach(([key, input]) => {
+    if (!input) return;
+    input.addEventListener('change', () => {
+        state.dashboardTileVisibility = {
+            ...state.dashboardTileVisibility,
+            [key]: input.checked,
+        };
+        applyDashboardTileVisibility();
+        saveDashboardTileVisibility();
+    });
+});
+
+document.addEventListener('click', (event) => {
+    if (dom.monthlyFinanceSettingsPopover && dom.monthlyFinanceSettingsToggle
+        && !dom.monthlyFinanceSettingsPopover.hidden) {
+        const popoverClicked = dom.monthlyFinanceSettingsPopover.contains(event.target);
+        const toggleClicked = dom.monthlyFinanceSettingsToggle.contains(event.target);
+        if (!popoverClicked && !toggleClicked) {
+            setMonthlyFinanceSettingsOpen(false);
+        }
+    }
+
+    if (dom.dashboardSettingsPopover && dom.dashboardSettingsToggle
+        && !dom.dashboardSettingsPopover.hidden) {
+        const popoverClicked = dom.dashboardSettingsPopover.contains(event.target);
+        const toggleClicked = dom.dashboardSettingsToggle.contains(event.target);
+        if (!popoverClicked && !toggleClicked) {
+            setDashboardSettingsOpen(false);
+        }
     }
 });
 
@@ -6551,6 +6701,7 @@ initializeNavigation();
 applyStoredTheme();
 initializePasswordResetMode();
 applyMonthlyFinanceBoxVisibility();
+applyDashboardTileVisibility();
 renderSubscriptionMonths();
 updateCustomerArchiveControls();
 updateJobArchiveControls();
