@@ -993,6 +993,30 @@ function normalizeDashboardTileVisibility(value) {
     return normalized;
 }
 
+function dashboardTileStorageKey() {
+    return `dashboard_tile_preferences_${state.user?.id || 'guest'}`;
+}
+
+function readStoredDashboardTileVisibility() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(dashboardTileStorageKey()) || 'null');
+        if (!stored || typeof stored !== 'object' || !stored.tiles) return null;
+        return {
+            tiles: normalizeDashboardTileVisibility(stored.tiles),
+            pending: stored.pending === true,
+        };
+    } catch (error) {
+        return null;
+    }
+}
+
+function storeDashboardTileVisibility(tiles, pending = false) {
+    localStorage.setItem(dashboardTileStorageKey(), JSON.stringify({
+        tiles: normalizeDashboardTileVisibility(tiles),
+        pending,
+    }));
+}
+
 function applyDashboardTileVisibility() {
     const visibility = normalizeDashboardTileVisibility(state.dashboardTileVisibility);
     state.dashboardTileVisibility = visibility;
@@ -1039,14 +1063,16 @@ function setDashboardSettingsOpen(isOpen) {
 }
 
 async function saveDashboardTileVisibility() {
+    storeDashboardTileVisibility(state.dashboardTileVisibility, true);
     try {
         const response = await api.put('/api/preferences', {
             dashboard_tiles: state.dashboardTileVisibility,
         });
         state.dashboardTileVisibility = normalizeDashboardTileVisibility(response?.data?.dashboard_tiles);
+        storeDashboardTileVisibility(state.dashboardTileVisibility, false);
         applyDashboardTileVisibility();
     } catch (error) {
-        showToast('Unable to save dashboard settings.', true);
+        showToast('Dashboard settings saved on this device. Account sync is temporarily unavailable.', true);
     }
 }
 
@@ -1065,13 +1091,18 @@ async function saveMonthlyFinanceBoxVisibility() {
 }
 
 async function loadPreferences() {
+    const storedDashboardTiles = readStoredDashboardTileVisibility();
     try {
         const response = await api.get('/api/preferences');
         const theme = response.data?.theme || 'light';
         state.monthlyFinanceBoxVisibility = normalizeMonthlyFinanceBoxVisibility(
             response?.data?.monthly_finance_boxes
         );
-        state.dashboardTileVisibility = normalizeDashboardTileVisibility(response?.data?.dashboard_tiles);
+        const serverDashboardTiles = normalizeDashboardTileVisibility(response?.data?.dashboard_tiles);
+        state.dashboardTileVisibility = storedDashboardTiles?.pending
+            ? storedDashboardTiles.tiles
+            : serverDashboardTiles;
+        storeDashboardTileVisibility(state.dashboardTileVisibility, storedDashboardTiles?.pending === true);
         localStorage.setItem(themeKey, theme);
         setTheme(theme);
         applyMonthlyFinanceBoxVisibility();
@@ -1079,7 +1110,7 @@ async function loadPreferences() {
     } catch (error) {
         applyStoredTheme();
         state.monthlyFinanceBoxVisibility = { ...monthlyFinanceBoxDefaults };
-        state.dashboardTileVisibility = { ...dashboardTileDefaults };
+        state.dashboardTileVisibility = storedDashboardTiles?.tiles ?? { ...dashboardTileDefaults };
         applyMonthlyFinanceBoxVisibility();
         applyDashboardTileVisibility();
     }

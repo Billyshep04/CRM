@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\UserPreference;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
 
 class UserPreferenceController extends Controller
 {
@@ -81,11 +80,6 @@ class UserPreferenceController extends Controller
         return $normalized;
     }
 
-    private function hasDashboardTilesColumn(): bool
-    {
-        return Schema::hasColumn('user_preferences', 'dashboard_tiles');
-    }
-
     /**
      * @return array<string, bool>
      */
@@ -95,15 +89,13 @@ class UserPreferenceController extends Controller
             return $this->defaultDashboardTiles();
         }
 
-        $storedTiles = $this->hasDashboardTilesColumn()
-            ? $preference->dashboard_tiles
+        $monthlyFinanceBoxes = $preference->monthly_finance_boxes;
+        $storedTiles = is_array($monthlyFinanceBoxes)
+            ? ($monthlyFinanceBoxes['dashboard_tiles'] ?? null)
             : null;
 
         if (!is_array($storedTiles)) {
-            $monthlyFinanceBoxes = $preference->monthly_finance_boxes;
-            $storedTiles = is_array($monthlyFinanceBoxes)
-                ? ($monthlyFinanceBoxes['dashboard_tiles'] ?? null)
-                : null;
+            $storedTiles = $preference->dashboard_tiles;
         }
 
         return $this->normalizeDashboardTiles($storedTiles);
@@ -162,19 +154,13 @@ class UserPreferenceController extends Controller
 
         $defaultTheme = $validated['theme'] ?? 'light';
         $defaultBoxes = $this->defaultMonthlyFinanceBoxes();
-        $defaultDashboardTiles = $this->defaultDashboardTiles();
-
-        $createValues = [
-            'theme' => $defaultTheme,
-            'monthly_finance_boxes' => $defaultBoxes,
-        ];
-        if ($this->hasDashboardTilesColumn()) {
-            $createValues['dashboard_tiles'] = $defaultDashboardTiles;
-        }
 
         $preference = UserPreference::query()->firstOrCreate(
             ['user_id' => $user->id],
-            $createValues
+            [
+                'theme' => $defaultTheme,
+                'monthly_finance_boxes' => $defaultBoxes,
+            ]
         );
 
         $updates = [];
@@ -200,15 +186,11 @@ class UserPreferenceController extends Controller
             $currentDashboardTiles = $this->dashboardTilesFor($preference);
             $incomingDashboardTiles = $this->normalizeDashboardTiles($validated['dashboard_tiles']);
             if ($currentDashboardTiles !== $incomingDashboardTiles) {
-                if ($this->hasDashboardTilesColumn()) {
-                    $updates['dashboard_tiles'] = $incomingDashboardTiles;
-                } else {
-                    $monthlyFinanceBoxes = $updates['monthly_finance_boxes']
-                        ?? $preference->monthly_finance_boxes
-                        ?? $defaultBoxes;
-                    $monthlyFinanceBoxes['dashboard_tiles'] = $incomingDashboardTiles;
-                    $updates['monthly_finance_boxes'] = $monthlyFinanceBoxes;
-                }
+                $monthlyFinanceBoxes = $updates['monthly_finance_boxes']
+                    ?? $preference->monthly_finance_boxes
+                    ?? $defaultBoxes;
+                $monthlyFinanceBoxes['dashboard_tiles'] = $incomingDashboardTiles;
+                $updates['monthly_finance_boxes'] = $monthlyFinanceBoxes;
             }
         }
 
