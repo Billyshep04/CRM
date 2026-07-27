@@ -3669,6 +3669,11 @@ async function handleCustomerSubmit(event) {
 }
 
 async function handleCustomerAction(event) {
+    if (event.target.closest('a.email-link, a.phone-link')) {
+        event.stopPropagation();
+        return;
+    }
+
     const actionButton = event.target.closest('[data-action]');
     if (!actionButton) {
         const row = event.target.closest('.table-row.customers');
