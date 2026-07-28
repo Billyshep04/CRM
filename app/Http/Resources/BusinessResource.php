@@ -21,6 +21,10 @@ class BusinessResource extends JsonResource
             'current_score' => new LeadScoreResource($this->whenLoaded('currentLeadScore')),
             'discovered_at' => $this->discovered_at, 'last_discovered_at' => $this->last_discovered_at,
             'contacted' => $this->contacted_at !== null, 'contacted_at' => $this->contacted_at,
+            'contacted_by' => $this->whenLoaded('contactedBy', fn () => $this->contactedBy ? [
+                'id' => $this->contactedBy->id,
+                'name' => $this->contactedBy->name,
+            ] : null),
             'customer_id' => $this->customer_id,
             'created_at' => $this->created_at, 'updated_at' => $this->updated_at,
         ];

@@ -47,6 +47,11 @@ class Business extends Model
         return $this->belongsTo(User::class, 'owner_user_id');
     }
 
+    public function contactedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'contacted_by_user_id');
+    }
+
     public function discoveryRun(): BelongsTo
     {
         return $this->belongsTo(LeadDiscoveryRun::class, 'lead_discovery_run_id');

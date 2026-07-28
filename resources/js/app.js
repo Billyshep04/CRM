@@ -2944,8 +2944,11 @@ function renderDiscoveredLeads() {
         const row = document.createElement('div');
         row.className = 'table-row discovered-leads';
         const website = lead.website_url ? `<a href="${escapeHtml(lead.website_url)}" target="_blank" rel="noopener">${escapeHtml(new URL(lead.website_url).hostname)}</a>` : '<span class="text-muted">No website</span>';
+        const contactedBy = lead.contacted_by?.name
+            ? `Contacted by ${escapeHtml(lead.contacted_by.name)}`
+            : 'Contacted · user not recorded';
         const contactedAction = state.showingContactedLeads
-            ? '<span class="text-muted">Contacted</span>'
+            ? `<span class="lead-contacted-label">${contactedBy}</span>`
             : `<button class="btn btn-primary lead-contacted-button" type="button" data-lead-contacted="${escapeHtml(lead.id)}">Contacted</button>`;
         row.innerHTML = `<span><button class="lead-business-link" type="button" data-lead-view="${escapeHtml(lead.id)}">${escapeHtml(lead.name)}</button><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span>${contactedAction}</span><span class="lead-row-actions"><button class="btn btn-danger lead-row-delete" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
         dom.discoveredLeadsTable.appendChild(row);

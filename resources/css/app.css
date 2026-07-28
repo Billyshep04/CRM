@@ -1137,12 +1137,13 @@ body[data-role="admin"] .admin-inline-only {
 .content-grid.lead-discovery-layout > .discovery-runs-card { grid-column: 1 / -1; width: 100%; }
 .discovered-leads-card { height: 620px; min-height: 620px; display: flex; flex-direction: column; overflow: hidden; }
 .discovered-leads-card #discovered-leads-table { flex: 1; min-height: 0; overflow: auto; padding-right: 4px; }
-.table-row.discovered-leads { grid-template-columns: minmax(190px, 1.4fr) minmax(150px, 1fr) minmax(100px, 0.65fr) minmax(90px, 0.55fr) minmax(80px, 0.4fr); }
+.table-row.discovered-leads { grid-template-columns: minmax(190px, 1.4fr) minmax(150px, 1fr) minmax(100px, 0.65fr) minmax(150px, 0.8fr) minmax(80px, 0.4fr); }
 .table-row.discovery-runs { grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(70px, 0.5fr)) minmax(120px, 0.8fr) minmax(90px, 0.5fr); }
 #discovered-leads-table, #lead-discovery-runs { overflow-x: auto; }
-#discovered-leads-table .table-row { min-width: 760px; }
+#discovered-leads-table .table-row { min-width: 820px; }
 #lead-discovery-runs .table-row { min-width: 920px; }
 .lead-contacted-button { min-width: 88px; padding: 7px 12px; font-size: 0.78rem; }
+.lead-contacted-label { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 5px 9px; border-radius: 999px; background: rgba(34, 197, 94, 0.14); color: #22c55e; font-size: 0.72rem; font-weight: 700; line-height: 1.25; }
 .lead-business-link { appearance: none; border: 0; background: transparent; color: var(--text); padding: 0; font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
 .lead-business-link:hover, .lead-business-link:focus-visible { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .email-link, .phone-link { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; overflow-wrap: anywhere; }

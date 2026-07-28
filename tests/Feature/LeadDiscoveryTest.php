@@ -101,6 +101,59 @@ class LeadDiscoveryTest extends TestCase
         $this->assertSoftDeleted('businesses', ['id' => $lead->id]);
     }
 
+    public function test_admin_and_staff_can_see_which_user_contacted_a_lead(): void
+    {
+        $admin = $this->admin();
+        $staff = User::factory()->create(['name' => 'Ruth Chisholm']);
+        $staff->roles()->attach(Role::query()->where('slug', 'staff')->firstOrFail());
+        $lead = Business::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'owner_user_id' => $admin->id,
+            'name' => 'Contact Attribution Ltd',
+            'status' => 'new',
+            'source' => 'google_places',
+        ]);
+
+        $this->actingAs($staff)
+            ->patchJson("/api/businesses/{$lead->public_id}/contacted", ['contacted' => true])
+            ->assertOk()
+            ->assertJsonPath('data.contacted_by.id', $staff->id)
+            ->assertJsonPath('data.contacted_by.name', 'Ruth Chisholm');
+
+        $this->assertDatabaseHas('businesses', [
+            'id' => $lead->id,
+            'contacted_by_user_id' => $staff->id,
+        ]);
+
+        $this->actingAs($admin)
+            ->getJson('/api/businesses?source=google_places&contacted=1')
+            ->assertOk()
+            ->assertJsonPath('data.0.contacted_by.name', 'Ruth Chisholm');
+    }
+
+    public function test_existing_contacted_leads_are_backfilled_to_billy_admin(): void
+    {
+        $billy = $this->admin();
+        $billy->update(['name' => 'Billy']);
+        $lead = Business::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'owner_user_id' => $billy->id,
+            'name' => 'Historical Contact Ltd',
+            'status' => 'contacted',
+            'source' => 'google_places',
+            'contacted_at' => now()->subDay(),
+            'contacted_by_user_id' => null,
+        ]);
+
+        $migration = require database_path('migrations/2026_07_28_000100_backfill_contacted_leads_to_billy_admin.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('businesses', [
+            'id' => $lead->id,
+            'contacted_by_user_id' => $billy->id,
+        ]);
+    }
+
     public function test_discovery_activity_can_be_deleted_without_deleting_imported_leads(): void
     {
         $admin = $this->admin();

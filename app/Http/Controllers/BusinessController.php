@@ -26,7 +26,7 @@ class BusinessController extends Controller
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
-        return BusinessResource::collection(Business::query()->with('currentLeadScore')
+        return BusinessResource::collection(Business::query()->with(['currentLeadScore', 'contactedBy:id,name'])
             ->when($validated['grade'] ?? null, fn ($query, $grade) => $query->where('lead_grade', $grade))
             ->when($validated['status'] ?? null, fn ($query, $status) => $query->where('status', $status))
             ->when($validated['source'] ?? null, fn ($query, $source) => $query->where('source', $source))
@@ -46,13 +46,14 @@ class BusinessController extends Controller
 
     public function show(Business $business): BusinessResource
     {
-        return new BusinessResource($business->load('currentLeadScore'));
+        return new BusinessResource($business->load(['currentLeadScore', 'contactedBy:id,name']));
     }
 
     public function intelligence(Business $business): LeadIntelligenceResource
     {
         $business->load([
             'currentLeadScore',
+            'contactedBy:id,name',
             'websiteAudits' => fn ($query) => $query->with(['findings', 'seoAudit', 'performanceAudit', 'accessibilityAudit', 'securityAudit'])
                 ->latest('created_at')->limit(10),
         ]);
@@ -72,15 +73,18 @@ class BusinessController extends Controller
     {
         $business->update($this->validated($request, true));
 
-        return new BusinessResource($business->fresh('currentLeadScore'));
+        return new BusinessResource($business->fresh(['currentLeadScore', 'contactedBy:id,name']));
     }
 
     public function markContacted(Request $request, Business $business): BusinessResource
     {
         $data = $request->validate(['contacted' => ['required', 'boolean']]);
-        $business->update(['contacted_at' => $data['contacted'] ? now() : null]);
+        $business->update([
+            'contacted_at' => $data['contacted'] ? now() : null,
+            'contacted_by_user_id' => $data['contacted'] ? $request->user()->id : null,
+        ]);
 
-        return new BusinessResource($business->fresh('currentLeadScore'));
+        return new BusinessResource($business->fresh(['currentLeadScore', 'contactedBy:id,name']));
     }
 
     public function convert(Request $request, Business $business, ConvertLeadToCustomer $converter): CustomerResource
