@@ -294,6 +294,14 @@
                         </div>
                         <div class="card wide discovered-leads-card">
                             <div class="card-header"><div><div class="card-title" id="discovered-leads-title">Discovered leads</div><div class="card-subtitle" id="discovered-leads-subtitle">External businesses ready for review and conversion.</div></div><div class="card-header-actions"><button class="btn btn-outline" id="lead-discovery-contacted" type="button">Contacted</button><button class="btn btn-outline" id="lead-discovery-refresh" type="button">Refresh</button></div></div>
+                            <div class="filters lead-contacted-filters" id="lead-contacted-filters" hidden>
+                                <label class="field">
+                                    <span>Contacted by</span>
+                                    <select id="lead-contacted-user-filter">
+                                        <option value="all">All users</option>
+                                    </select>
+                                </label>
+                            </div>
                             <div class="table" id="discovered-leads-table">
                                 <div class="table-row table-header discovered-leads"><span>Business</span><span>Website</span><span>Google</span><span>Contacted</span><span>Actions</span></div>
                                 <div class="table-row table-empty discovered-leads"><span>No leads loaded.</span><span></span><span></span><span></span><span></span></div>

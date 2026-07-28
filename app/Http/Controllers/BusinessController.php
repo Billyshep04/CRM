@@ -9,6 +9,7 @@ use App\Http\Resources\CustomerResource;
 use App\Http\Resources\LeadIntelligenceResource;
 use App\Http\Resources\WebsiteAuditResource;
 use App\Models\Business;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -23,6 +24,7 @@ class BusinessController extends Controller
             'grade' => ['nullable', 'in:hot,warm,cool,cold'], 'status' => ['nullable', 'in:new,reviewing,qualified,contacted,converted,disqualified'],
             'source' => ['nullable', 'string', 'max:50'], 'search' => ['nullable', 'string', 'max:100'],
             'contacted' => ['nullable', 'boolean'],
+            'contacted_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
 
@@ -33,8 +35,25 @@ class BusinessController extends Controller
             ->when(array_key_exists('contacted', $validated), fn ($query) => $validated['contacted']
                 ? $query->whereNotNull('contacted_at')
                 : $query->whereNull('contacted_at'))
+            ->when($validated['contacted_by_user_id'] ?? null, fn ($query, $userId) => $query->where('contacted_by_user_id', $userId))
             ->when($validated['search'] ?? null, fn ($query, $search) => $query->where(fn ($inner) => $inner->where('name', 'like', '%'.$search.'%')->orWhere('address', 'like', '%'.$search.'%')))
             ->orderByRaw('lead_score IS NULL')->orderByDesc('lead_score')->latest()->paginate($validated['per_page'] ?? 20));
+    }
+
+    public function contactors(): JsonResponse
+    {
+        $userIds = Business::query()
+            ->whereNotNull('contacted_at')
+            ->whereNotNull('contacted_by_user_id')
+            ->distinct()
+            ->pluck('contacted_by_user_id');
+
+        return response()->json([
+            'data' => User::query()
+                ->whereIn('id', $userIds)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+        ]);
     }
 
     public function store(Request $request): BusinessResource

@@ -61,6 +61,8 @@ const dom = {
     leadDiscoveryStatus: document.getElementById('lead-discovery-status'),
     leadDiscoveryRefresh: document.getElementById('lead-discovery-refresh'),
     leadDiscoveryContacted: document.getElementById('lead-discovery-contacted'),
+    leadContactedFilters: document.getElementById('lead-contacted-filters'),
+    leadContactedUserFilter: document.getElementById('lead-contacted-user-filter'),
     discoveredLeadsTitle: document.getElementById('discovered-leads-title'),
     discoveredLeadsSubtitle: document.getElementById('discovered-leads-subtitle'),
     discoveredLeadsTable: document.getElementById('discovered-leads-table'),
@@ -385,6 +387,8 @@ const state = {
     selectedOpportunityIds: new Set(),
     discoveredLeads: [],
     showingContactedLeads: false,
+    contactedLeadUsers: [],
+    contactedLeadUser: 'all',
     leadDiscoveryRuns: [],
     staffUsers: [],
     monthlyFinance: [],
@@ -2908,12 +2912,23 @@ async function loadOpportunitySummary() {
 async function loadLeadDiscoveryData() {
     if (!dom.discoveredLeadsTable || !dom.leadDiscoveryRuns) return;
     try {
-        const [leadsResponse, runsResponse] = await Promise.all([
-            api.get('/api/businesses', { params: { source: 'google_places', contacted: state.showingContactedLeads ? 1 : 0, per_page: 100 } }),
+        const [leadsResponse, runsResponse, contactorsResponse] = await Promise.all([
+            api.get('/api/businesses', { params: {
+                source: 'google_places',
+                contacted: state.showingContactedLeads ? 1 : 0,
+                contacted_by_user_id: state.showingContactedLeads && state.contactedLeadUser !== 'all'
+                    ? state.contactedLeadUser
+                    : undefined,
+                per_page: 100,
+            } }),
             api.get('/api/lead-discovery', { params: { per_page: 20 } }),
+            state.showingContactedLeads ? api.get('/api/businesses/contactors') : Promise.resolve(null),
         ]);
         state.discoveredLeads = leadsResponse?.data?.data || [];
         state.leadDiscoveryRuns = runsResponse?.data?.data || [];
+        if (state.showingContactedLeads) {
+            state.contactedLeadUsers = contactorsResponse?.data?.data || [];
+        }
         renderDiscoveredLeads();
         renderDiscoveryRuns();
         if (state.view === 'lead-discovery' && state.leadDiscoveryRuns.some((run) => ['pending', 'running'].includes(run.status))) {
@@ -2932,6 +2947,7 @@ function renderDiscoveredLeads() {
         dom.leadDiscoveryContacted.classList.toggle('btn-primary', state.showingContactedLeads);
         dom.leadDiscoveryContacted.classList.toggle('btn-outline', !state.showingContactedLeads);
     }
+    renderContactedLeadUserFilter();
     resetTable(dom.discoveredLeadsTable);
     if (!state.discoveredLeads.length) {
         const row = document.createElement('div');
@@ -2953,6 +2969,24 @@ function renderDiscoveredLeads() {
         row.innerHTML = `<span><button class="lead-business-link" type="button" data-lead-view="${escapeHtml(lead.id)}">${escapeHtml(lead.name)}</button><small>${escapeHtml(lead.address || '')}</small></span><span>${website}</span><span>${lead.google_rating ? `${escapeHtml(lead.google_rating)} ★ (${escapeHtml(lead.google_review_count || 0)})` : '--'}</span><span>${contactedAction}</span><span class="lead-row-actions"><button class="btn btn-danger lead-row-delete" type="button" data-lead-delete="${escapeHtml(lead.id)}">Delete</button></span>`;
         dom.discoveredLeadsTable.appendChild(row);
     });
+}
+
+function renderContactedLeadUserFilter() {
+    if (dom.leadContactedFilters) {
+        dom.leadContactedFilters.hidden = !state.showingContactedLeads;
+    }
+    if (!dom.leadContactedUserFilter || !state.showingContactedLeads) return;
+
+    const selectedUserExists = state.contactedLeadUsers.some((user) => String(user.id) === String(state.contactedLeadUser));
+    if (state.contactedLeadUser !== 'all' && !selectedUserExists) {
+        state.contactedLeadUser = 'all';
+    }
+
+    dom.leadContactedUserFilter.innerHTML = [
+        '<option value="all">All users</option>',
+        ...state.contactedLeadUsers.map((user) => `<option value="${escapeHtml(user.id)}">${escapeHtml(user.name || 'Unnamed user')}</option>`),
+    ].join('');
+    dom.leadContactedUserFilter.value = String(state.contactedLeadUser);
 }
 
 function renderDiscoveryRuns() {
@@ -7015,6 +7049,10 @@ if (dom.leadDiscoveryForm) dom.leadDiscoveryForm.addEventListener('submit', hand
 if (dom.leadDiscoveryRefresh) dom.leadDiscoveryRefresh.addEventListener('click', loadLeadDiscoveryData);
 if (dom.leadDiscoveryContacted) dom.leadDiscoveryContacted.addEventListener('click', () => {
     state.showingContactedLeads = !state.showingContactedLeads;
+    loadLeadDiscoveryData();
+});
+if (dom.leadContactedUserFilter) dom.leadContactedUserFilter.addEventListener('change', () => {
+    state.contactedLeadUser = dom.leadContactedUserFilter.value || 'all';
     loadLeadDiscoveryData();
 });
 if (dom.discoveredLeadsTable) dom.discoveredLeadsTable.addEventListener('click', handleDiscoveredLeadAction);

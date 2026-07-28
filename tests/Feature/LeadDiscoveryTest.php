@@ -129,6 +129,29 @@ class LeadDiscoveryTest extends TestCase
             ->getJson('/api/businesses?source=google_places&contacted=1')
             ->assertOk()
             ->assertJsonPath('data.0.contacted_by.name', 'Ruth Chisholm');
+
+        $adminLead = Business::query()->create([
+            'public_id' => (string) Str::ulid(),
+            'owner_user_id' => $admin->id,
+            'name' => 'Admin Contact Ltd',
+            'status' => 'new',
+            'source' => 'google_places',
+        ]);
+        $this->actingAs($admin)
+            ->patchJson("/api/businesses/{$adminLead->public_id}/contacted", ['contacted' => true])
+            ->assertOk();
+
+        $this->actingAs($staff)
+            ->getJson('/api/businesses/contactors')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+
+        $this->actingAs($admin)
+            ->getJson("/api/businesses?source=google_places&contacted=1&contacted_by_user_id={$staff->id}")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $lead->public_id)
+            ->assertJsonPath('data.0.contacted_by.name', 'Ruth Chisholm');
     }
 
     public function test_existing_contacted_leads_are_backfilled_to_billy_admin(): void

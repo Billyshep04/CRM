@@ -1136,6 +1136,8 @@ body[data-role="admin"] .admin-inline-only {
 .lead-discovery-layout { grid-template-columns: minmax(280px, 0.7fr) minmax(0, 1.6fr); align-items: start; }
 .content-grid.lead-discovery-layout > .discovery-runs-card { grid-column: 1 / -1; width: 100%; }
 .discovered-leads-card { height: 620px; min-height: 620px; display: flex; flex-direction: column; overflow: hidden; }
+.lead-contacted-filters { grid-template-columns: minmax(200px, 320px); margin-bottom: 14px; }
+.lead-contacted-filters[hidden] { display: none; }
 .discovered-leads-card #discovered-leads-table { flex: 1; min-height: 0; overflow: auto; padding-right: 4px; }
 .table-row.discovered-leads { grid-template-columns: minmax(190px, 1.4fr) minmax(150px, 1fr) minmax(100px, 0.65fr) minmax(150px, 0.8fr) minmax(80px, 0.4fr); }
 .table-row.discovery-runs { grid-template-columns: minmax(220px, 1.5fr) repeat(4, minmax(70px, 0.5fr)) minmax(120px, 0.8fr) minmax(90px, 0.5fr); }

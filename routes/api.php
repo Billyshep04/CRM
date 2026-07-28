@@ -56,6 +56,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::delete('revenue-opportunities/bulk', [RevenueOpportunityController::class, 'bulkDestroy']);
         Route::post('revenue-opportunities/{revenueOpportunity}/follow-up', [RevenueOpportunityController::class, 'scheduleFollowUp']);
         Route::apiResource('revenue-opportunities', RevenueOpportunityController::class);
+        Route::get('businesses/contactors', [BusinessController::class, 'contactors']);
         Route::apiResource('businesses', BusinessController::class)->only(['index', 'store', 'show', 'update']);
         Route::get('businesses/{business}/intelligence', [BusinessController::class, 'intelligence']);
         Route::post('businesses/{business}/audit', [BusinessController::class, 'audit']);
