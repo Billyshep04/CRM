@@ -1478,7 +1478,7 @@
                                     <div class="card-subtitle">Create, send, and download invoices.</div>
                                 </div>
                                 <div class="card-header-actions">
-                                    <button class="btn btn-outline" id="invoices-archived-toggle" type="button">Archived invoices</button>
+                                    <button class="btn btn-outline" id="invoices-paid-toggle" type="button">Paid invoices</button>
                                     <button class="btn btn-outline" id="invoices-refresh">Refresh</button>
                                 </div>
                             </div>
@@ -1489,7 +1489,6 @@
                                         <option value="all">All</option>
                                         <option value="draft">Draft</option>
                                         <option value="sent">Sent</option>
-                                        <option value="paid">Paid</option>
                                         <option value="overdue">Overdue</option>
                                     </select>
                                 </label>

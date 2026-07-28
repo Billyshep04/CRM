@@ -33,16 +33,26 @@ class InvoiceController extends Controller
             $customerId ? [(int) $customerId] : null
         );
 
+        $paymentView = strtolower(trim((string) $request->query('payment_view')));
+        $usesPaymentView = in_array($paymentView, ['current', 'paid'], true);
         $archivedOnly = $request->boolean('archived');
         $supportsArchiving = $this->ensureInvoiceArchiveColumnExists(true);
         $query = Invoice::query()
             ->with(['customer', 'lineItems', 'pdfFile'])
             ->when(
-                $supportsArchiving,
+                $supportsArchiving && !$usesPaymentView,
                 static fn ($builder) => $builder->when(
                     $archivedOnly,
                     static fn ($archiveQuery) => $archiveQuery->whereNotNull('archived_at'),
                     static fn ($archiveQuery) => $archiveQuery->whereNull('archived_at')
+                )
+            )
+            ->when(
+                $usesPaymentView,
+                static fn ($builder) => $builder->when(
+                    $paymentView === 'paid',
+                    static fn ($paymentQuery) => $paymentQuery->where('status', 'paid'),
+                    static fn ($paymentQuery) => $paymentQuery->where('status', '!=', 'paid')
                 )
             )
             ->latest();

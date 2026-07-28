@@ -241,7 +241,7 @@ const dom = {
     invoicesFilterCustomer: document.getElementById('invoices-filter-customer'),
     invoicesClear: document.getElementById('invoices-clear'),
     invoicesLoadMore: document.getElementById('invoices-load-more'),
-    invoicesArchivedToggle: document.getElementById('invoices-archived-toggle'),
+    invoicesPaidToggle: document.getElementById('invoices-paid-toggle'),
     customersTable: document.getElementById('customers-table'),
     customerForm: document.getElementById('customer-form'),
     customerFormTitle: document.getElementById('customer-form-title'),
@@ -426,7 +426,7 @@ const state = {
         invoices: {
             status: 'all',
             customer: 'all',
-            archived: false,
+            paid: false,
         },
         tasks: {
             status: 'all',
@@ -3399,20 +3399,26 @@ function setJobsArchivedMode(showArchived) {
     loadJobs();
 }
 
-function isViewingArchivedInvoices() {
-    return state.filters.invoices.archived === true;
+function isViewingPaidInvoices() {
+    return state.filters.invoices.paid === true;
 }
 
-function updateInvoiceArchiveControls() {
-    if (!dom.invoicesArchivedToggle) return;
-    const viewingArchived = isViewingArchivedInvoices();
-    dom.invoicesArchivedToggle.textContent = viewingArchived ? 'Active invoices' : 'Archived invoices';
-    dom.invoicesArchivedToggle.classList.toggle('is-active', viewingArchived);
+function updateInvoicePaidControls() {
+    const viewingPaid = isViewingPaidInvoices();
+    if (dom.invoicesPaidToggle) {
+        dom.invoicesPaidToggle.textContent = viewingPaid ? 'Current invoices' : 'Paid invoices';
+        dom.invoicesPaidToggle.classList.toggle('is-active', viewingPaid);
+    }
+    if (dom.invoicesFilterStatus) {
+        dom.invoicesFilterStatus.disabled = viewingPaid;
+    }
 }
 
-function setInvoicesArchivedMode(showArchived) {
-    state.filters.invoices.archived = showArchived === true;
-    updateInvoiceArchiveControls();
+function setInvoicesPaidMode(showPaid) {
+    state.filters.invoices.paid = showPaid === true;
+    state.filters.invoices.status = 'all';
+    if (dom.invoicesFilterStatus) dom.invoicesFilterStatus.value = 'all';
+    updateInvoicePaidControls();
     loadInvoices();
 }
 
@@ -6072,7 +6078,7 @@ function collectInvoiceLineItems() {
 async function loadInvoices(append = false) {
     if (!dom.invoicesTable) return;
     setFormStatus(dom.invoiceFormStatus, '');
-    updateInvoiceArchiveControls();
+    updateInvoicePaidControls();
     setLoadMoreLoading('invoices', true);
     if (!append) {
         resetPagination('invoices');
@@ -6090,7 +6096,7 @@ async function loadInvoices(append = false) {
             page,
             status: state.filters.invoices.status,
             customer_id: state.filters.invoices.customer,
-            archived: isViewingArchivedInvoices() ? 1 : undefined,
+            payment_view: isViewingPaidInvoices() ? 'paid' : 'current',
         });
         const response = await api.get(`/api/invoices${query}`);
         const items = response?.data?.data ?? [];
@@ -6115,7 +6121,7 @@ function renderInvoices() {
     if (!state.invoices.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty invoices';
-        emptyRow.innerHTML = `<span>${isViewingArchivedInvoices() ? 'No archived invoices yet.' : 'No invoices yet.'}</span><span></span><span></span><span></span><span></span><span></span>`;
+        emptyRow.innerHTML = `<span>${isViewingPaidInvoices() ? 'No paid invoices yet.' : 'No current invoices yet.'}</span><span></span><span></span><span></span><span></span><span></span>`;
         dom.invoicesTable.appendChild(emptyRow);
         return;
     }
@@ -6127,9 +6133,6 @@ function renderInvoices() {
         const displayStatus = invoice.effective_status || invoice.status || 'draft';
         const nextStatus = isPaid ? 'unpaid' : 'paid';
         const paymentActionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
-        const archiveAction = invoice.is_archived
-            ? `<button class="btn btn-outline btn-small" data-action="unarchive" data-id="${invoice.id}">Unarchive</button>`
-            : `<button class="btn btn-outline btn-small" data-action="archive" data-id="${invoice.id}">Archive</button>`;
         row.innerHTML = `
             <span>#${escapeHtml(invoice.invoice_number)}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
@@ -6141,7 +6144,6 @@ function renderInvoices() {
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${invoice.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="send" data-id="${invoice.id}">Send</button>
                 <button class="btn btn-outline btn-small" data-action="download" data-id="${invoice.id}">Download</button>
-                ${archiveAction}
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${invoice.id}">Delete</button>
             </div>
         `;
@@ -6305,18 +6307,6 @@ async function handleInvoiceAction(event) {
 
     if (action === 'download' && invoice) {
         await downloadInvoice(id, `Invoice-${invoice.invoice_number}.pdf`);
-    }
-
-    if ((action === 'archive' || action === 'unarchive') && invoice) {
-        const label = action === 'archive' ? 'Archive' : 'Unarchive';
-        if (!window.confirm(`${label} this invoice?`)) return;
-        try {
-            await api.patch(`/api/invoices/${id}/${action}`);
-            showToast(`Invoice ${action}d.`);
-            await loadInvoices();
-        } catch (error) {
-            setFormStatus(dom.invoiceFormStatus, getErrorMessage(error, `Unable to ${action} invoice.`), true);
-        }
     }
 
     if (action === 'delete' && id) {
@@ -7115,9 +7105,9 @@ if (dom.invoicesRefresh) {
     dom.invoicesRefresh.addEventListener('click', loadInvoices);
 }
 
-if (dom.invoicesArchivedToggle) {
-    dom.invoicesArchivedToggle.addEventListener('click', () => {
-        setInvoicesArchivedMode(!isViewingArchivedInvoices());
+if (dom.invoicesPaidToggle) {
+    dom.invoicesPaidToggle.addEventListener('click', () => {
+        setInvoicesPaidMode(!isViewingPaidInvoices());
     });
 }
 
@@ -7145,8 +7135,8 @@ if (dom.invoicesClear) {
         if (dom.invoicesFilterCustomer) dom.invoicesFilterCustomer.value = 'all';
         state.filters.invoices.status = 'all';
         state.filters.invoices.customer = 'all';
-        state.filters.invoices.archived = false;
-        updateInvoiceArchiveControls();
+        state.filters.invoices.paid = false;
+        updateInvoicePaidControls();
         loadInvoices();
     });
 }
