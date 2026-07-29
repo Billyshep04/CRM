@@ -26,6 +26,12 @@ class BusinessResource extends JsonResource
                 'name' => $this->contactedBy->name,
             ] : null),
             'customer_id' => $this->customer_id,
+            'owner_user_id' => $this->owner_user_id, 'next_action_type' => $this->next_action_type, 'next_action_at' => $this->next_action_at,
+            'next_action_notes' => $this->next_action_notes, 'last_activity_at' => $this->last_activity_at,
+            'estimated_project_value' => $this->estimated_project_value, 'probability' => $this->probability,
+            'weighted_value' => round((float) $this->estimated_project_value * (int) $this->probability / 100, 2),
+            'expected_close_date' => $this->expected_close_date, 'service_sought' => $this->service_sought, 'proposal_id' => $this->proposal_id,
+            'won_at' => $this->won_at, 'lost_at' => $this->lost_at, 'lost_reason' => $this->lost_reason, 'competitor_notes' => $this->competitor_notes,
             'created_at' => $this->created_at, 'updated_at' => $this->updated_at,
         ];
     }

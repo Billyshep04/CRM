@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RevenueOpportunity extends Model
@@ -22,6 +23,7 @@ class RevenueOpportunity extends Model
             'type' => RevenueOpportunityType::class, 'status' => RevenueOpportunityStatus::class,
             'estimated_project_value' => 'decimal:2', 'estimated_monthly_revenue' => 'decimal:2',
             'renewal_due_at' => 'date', 'next_action_at' => 'datetime', 'won_at' => 'datetime', 'lost_at' => 'datetime',
+            'last_contacted_at' => 'datetime', 'last_activity_at' => 'datetime',
         ];
     }
 
@@ -63,5 +65,10 @@ class RevenueOpportunity extends Model
     public function tasks(): HasMany
     {
         return $this->hasMany(CrmTask::class);
+    }
+
+    public function activities(): MorphMany
+    {
+        return $this->morphMany(CrmActivity::class, 'subject')->latest('occurred_at');
     }
 }

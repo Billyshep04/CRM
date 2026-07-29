@@ -8,6 +8,7 @@ use App\Http\Resources\RevenueOpportunityResource;
 use App\Models\CrmTask;
 use App\Models\RevenueOpportunity;
 use App\Services\RevenueOpportunities\OpportunityRecommendationService;
+use App\Services\Sales\NextActionValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -58,10 +59,13 @@ class RevenueOpportunityController extends Controller
         return new RevenueOpportunityResource($revenueOpportunity->load(['customer', 'website', 'owner']));
     }
 
-    public function update(Request $request, RevenueOpportunity $revenueOpportunity): RevenueOpportunityResource
+    public function update(Request $request, RevenueOpportunity $revenueOpportunity, NextActionValidator $nextActions): RevenueOpportunityResource
     {
         $this->authorizeAccess($request, $revenueOpportunity);
         $data = $this->validated($request, true);
+        if (array_key_exists('status', $data) || array_key_exists('next_action_at', $data)) {
+            $nextActions->opportunity(['status' => $data['status'] ?? $revenueOpportunity->status->value, 'next_action_at' => $data['next_action_at'] ?? $revenueOpportunity->next_action_at], $revenueOpportunity->status);
+        }
         if (($data['status'] ?? null) === RevenueOpportunityStatus::Won->value && $revenueOpportunity->status !== RevenueOpportunityStatus::Won) {
             $data['won_at'] = now();
         }
@@ -155,6 +159,8 @@ class RevenueOpportunityController extends Controller
             'estimated_project_value' => ['sometimes', 'numeric', 'min:0', 'max:9999999999.99'],
             'estimated_monthly_revenue' => ['sometimes', 'numeric', 'min:0', 'max:9999999999.99'],
             'renewal_due_at' => ['nullable', 'date'], 'next_action_at' => ['nullable', 'date'],
+            'next_action_type' => ['nullable', 'string', 'max:50'], 'next_action_notes' => ['nullable', 'string', 'max:5000'],
+            'lost_reason' => ['nullable', 'string', 'max:50'], 'competitor_notes' => ['nullable', 'string', 'max:5000'],
             'converted_subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'], 'converted_job_id' => ['nullable', 'integer', 'exists:jobs,id'],
         ]);
     }

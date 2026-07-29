@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Business extends Model
@@ -29,6 +30,8 @@ class Business extends Model
             'discovered_at' => 'datetime',
             'last_discovered_at' => 'datetime',
             'contacted_at' => 'datetime',
+            'next_action_at' => 'datetime', 'last_activity_at' => 'datetime', 'expected_close_date' => 'date',
+            'estimated_project_value' => 'decimal:2', 'won_at' => 'datetime', 'lost_at' => 'datetime',
         ];
     }
 
@@ -70,5 +73,15 @@ class Business extends Model
     public function currentLeadScore(): HasOne
     {
         return $this->hasOne(LeadScore::class)->where('is_current', true)->latestOfMany('calculated_at');
+    }
+
+    public function activities(): MorphMany
+    {
+        return $this->morphMany(CrmActivity::class, 'subject')->latest('occurred_at');
+    }
+
+    public function transitions(): HasMany
+    {
+        return $this->hasMany(PipelineStageTransition::class);
     }
 }

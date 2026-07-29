@@ -35,6 +35,8 @@ const dom = {
     dashboardPotentialMrr: document.getElementById('dashboard-potential-mrr'),
     dashboardOpportunityValue: document.getElementById('dashboard-opportunity-value'),
     dashboardOpportunityCount: document.getElementById('dashboard-opportunity-count'),
+    todayActionFeed: document.getElementById('today-action-feed'),
+    todayRefresh: document.getElementById('today-refresh'),
     opportunityPotentialMrr: document.getElementById('opportunity-potential-mrr'),
     opportunityWeightedMrr: document.getElementById('opportunity-weighted-mrr'),
     opportunityProjectValue: document.getElementById('opportunity-project-value'),
@@ -1319,6 +1321,7 @@ function renderInvoiceRows(container, invoices, emptyMessage) {
 }
 
 async function loadStaffStats() {
+    loadTodayActions();
     loadOpportunitySummary();
     if (state.role === 'staff') {
         const result = await api.get('/api/tasks/dashboard');
@@ -1415,6 +1418,26 @@ async function loadStaffStats() {
     const failures = results.filter((result) => result.status === 'rejected').length;
     updateSyncStatus(failures === results.length ? 'Offline' : failures ? 'Partial' : 'Connected');
 }
+
+async function loadTodayActions() {
+    if (!dom.todayActionFeed) return;
+    dom.todayActionFeed.innerHTML = '<div class="table-empty">Loading today’s actions…</div>';
+    try {
+        const response = await api.get('/api/today');
+        const groups = response?.data?.groups ?? {};
+        const labels = { overdue: 'Overdue actions', today: 'Due today', upcoming: 'Upcoming actions', missing_next_action: 'Missing next action' };
+        const sections = Object.entries(labels).map(([key, label]) => {
+            const items = groups[key] ?? [];
+            if (!items.length) return '';
+            return `<section class="today-group"><h3>${escapeHtml(label)} <span>${items.length}</span></h3>${items.map(item => `<article class="today-item"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.context || item.customer_or_business_name || '')}</p></div><div class="today-item-meta"><span class="pill">${escapeHtml(item.priority || 'normal')}</span><time>${item.due_at ? escapeHtml(formatDate(item.due_at)) : 'Schedule required'}</time></div></article>`).join('')}</section>`;
+        }).join('');
+        dom.todayActionFeed.innerHTML = sections || '<div class="table-empty">Nothing requires action right now.</div>';
+    } catch (error) {
+        dom.todayActionFeed.innerHTML = '<div class="table-empty">Unable to load today’s actions.</div>';
+    }
+}
+
+if (dom.todayRefresh) dom.todayRefresh.addEventListener('click', loadTodayActions);
 
 function resetMonthlyFinanceCards() {
     if (dom.monthlyFinanceSelectedMonth) dom.monthlyFinanceSelectedMonth.textContent = '--';

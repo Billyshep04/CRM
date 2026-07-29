@@ -733,6 +733,11 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     grid-column: span 1;
 }
 
+.content-grid > .today-card {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+
 .dashboard-chart-card {
     grid-column: 1 / -1;
 }
@@ -1878,3 +1883,13 @@ body[data-role="staff"] .staff-member-only {
         display: block;
     }
 }
+.today-action-feed { display:grid; gap:1rem; }
+.today-group { border-top:1px solid var(--border, #d9dee8); padding-top:.75rem; }
+.today-group:first-child { border-top:0; padding-top:0; }
+.today-group h3 { display:flex; justify-content:space-between; margin:0 0 .5rem; font-size:.9rem; }
+.today-group h3 span { color:var(--muted, #667085); }
+.today-item { display:flex; justify-content:space-between; gap:1rem; padding:.7rem 0; border-top:1px solid var(--border, #e7eaf0); }
+.today-item:first-of-type { border-top:0; }
+.today-item p { margin:.2rem 0 0; color:var(--muted, #667085); font-size:.85rem; }
+.today-item-meta { display:flex; align-items:flex-end; flex-direction:column; gap:.35rem; white-space:nowrap; font-size:.8rem; }
+@media (max-width: 640px) { .today-item { flex-direction:column; } .today-item-meta { align-items:flex-start; } }

@@ -33,6 +33,7 @@ class CrmTask extends Model
         'staff_notes',
         'completed_at',
         'reminder_sent_at',
+        'business_id', 'source_type', 'source_reference', 'due_at',
     ];
 
     protected $casts = [
@@ -41,6 +42,7 @@ class CrmTask extends Model
         'reminder_sent_at' => 'datetime',
         'hours' => 'integer',
         'minutes' => 'integer',
+        'due_at' => 'datetime',
     ];
 
     public function assignedTo(): BelongsTo

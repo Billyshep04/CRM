@@ -18,3 +18,9 @@ Schedule::command('opportunities:send-follow-up-reminders')
     ->timezone('Europe/London')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('follow-ups:process')
+    ->everyFifteenMinutes()
+    ->timezone('Europe/London')
+    ->withoutOverlapping()
+    ->onOneServer();

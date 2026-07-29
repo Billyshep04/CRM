@@ -7,12 +7,14 @@ use App\Jobs\SendProposalEmail;
 use App\Models\Job;
 use App\Models\Proposal;
 use App\Models\ProposalLineItem;
+use App\Services\FollowUps\FollowUpSequenceService;
+use App\Services\ProposalFormSettings;
 use App\Services\ProposalNumberGenerator;
 use App\Services\ProposalPdfService;
-use App\Services\ProposalFormSettings;
+use App\Services\Sales\PipelineService;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -27,7 +29,7 @@ class ProposalController extends Controller
     {
         $perPage = $request->integer('per_page', 15);
 
-        if (!$this->ensureProposalTablesExist(true)) {
+        if (! $this->ensureProposalTablesExist(true)) {
             $emptyPaginator = new LengthAwarePaginator(
                 [],
                 0,
@@ -68,6 +70,8 @@ class ProposalController extends Controller
             $proposal = Proposal::create([
                 'customer_id' => $validated['customer_id'],
                 'job_id' => null,
+                'business_id' => $validated['business_id'] ?? null,
+                'revenue_opportunity_id' => $validated['revenue_opportunity_id'] ?? null,
                 'created_by_user_id' => $request->user()?->id,
                 'proposal_number' => $numberGenerator->generate(),
                 'version' => 1,
@@ -118,6 +122,8 @@ class ProposalController extends Controller
 
             $editableProposal->update([
                 'customer_id' => $validated['customer_id'],
+                'business_id' => $validated['business_id'] ?? $editableProposal->business_id,
+                'revenue_opportunity_id' => $validated['revenue_opportunity_id'] ?? $editableProposal->revenue_opportunity_id,
                 'title' => $validated['title'],
                 'proposal_type' => $validated['proposal_type'],
                 'proposal_type_label' => $validated['proposal_type_label'],
@@ -183,7 +189,7 @@ class ProposalController extends Controller
     {
         $this->assertProposalTablesExist();
 
-        if (!$proposal->pdfFile) {
+        if (! $proposal->pdfFile) {
             $storedFile = $pdfService->generate($proposal);
             $proposal->forceFill(['pdf_file_id' => $storedFile->id])->save();
             $proposal->setRelation('pdfFile', $storedFile);
@@ -211,6 +217,8 @@ class ProposalController extends Controller
     {
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
+            'business_id' => ['nullable', 'integer', 'exists:businesses,id'],
+            'revenue_opportunity_id' => ['nullable', 'integer', 'exists:revenue_opportunities,id'],
             'title' => ['required', 'string', 'max:255'],
             'proposal_type' => ['required', 'string', 'max:100'],
             'issue_date' => ['required', 'date'],
@@ -226,7 +234,7 @@ class ProposalController extends Controller
         ]);
 
         $proposalType = $formSettings->findType((string) $validated['proposal_type']);
-        if (!$proposalType) {
+        if (! $proposalType) {
             throw ValidationException::withMessages([
                 'proposal_type' => ['Please select a valid proposal type.'],
             ]);
@@ -295,7 +303,7 @@ class ProposalController extends Controller
     {
         $source->loadMissing('lineItems');
 
-        if ($lockSource || !$source->isLocked()) {
+        if ($lockSource || ! $source->isLocked()) {
             $source->forceFill([
                 'locked_at' => $source->locked_at ?? now(),
             ])->save();
@@ -312,6 +320,8 @@ class ProposalController extends Controller
             'job_id' => $source->job_id,
             'created_by_user_id' => $createdByUserId ?: $source->created_by_user_id,
             'parent_proposal_id' => $source->id,
+            'business_id' => $source->business_id,
+            'revenue_opportunity_id' => $source->revenue_opportunity_id,
             'proposal_number' => $source->proposal_number,
             'version' => $nextVersion,
             'title' => $source->title,
@@ -357,7 +367,13 @@ class ProposalController extends Controller
                 'rejected_at' => null,
             ])->save();
 
+            app(FollowUpSequenceService::class)->enrol($proposal, 'proposal_default', $userId);
+            if ($proposal->business && ! in_array($proposal->business->status, ['won', 'lost'], true)) {
+                app(PipelineService::class)->transition($proposal->business, ['stage' => 'proposal', 'next_action_at' => now()->addDays(2), 'next_action_type' => 'proposal_follow_up'], $userId ?? $proposal->created_by_user_id ?? 1);
+            }
+
             $this->sendProposalEmailNow($proposal);
+
             return;
         }
 
@@ -368,7 +384,13 @@ class ProposalController extends Controller
                 'locked_at' => $proposal->locked_at ?? now(),
             ])->save();
 
+            app(FollowUpSequenceService::class)->cancel($proposal, 'Proposal approved.');
+            if ($proposal->business) {
+                app(PipelineService::class)->transition($proposal->business, ['stage' => 'won'], $userId ?? $proposal->created_by_user_id ?? 1);
+            }
+
             $this->createApprovedJob($proposal, $userId);
+
             return;
         }
 
@@ -378,6 +400,8 @@ class ProposalController extends Controller
                 'rejected_at' => $proposal->rejected_at ?? now(),
                 'locked_at' => $proposal->locked_at ?? now(),
             ])->save();
+            app(FollowUpSequenceService::class)->cancel($proposal, 'Proposal declined.');
+
             return;
         }
 
@@ -458,12 +482,12 @@ class ProposalController extends Controller
             return true;
         }
 
-        if (!$attemptAutoCreate) {
+        if (! $attemptAutoCreate) {
             return false;
         }
 
         try {
-            if (!Schema::hasTable('proposals')) {
+            if (! Schema::hasTable('proposals')) {
                 Schema::create('proposals', function (Blueprint $table): void {
                     $table->id();
                     $table->foreignId('customer_id')->constrained('customers')->cascadeOnDelete();
@@ -494,21 +518,21 @@ class ProposalController extends Controller
                 });
             } else {
                 Schema::table('proposals', function (Blueprint $table): void {
-                    if (!Schema::hasColumn('proposals', 'proposal_type')) {
+                    if (! Schema::hasColumn('proposals', 'proposal_type')) {
                         $table->string('proposal_type')->nullable()->after('title');
                     }
 
-                    if (!Schema::hasColumn('proposals', 'proposal_type_label')) {
+                    if (! Schema::hasColumn('proposals', 'proposal_type_label')) {
                         $table->string('proposal_type_label')->nullable()->after('proposal_type');
                     }
 
-                    if (!Schema::hasColumn('proposals', 'form_answers')) {
+                    if (! Schema::hasColumn('proposals', 'form_answers')) {
                         $table->json('form_answers')->nullable()->after('proposal_type_label');
                     }
                 });
             }
 
-            if (!Schema::hasTable('proposal_line_items')) {
+            if (! Schema::hasTable('proposal_line_items')) {
                 Schema::create('proposal_line_items', function (Blueprint $table): void {
                     $table->id();
                     $table->foreignId('proposal_id')->constrained('proposals')->cascadeOnDelete();
@@ -572,7 +596,7 @@ class ProposalController extends Controller
                 $scaled = $quantity * 2;
                 $isHalfStep = abs($scaled - round($scaled)) < 0.00001;
 
-                if (!$isHalfStep) {
+                if (! $isHalfStep) {
                     $fail("The {$attribute} field must be a whole number or end in .5.");
                 }
             },
@@ -643,7 +667,7 @@ class ProposalController extends Controller
                     $value = $value ? 'Yes' : 'No';
                 }
 
-                return ($answer['label'] ?? $answer['key'] ?? 'Question') . ': ' . ($value === null || $value === '' ? 'Not specified' : $value);
+                return ($answer['label'] ?? $answer['key'] ?? 'Question').': '.($value === null || $value === '' ? 'Not specified' : $value);
             })
             ->implode("\n");
 

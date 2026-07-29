@@ -212,6 +212,10 @@
                     </section>
 
                     <section class="content-grid">
+                        <div class="card wide today-card">
+                            <div class="card-header"><div><div class="card-title">Today</div><div class="card-subtitle">Your prioritised sales, delivery and finance actions</div></div><button class="btn btn-outline" id="today-refresh" type="button">Refresh</button></div>
+                            <div id="today-action-feed" class="today-action-feed" aria-live="polite"><div class="table-empty">Loading today’s actions…</div></div>
+                        </div>
                         <div class="card dashboard-chart-card">
                             <div class="card-header">
                                 <div>

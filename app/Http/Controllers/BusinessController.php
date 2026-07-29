@@ -4,16 +4,19 @@ namespace App\Http\Controllers;
 
 use App\Actions\Leads\ConvertLeadToCustomer;
 use App\Actions\WebsiteAudits\StartWebsiteAudit;
+use App\Enums\LeadPipelineStage;
 use App\Http\Resources\BusinessResource;
 use App\Http\Resources\CustomerResource;
 use App\Http\Resources\LeadIntelligenceResource;
 use App\Http\Resources\WebsiteAuditResource;
 use App\Models\Business;
 use App\Models\User;
+use App\Services\Sales\NextActionValidator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
 class BusinessController extends Controller
@@ -21,7 +24,7 @@ class BusinessController extends Controller
     public function index(Request $request): AnonymousResourceCollection
     {
         $validated = $request->validate([
-            'grade' => ['nullable', 'in:hot,warm,cool,cold'], 'status' => ['nullable', 'in:new,reviewing,qualified,contacted,converted,disqualified'],
+            'grade' => ['nullable', 'in:hot,warm,cool,cold'], 'status' => ['nullable', Rule::in([...LeadPipelineStage::values(), 'reviewing', 'converted', 'disqualified'])],
             'source' => ['nullable', 'string', 'max:50'], 'search' => ['nullable', 'string', 'max:100'],
             'contacted' => ['nullable', 'boolean'],
             'contacted_by_user_id' => ['nullable', 'integer', 'exists:users,id'],
@@ -88,9 +91,13 @@ class BusinessController extends Controller
         return (new WebsiteAuditResource($audit))->response()->setStatusCode(Response::HTTP_ACCEPTED);
     }
 
-    public function update(Request $request, Business $business): BusinessResource
+    public function update(Request $request, Business $business, NextActionValidator $nextActions): BusinessResource
     {
-        $business->update($this->validated($request, true));
+        $data = $this->validated($request, true);
+        if (array_key_exists('status', $data) || array_key_exists('next_action_at', $data)) {
+            $nextActions->business(['status' => $data['status'] ?? $business->status, 'next_action_at' => $data['next_action_at'] ?? $business->next_action_at], $business->status);
+        }
+        $business->update($data);
 
         return new BusinessResource($business->fresh(['currentLeadScore', 'contactedBy:id,name']));
     }
@@ -129,7 +136,12 @@ class BusinessController extends Controller
             'domain_registered_at' => ['nullable', 'date', 'before_or_equal:today'], 'design_quality_score' => ['nullable', 'numeric', 'between:0,100'],
             'professionalism_score' => ['nullable', 'numeric', 'between:0,100'], 'missing_features' => ['nullable', 'array', 'max:50'],
             'missing_features.*' => ['string', 'max:100'],
-            'status' => ['sometimes', 'in:new,reviewing,qualified,contacted,converted,disqualified'],
+            'status' => ['sometimes', Rule::in(LeadPipelineStage::values())],
+            'owner_user_id' => ['sometimes', 'nullable', 'integer', 'exists:users,id'], 'next_action_type' => ['nullable', 'string', 'max:50'],
+            'next_action_at' => ['nullable', 'date'], 'next_action_notes' => ['nullable', 'string', 'max:5000'],
+            'estimated_project_value' => ['nullable', 'numeric', 'min:0'], 'probability' => ['nullable', 'integer', 'between:0,100'],
+            'expected_close_date' => ['nullable', 'date'], 'service_sought' => ['nullable', 'string', 'max:100'], 'source' => ['sometimes', 'nullable', 'string', 'max:50'],
+            'proposal_id' => ['nullable', 'integer', 'exists:proposals,id'], 'lost_reason' => ['nullable', 'string', 'max:50'], 'competitor_notes' => ['nullable', 'string', 'max:5000'],
         ]);
     }
 }

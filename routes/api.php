@@ -1,30 +1,34 @@
 <?php
 
 use App\Http\Controllers\AccountController;
-use App\Http\Controllers\AdminInvoiceSettingController;
+use App\Http\Controllers\ActivityController;
 use App\Http\Controllers\AdminCustomerFormController;
+use App\Http\Controllers\AdminInvoiceSettingController;
 use App\Http\Controllers\AdminMailSettingController;
 use App\Http\Controllers\AdminProposalFormController;
 use App\Http\Controllers\AdminStaffUserController;
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AuditFindingController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BrandSettingController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\CostController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerFormController;
+use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobController;
 use App\Http\Controllers\LeadDiscoveryController;
 use App\Http\Controllers\LeadScoreController;
 use App\Http\Controllers\LeadScoringProfileController;
 use App\Http\Controllers\PasswordResetController;
+use App\Http\Controllers\PipelineController;
 use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\RevenueOpportunityController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\TodayController;
 use App\Http\Controllers\UserPreferenceController;
 use App\Http\Controllers\WebsiteAuditController;
 use App\Http\Controllers\WebsiteController;
@@ -47,6 +51,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('brand', [BrandSettingController::class, 'show']);
 
     Route::middleware('role:admin,staff')->group(function (): void {
+        Route::get('today', TodayController::class);
+        Route::get('pipeline/summary', [PipelineController::class, 'summary']);
+        Route::patch('businesses/{business}/stage', [PipelineController::class, 'transition']);
+        Route::get('businesses/{business}/activities', [ActivityController::class, 'businessIndex']);
+        Route::post('businesses/{business}/activities', [ActivityController::class, 'businessStore']);
+        Route::get('revenue-opportunities/{revenueOpportunity}/activities', [ActivityController::class, 'opportunityIndex']);
+        Route::post('revenue-opportunities/{revenueOpportunity}/activities', [ActivityController::class, 'opportunityStore']);
+        Route::get('follow-ups', [FollowUpController::class, 'index']);
+        Route::patch('follow-ups/executions/{execution}', [FollowUpController::class, 'updateExecution']);
+        Route::post('follow-ups/{enrolment}/cancel', [FollowUpController::class, 'cancel']);
         Route::get('lead-discovery', [LeadDiscoveryController::class, 'index']);
         Route::post('lead-discovery', [LeadDiscoveryController::class, 'store']);
         Route::get('lead-discovery/{leadDiscoveryRun}', [LeadDiscoveryController::class, 'show']);

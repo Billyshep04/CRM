@@ -40,6 +40,7 @@ class Proposal extends Model
         'accepted_at',
         'rejected_at',
         'locked_at',
+        'business_id', 'revenue_opportunity_id', 'lost_reason',
     ];
 
     protected $casts = [
@@ -80,6 +81,16 @@ class Proposal extends Model
     public function lineItems(): HasMany
     {
         return $this->hasMany(ProposalLineItem::class);
+    }
+
+    public function business(): BelongsTo
+    {
+        return $this->belongsTo(Business::class);
+    }
+
+    public function revenueOpportunity(): BelongsTo
+    {
+        return $this->belongsTo(RevenueOpportunity::class);
     }
 
     public function scopeFilterByStatus(Builder $query, ?string $status): Builder
