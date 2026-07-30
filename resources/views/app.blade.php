@@ -1537,6 +1537,61 @@
 
                 <section class="view staff-view admin-view" data-view="admin">
                     <section class="content-grid admin-panel">
+                        <div class="card admin-only organisation-settings-card">
+                            <div class="card-header"><div><div class="card-title">CRM customisation</div><div class="card-subtitle">Brand, regional, document, portal and dashboard defaults for this organisation.</div></div></div>
+                            <form id="organisation-settings-form" class="form-stack">
+                                <details open><summary>Company and branding</summary><div class="settings-fields">
+                                    <label class="field"><span>Company name</span><input name="company_name" required maxlength="120"></label>
+                                    <label class="field"><span>Trading name</span><input name="trading_name" maxlength="120"></label>
+                                    <label class="field"><span>Business email</span><input name="business_email" type="email"></label>
+                                    <label class="field"><span>Phone</span><input name="business_phone"></label>
+                                    <label class="field"><span>Website</span><input name="website_url" type="url"></label>
+                                    <label class="field"><span>Company number</span><input name="company_number"></label>
+                                    <label class="field"><span>VAT number</span><input name="vat_number"></label>
+                                    <label class="field"><span>Login title</span><input name="login_title" required></label>
+                                    <label class="field"><span>Primary colour</span><input name="primary_colour" type="color"></label>
+                                    <label class="field"><span>Accent colour</span><input name="accent_colour" type="color"></label>
+                                    <label class="field"><span>Light page background</span><input name="background_colour" type="color"></label>
+                                    <label class="field"><span>Light card background</span><input name="surface_colour" type="color"></label>
+                                    <label class="field"><span>Dark page background</span><input name="dark_background_colour" type="color"></label>
+                                    <label class="field"><span>Dark card background</span><input name="dark_surface_colour" type="color"></label>
+                                    <label class="field settings-field-wide"><span>Business address</span><textarea name="business_address" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Footer text</span><input name="footer_text" maxlength="500"></label>
+                                </div></details>
+                                <details><summary>Regional and financial defaults</summary><div class="settings-fields">
+                                    <label class="field"><span>Currency</span><select name="currency"><option>GBP</option><option>EUR</option><option>USD</option></select></label>
+                                    <label class="field"><span>Timezone</span><select name="timezone"><option>Europe/London</option><option>Europe/Dublin</option><option>America/New_York</option><option>America/Los_Angeles</option><option>UTC</option></select></label>
+                                    <label class="field"><span>Date format</span><select name="date_format"><option value="d/m/Y">DD/MM/YYYY</option><option value="m/d/Y">MM/DD/YYYY</option><option value="Y-m-d">YYYY-MM-DD</option></select></label>
+                                    <label class="field"><span>Financial year starts</span><select name="financial_year_start_month"><option value="1">January</option><option value="4">April</option><option value="7">July</option><option value="10">October</option></select></label>
+                                </div></details>
+                                <details><summary>Invoices and proposals</summary><div class="settings-fields">
+                                    <label class="field"><span>Invoice prefix</span><input name="invoice_prefix" required></label><label class="field"><span>Payment terms (days)</span><input name="invoice_payment_terms_days" type="number" min="0"></label>
+                                    <label class="field"><span>Default tax rate (%)</span><input name="default_tax_rate" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>Proposal prefix</span><input name="proposal_prefix" required></label>
+                                    <label class="field"><span>Proposal validity (days)</span><input name="proposal_validity_days" type="number" min="1"></label>
+                                    <label class="field settings-field-wide"><span>Default invoice notes</span><textarea name="invoice_notes" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Invoice footer</span><textarea name="invoice_footer" rows="2"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Default proposal terms</span><textarea name="proposal_terms" rows="4"></textarea></label>
+                                </div></details>
+                                <details><summary>Email defaults and templates</summary><div class="settings-fields">
+                                    <label class="field"><span>Sender name</span><input name="sender_name" required></label><label class="field"><span>Reply-to email</span><input name="reply_to_email" type="email"></label>
+                                    <label class="field settings-field-wide"><span>Email signature</span><textarea name="email_signature" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Invoice email template</span><textarea name="invoice_email_template" rows="4" placeholder="Use placeholders such as @{{customer_name}} and @{{invoice_number}}"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Proposal email template</span><textarea name="proposal_email_template" rows="4"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Reminder email template</span><textarea name="reminder_email_template" rows="4"></textarea></label>
+                                </div></details>
+                                <details><summary>Customer portal</summary><div class="settings-fields">
+                                    <label class="field settings-field-wide"><span>Welcome message</span><textarea name="portal_welcome_message" rows="3"></textarea></label><label class="field"><span>Support email</span><input name="portal_support_email" type="email"></label>
+                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input type="checkbox" name="portal_show_jobs"><span>Show jobs</span></label><label class="check-row"><input type="checkbox" name="portal_show_invoices"><span>Show invoices</span></label><label class="check-row"><input type="checkbox" name="portal_show_proposals"><span>Show proposals</span></label><label class="check-row"><input type="checkbox" name="portal_show_subscriptions"><span>Show subscriptions</span></label><label class="check-row"><input type="checkbox" name="portal_allow_invoice_payment"><span>Allow invoice payment updates</span></label><label class="check-row"><input type="checkbox" name="portal_allow_proposal_approval"><span>Allow proposal approval</span></label></div>
+                                </div></details>
+                                <details><summary>Dashboard and security defaults</summary><div class="settings-fields">
+                                    <label class="field"><span>Session timeout (minutes)</span><input name="session_timeout_minutes" type="number" min="15"></label><label class="field"><span>Default reporting period</span><select name="default_dashboard_period"><option value="week">Week</option><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option></select></label>
+                                    <label class="field"><span>MRR target</span><input name="mrr_target" type="number" min="0" step="0.01"></label><label class="field"><span>Revenue target</span><input name="revenue_target" type="number" min="0" step="0.01"></label>
+                                    <label class="field"><span>Overdue warning (days)</span><input name="overdue_warning_days" type="number" min="0"></label><label class="field"><span>Lead inactivity warning (days)</span><input name="lead_inactivity_days" type="number" min="1"></label>
+                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input type="checkbox" name="show_today_overdue"><span>Show overdue actions in Today</span></label><label class="check-row"><input type="checkbox" name="show_today_upcoming"><span>Show upcoming actions</span></label><label class="check-row"><input type="checkbox" name="show_today_invoices"><span>Show invoices</span></label><label class="check-row"><input type="checkbox" name="show_today_proposals"><span>Show proposals</span></label></div>
+                                </div></details>
+                                <div id="organisation-settings-status" class="form-hint" aria-live="polite"></div><button class="btn btn-primary" type="submit">Save CRM customisation</button>
+                            </form>
+                        </div>
                         <div class="card wide admin-only">
                             <div class="card-header">
                                 <div>

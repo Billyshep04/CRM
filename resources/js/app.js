@@ -144,6 +144,8 @@ const dom = {
     quickLinks: document.querySelectorAll('[data-go-view]'),
     logoUploadForm: document.getElementById('logo-upload-form'),
     logoUploadStatus: document.getElementById('logo-upload-status'),
+    organisationSettingsForm: document.getElementById('organisation-settings-form'),
+    organisationSettingsStatus: document.getElementById('organisation-settings-status'),
     smtp2goSettingsForm: document.getElementById('smtp2go-settings-form'),
     smtp2goSettingsStatus: document.getElementById('smtp2go-settings-status'),
     smtp2goEnabled: document.getElementById('smtp2go-enabled'),
@@ -761,6 +763,7 @@ function setActiveView(view) {
             loadAdminInvoiceSettings();
             loadAdminProposalForms();
             loadAdminCustomerForms();
+            loadOrganisationSettings();
         }
     }
     if (view === 'proposal-form-edit' && state.role === 'admin') {
@@ -1190,6 +1193,17 @@ async function saveTheme(theme) {
 
 async function loadBrand() {
     try {
+        const organisationResponse = await api.get('/api/organisation/public-settings');
+        const organisation = organisationResponse?.data?.data ?? {};
+        applyBrandPalette(organisation);
+        document.querySelectorAll('.brand-title').forEach((element) => {
+            element.textContent = element.closest('.auth-brand') ? organisation.login_title : organisation.company_name;
+        });
+        if (organisation.login_title) document.title = organisation.login_title;
+    } catch (error) {
+        // Keep built-in branding when public settings are unavailable.
+    }
+    try {
         const response = await api.get('/api/brand');
         const payload = response.data?.data ?? response.data;
         if (dom.brandLogo) {
@@ -1205,6 +1219,30 @@ async function loadBrand() {
             dom.brandLogo.style.display = 'none';
         }
     }
+}
+
+function colourToRgb(value) {
+    const match = String(value || '').match(/^#([0-9a-f]{6})$/i);
+    if (!match) return null;
+    const number = Number.parseInt(match[1], 16);
+    return `${(number >> 16) & 255}, ${(number >> 8) & 255}, ${number & 255}`;
+}
+
+function applyBrandPalette(settings) {
+    const root = document.documentElement;
+    if (settings.primary_colour) {
+        root.style.setProperty('--accent', settings.primary_colour);
+        const rgb = colourToRgb(settings.primary_colour);
+        if (rgb) root.style.setProperty('--brand-primary-rgb', rgb);
+    }
+    if (settings.accent_colour) {
+        const rgb = colourToRgb(settings.accent_colour);
+        if (rgb) root.style.setProperty('--brand-accent-rgb', rgb);
+    }
+    if (settings.background_colour) root.style.setProperty('--custom-light-bg', settings.background_colour);
+    if (settings.surface_colour) root.style.setProperty('--custom-light-surface', settings.surface_colour);
+    if (settings.dark_background_colour) root.style.setProperty('--custom-dark-bg', settings.dark_background_colour);
+    if (settings.dark_surface_colour) root.style.setProperty('--custom-dark-surface', settings.dark_surface_colour);
 }
 
 function parseTotal(response) {
@@ -2327,6 +2365,60 @@ async function handleLogoUpload(event) {
         if (dom.logoUploadStatus) {
             dom.logoUploadStatus.textContent = 'Upload failed. Please try again.';
         }
+    }
+}
+
+const organisationBooleanSettings = new Set([
+    'portal_show_jobs', 'portal_show_invoices', 'portal_show_proposals', 'portal_show_subscriptions',
+    'portal_allow_invoice_payment', 'portal_allow_proposal_approval', 'show_today_overdue',
+    'show_today_upcoming', 'show_today_invoices', 'show_today_proposals',
+]);
+const organisationNumberSettings = new Set([
+    'financial_year_start_month', 'invoice_payment_terms_days', 'default_tax_rate', 'proposal_validity_days',
+    'session_timeout_minutes', 'mrr_target', 'revenue_target', 'overdue_warning_days', 'lead_inactivity_days',
+]);
+
+function applyOrganisationSettings(settings) {
+    if (!dom.organisationSettingsForm) return;
+    [...dom.organisationSettingsForm.elements].forEach((control) => {
+        if (!control.name || !(control.name in settings)) return;
+        if (control.type === 'checkbox') control.checked = Boolean(settings[control.name]);
+        else control.value = settings[control.name] ?? '';
+    });
+}
+
+async function loadOrganisationSettings() {
+    if (!dom.organisationSettingsForm || state.role !== 'admin') return;
+    setFormStatus(dom.organisationSettingsStatus, 'Loading settings…');
+    try {
+        const response = await api.get('/api/admin/organisation-settings');
+        applyOrganisationSettings(response?.data?.data ?? {});
+        setFormStatus(dom.organisationSettingsStatus, '');
+    } catch (error) {
+        setFormStatus(dom.organisationSettingsStatus, getErrorMessage(error, 'Unable to load CRM customisation.'), true);
+    }
+}
+
+async function handleOrganisationSettingsSubmit(event) {
+    event.preventDefault();
+    if (!dom.organisationSettingsForm || state.role !== 'admin') return;
+    const formData = new FormData(dom.organisationSettingsForm);
+    const payload = {};
+    [...dom.organisationSettingsForm.elements].forEach((control) => {
+        if (!control.name) return;
+        if (organisationBooleanSettings.has(control.name)) payload[control.name] = control.checked;
+        else if (organisationNumberSettings.has(control.name)) payload[control.name] = Number(formData.get(control.name) || 0);
+        else payload[control.name] = String(formData.get(control.name) || '').trim();
+    });
+    setFormStatus(dom.organisationSettingsStatus, 'Saving…');
+    try {
+        const response = await api.put('/api/admin/organisation-settings', payload);
+        applyOrganisationSettings(response?.data?.data ?? {});
+        setFormStatus(dom.organisationSettingsStatus, 'CRM customisation saved.');
+        applyBrandPalette(payload);
+        showToast('Customisation saved');
+    } catch (error) {
+        setFormStatus(dom.organisationSettingsStatus, getErrorMessage(error, 'Unable to save CRM customisation.'), true);
     }
 }
 
@@ -6537,6 +6629,10 @@ window.addEventListener('resize', () => {
 
 if (dom.logoUploadForm) {
     dom.logoUploadForm.addEventListener('submit', handleLogoUpload);
+}
+
+if (dom.organisationSettingsForm) {
+    dom.organisationSettingsForm.addEventListener('submit', handleOrganisationSettingsSubmit);
 }
 
 if (dom.smtp2goSettingsForm) {

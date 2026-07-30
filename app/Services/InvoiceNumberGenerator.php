@@ -10,14 +10,16 @@ use Illuminate\Support\Str;
 
 class InvoiceNumberGenerator
 {
+    public function __construct(private readonly OrganisationSettings $settings) {}
+
     public function generate(?int $customerId = null, mixed $issueDate = null): string
     {
-        if (!$customerId) {
+        if (! $customerId) {
             return $this->generateLegacyNumber();
         }
 
         $customer = Customer::query()->find($customerId);
-        if (!$customer) {
+        if (! $customer) {
             return $this->generateLegacyNumber();
         }
 
@@ -36,7 +38,7 @@ class InvoiceNumberGenerator
     private function generateLegacyNumber(): string
     {
         do {
-            $candidate = 'INV-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6));
+            $candidate = $this->settings->all()['invoice_prefix'].'-'.now()->format('Ymd').'-'.Str::upper(Str::random(6));
         } while (Invoice::query()->withTrashed()->where('invoice_number', $candidate)->exists());
 
         return $candidate;
@@ -48,7 +50,7 @@ class InvoiceNumberGenerator
         $tokens = preg_split('/\\s+/', trim((string) $normalized), -1, PREG_SPLIT_NO_EMPTY) ?: [];
 
         if (count($tokens) >= 2) {
-            return Str::upper(substr($tokens[0], 0, 1) . substr($tokens[1], 0, 1));
+            return Str::upper(substr($tokens[0], 0, 1).substr($tokens[1], 0, 1));
         }
 
         if (count($tokens) === 1) {
@@ -57,7 +59,7 @@ class InvoiceNumberGenerator
                 return substr($token, 0, 2);
             }
 
-            return $token . 'X';
+            return $token.'X';
         }
 
         return 'IN';

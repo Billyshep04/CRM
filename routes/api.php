@@ -20,6 +20,7 @@ use App\Http\Controllers\JobController;
 use App\Http\Controllers\LeadDiscoveryController;
 use App\Http\Controllers\LeadScoreController;
 use App\Http\Controllers\LeadScoringProfileController;
+use App\Http\Controllers\OrganisationSettingController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PipelineController;
 use App\Http\Controllers\PortalController;
@@ -38,6 +39,7 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/forgot-password', [PasswordResetController::class, 'request']);
 Route::post('/auth/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('brand/logo', [BrandSettingController::class, 'logo']);
+Route::get('organisation/public-settings', [OrganisationSettingController::class, 'public']);
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
@@ -141,6 +143,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::put('admin/proposal-forms', [AdminProposalFormController::class, 'update']);
         Route::get('admin/customer-forms', [AdminCustomerFormController::class, 'show']);
         Route::put('admin/customer-forms', [AdminCustomerFormController::class, 'update']);
+        Route::get('admin/organisation-settings', [OrganisationSettingController::class, 'show']);
+        Route::put('admin/organisation-settings', [OrganisationSettingController::class, 'update']);
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {

@@ -12,10 +12,16 @@
 }
 
 :root {
+    --custom-light-bg: #f5f6f8;
+    --custom-light-surface: #ffffff;
+    --custom-dark-bg: #0b0e14;
+    --custom-dark-surface: #111620;
+    --brand-primary-rgb: 47, 184, 240;
+    --brand-accent-rgb: 20, 119, 168;
     --accent: #2fb8f0;
     --accent-soft: rgba(47, 184, 240, 0.18);
-    --bg: #f5f6f8;
-    --bg-elevated: #ffffff;
+    --bg: var(--custom-light-bg);
+    --bg-elevated: var(--custom-light-surface);
     --bg-muted: #eef1f5;
     --text: #0f172a;
     --text-muted: #6b7280;
@@ -26,8 +32,8 @@
 }
 
 [data-theme="dark"] {
-    --bg: #0b0e14;
-    --bg-elevated: #111620;
+    --bg: var(--custom-dark-bg);
+    --bg-elevated: var(--custom-dark-surface);
     --bg-muted: #161c27;
     --text: #f8fafc;
     --text-muted: #a1a9b8;
@@ -52,8 +58,8 @@ body {
     position: fixed;
     inset: 0;
     background:
-        radial-gradient(60% 40% at 10% 5%, rgba(47, 184, 240, 0.22), transparent 60%),
-        radial-gradient(50% 40% at 90% 10%, rgba(255, 200, 114, 0.18), transparent 55%),
+        radial-gradient(60% 40% at 10% 5%, rgba(var(--brand-primary-rgb), 0.22), transparent 60%),
+        radial-gradient(50% 40% at 90% 10%, rgba(var(--brand-accent-rgb), 0.18), transparent 55%),
         radial-gradient(30% 30% at 50% 100%, rgba(59, 130, 246, 0.12), transparent 50%);
     pointer-events: none;
     z-index: 0;
@@ -737,6 +743,15 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     grid-column: 1 / -1;
     width: 100%;
 }
+
+.organisation-settings-card { grid-column: 1 / -1; }
+.organisation-settings-card details { border: 1px solid var(--border); border-radius: 12px; background: var(--surface-soft); overflow: hidden; }
+.organisation-settings-card summary { cursor: pointer; padding: 14px 16px; font-weight: 700; font-family: var(--font-display); }
+.organisation-settings-card details[open] summary { border-bottom: 1px solid var(--border); }
+.settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding: 16px; }
+.settings-field-wide { grid-column: 1 / -1; }
+.settings-checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 725px) { .settings-fields, .settings-checks { grid-template-columns: 1fr; } .settings-field-wide { grid-column: auto; } }
 
 .dashboard-chart-card {
     grid-column: 1 / -1;
