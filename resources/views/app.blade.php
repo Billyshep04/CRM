@@ -118,7 +118,10 @@
                     <a href="#" class="nav-item admin-only" data-view="staff-tracking">Staff</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-proposals">Proposals</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-proposals" id="portal-proposals-nav">
+                        Proposals
+                        <span class="portal-forms-notification" id="portal-proposals-notification" aria-hidden="true" hidden></span>
+                    </a>
                     <a href="#" class="nav-item customer-only" data-view="portal-forms" id="portal-forms-nav">
                         Forms
                         <span class="portal-forms-notification" id="portal-forms-notification" aria-hidden="true" hidden></span>

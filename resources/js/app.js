@@ -320,6 +320,8 @@ const dom = {
     invoicesRefresh: document.getElementById('invoices-refresh'),
     portalProposals: document.getElementById('portal-proposals'),
     portalProposalsRefresh: document.getElementById('portal-proposals-refresh'),
+    portalProposalsNav: document.getElementById('portal-proposals-nav'),
+    portalProposalsNotification: document.getElementById('portal-proposals-notification'),
     portalFormsTable: document.getElementById('portal-forms-table'),
     portalFormsRefresh: document.getElementById('portal-forms-refresh'),
     portalFormsNav: document.getElementById('portal-forms-nav'),
@@ -410,6 +412,8 @@ const state = {
     customerForms: [],
     customerFormTemplates: [],
     portalForms: [],
+    portalPendingForms: 0,
+    portalPendingProposals: 0,
     currentPortalForm: null,
     currentCustomer: null,
     currentLead: null,
@@ -574,7 +578,10 @@ function setAuthState(isAuthenticated) {
 function setRole(role) {
     state.role = role;
     dom.body.dataset.role = role;
-    if (role !== 'customer') updatePortalFormsNotification([]);
+    if (role !== 'customer') {
+        updatePortalFormsNotification([]);
+        updatePortalProposalsNotification([]);
+    }
 }
 
 function setNavOpen(isOpen) {
@@ -743,6 +750,7 @@ function setActiveView(view) {
         loadPortalSubscriptions();
         loadPortalWebsites();
         loadPortalForms();
+        loadPortalProposals();
     }
     if (view === 'portal-proposals') {
         loadPortalProposals();
@@ -5699,6 +5707,7 @@ async function loadPortalProposals() {
 
 function renderPortalProposals(proposals = [], emptyMessage = 'No proposals available.') {
     if (!dom.portalProposals) return;
+    updatePortalProposalsNotification(proposals);
     resetTable(dom.portalProposals);
 
     if (!proposals.length) {
@@ -5732,6 +5741,36 @@ function renderPortalProposals(proposals = [], emptyMessage = 'No proposals avai
         `;
         dom.portalProposals.appendChild(row);
     });
+}
+
+function updatePortalMobileNotification() {
+    const total = state.portalPendingForms + state.portalPendingProposals;
+    if (dom.mobileMenuNotification) dom.mobileMenuNotification.hidden = total === 0;
+    if (dom.mobileMenuToggle) {
+        dom.mobileMenuToggle.setAttribute('aria-label', total > 0
+            ? `Toggle menu, ${total} pending portal ${total === 1 ? 'action' : 'actions'}`
+            : 'Toggle menu');
+    }
+}
+
+function updatePortalProposalsNotification(proposals = []) {
+    const pendingCount = proposals.filter((proposal) => {
+        const status = proposal.effective_status || proposal.status || 'draft';
+        return ['pending', 'sent'].includes(status);
+    }).length;
+    state.portalPendingProposals = pendingCount;
+    if (dom.portalProposalsNotification) dom.portalProposalsNotification.hidden = pendingCount === 0;
+    if (dom.portalProposalsNav) {
+        if (pendingCount > 0) {
+            const label = `${pendingCount} ${pendingCount === 1 ? 'proposal' : 'proposals'} awaiting your decision`;
+            dom.portalProposalsNav.setAttribute('aria-label', `Proposals, ${label}`);
+            dom.portalProposalsNav.title = label;
+        } else {
+            dom.portalProposalsNav.removeAttribute('aria-label');
+            dom.portalProposalsNav.removeAttribute('title');
+        }
+    }
+    updatePortalMobileNotification();
 }
 
 async function handlePortalProposalAction(event) {
@@ -5787,13 +5826,10 @@ async function handlePortalProposalAction(event) {
 
 function updatePortalFormsNotification(forms = []) {
     const pendingCount = forms.filter((formRequest) => formRequest.status === 'pending').length;
+    state.portalPendingForms = pendingCount;
 
     if (dom.portalFormsNotification) {
         dom.portalFormsNotification.hidden = pendingCount === 0;
-    }
-
-    if (dom.mobileMenuNotification) {
-        dom.mobileMenuNotification.hidden = pendingCount === 0;
     }
 
     if (dom.portalFormsNav) {
@@ -5809,14 +5845,7 @@ function updatePortalFormsNotification(forms = []) {
         }
     }
 
-    if (dom.mobileMenuToggle) {
-        dom.mobileMenuToggle.setAttribute(
-            'aria-label',
-            pendingCount > 0
-                ? `Toggle menu, ${pendingCount} pending ${pendingCount === 1 ? 'form' : 'forms'}`
-                : 'Toggle menu'
-        );
-    }
+    updatePortalMobileNotification();
 }
 
 function renderPortalForms(forms = [], emptyMessage = 'No forms available.') {
