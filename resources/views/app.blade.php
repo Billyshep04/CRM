@@ -1323,7 +1323,7 @@
                             <div class="card-header">
                                 <div>
                                     <div class="card-title" id="proposal-form-title">New proposal</div>
-                                    <div class="card-subtitle">Complete a proposal form and set a manual price.</div>
+                                    <div class="card-subtitle">Complete a proposal form and build a detailed price.</div>
                                 </div>
                             </div>
                             <form id="proposal-form" class="form-stack">
@@ -1349,20 +1349,26 @@
                                     <input type="date" name="expiry_date" required>
                                 </label>
                                 <div id="proposal-form-answers" class="form-stack"></div>
+                                <div class="line-items proposal-line-items-section">
+                                    <div class="line-items-header">
+                                        <span>Price breakdown</span>
+                                        <button type="button" class="btn btn-ghost" id="proposal-add-line-item">Add line item</button>
+                                    </div>
+                                    <div id="proposal-line-items"></div>
+                                    <div class="proposal-price-total">
+                                        <span>Total</span>
+                                        <strong id="proposal-price-total">£0.00</strong>
+                                    </div>
+                                </div>
                                 <label class="field">
-                                    <span>Price description</span>
-                                    <input type="text" name="line_item_description" id="proposal-line-item-description" placeholder="Auto-filled from selected job" required>
-                                </label>
-                                <div class="line-item">
-                                    <input type="hidden" name="line_item_quantity" value="1">
-                                    <input type="number" name="line_item_unit_price" min="0" step="0.01" placeholder="Manual price" required>
+                                    <span>Status</span>
                                     <select name="status">
                                         <option value="draft">Draft</option>
                                         <option value="pending">Send now / Pending</option>
                                     </select>
-                                </div>
+                                </label>
                                 <label class="field">
-                                    <span>Notes</span>
+                                    <span>Brief</span>
                                     <textarea name="notes" rows="3" placeholder="Scope, assumptions, and delivery details"></textarea>
                                 </label>
                                 <label class="field">
@@ -2068,6 +2074,16 @@
                     <option value="">Manual line item</option>
                 </select>
                 <button type="button" class="btn btn-outline btn-small" data-action="remove-line-item">Remove</button>
+            </div>
+        </template>
+
+        <template id="proposal-line-item-template">
+            <div class="line-item proposal-line-item">
+                <input type="text" name="description" placeholder="Description" aria-label="Description" required>
+                <input type="number" name="quantity" min="0.01" step="0.01" value="1" placeholder="Quantity" aria-label="Quantity" required>
+                <input type="number" name="unit_price" min="0" step="0.01" placeholder="Unit price" aria-label="Unit price" required>
+                <output class="proposal-line-total" aria-label="Line total">£0.00</output>
+                <button type="button" class="btn btn-outline btn-small" data-action="remove-proposal-line-item">Remove</button>
             </div>
         </template>
     </body>

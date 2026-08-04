@@ -251,7 +251,7 @@
                 @endif
 
                 @if (trim((string) $proposal->notes) !== '')
-                    <div class="label">Notes</div>
+                    <div class="label">Brief</div>
                     <div class="box">
                         <p>{{ $proposal->notes }}</p>
                     </div>

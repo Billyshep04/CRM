@@ -64,8 +64,8 @@ class ProposalController extends Controller
         $validated = $this->validatePayload($request, $formSettings);
 
         $proposal = DB::transaction(function () use ($validated, $request, $numberGenerator): Proposal {
-            $lineItem = $this->buildLineItem($validated['line_item'], $validated['title']);
-            $subtotal = $lineItem['total'];
+            $lineItems = $this->buildLineItems($validated['line_items'], $validated['title']);
+            $subtotal = array_sum(array_column($lineItems, 'total'));
 
             $proposal = Proposal::create([
                 'customer_id' => $validated['customer_id'],
@@ -88,7 +88,7 @@ class ProposalController extends Controller
                 'total' => $subtotal,
             ]);
 
-            $this->replaceLineItems($proposal, [$lineItem]);
+            $this->replaceLineItems($proposal, $lineItems);
 
             return $proposal->load(['customer', 'job', 'lineItems', 'pdfFile']);
         });
@@ -117,8 +117,8 @@ class ProposalController extends Controller
                 ? $this->createDraftVersion($proposal, $request->user()?->id)
                 : $proposal;
 
-            $lineItem = $this->buildLineItem($validated['line_item'], $validated['title']);
-            $subtotal = $lineItem['total'];
+            $lineItems = $this->buildLineItems($validated['line_items'], $validated['title']);
+            $subtotal = array_sum(array_column($lineItems, 'total'));
 
             $editableProposal->update([
                 'customer_id' => $validated['customer_id'],
@@ -138,7 +138,7 @@ class ProposalController extends Controller
                 'pdf_file_id' => null,
             ]);
 
-            $this->replaceLineItems($editableProposal, [$lineItem]);
+            $this->replaceLineItems($editableProposal, $lineItems);
 
             return $editableProposal->load(['customer', 'job', 'lineItems', 'pdfFile']);
         });
@@ -227,9 +227,14 @@ class ProposalController extends Controller
             'notes' => ['nullable', 'string'],
             'terms' => ['nullable', 'string'],
             'form_answers' => ['nullable', 'array'],
-            'line_item' => ['required', 'array'],
+            'line_items' => ['required_without:line_item', 'array', 'min:1', 'max:100'],
+            'line_items.*' => ['array'],
+            'line_items.*.quantity' => $this->quantityRules('required'),
+            'line_items.*.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_items.*.description' => ['required', 'string', 'max:1000'],
+            'line_item' => ['required_without:line_items', 'array'],
             'line_item.quantity' => $this->quantityRules('nullable'),
-            'line_item.unit_price' => ['required', 'numeric', 'min:0'],
+            'line_item.unit_price' => ['required_with:line_item', 'numeric', 'min:0'],
             'line_item.description' => ['nullable', 'string'],
         ]);
 
@@ -246,9 +251,26 @@ class ProposalController extends Controller
             $validated['form_answers'] ?? []
         );
 
-        $validated['line_item']['quantity'] = $validated['line_item']['quantity'] ?? 1;
+        if (isset($validated['line_items'])) {
+            $validated['line_items'] = array_values($validated['line_items']);
+        } else {
+            $validated['line_item']['quantity'] = $validated['line_item']['quantity'] ?? 1;
+            $validated['line_items'] = [$validated['line_item']];
+        }
 
         return $validated;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $lineItemInputs
+     * @return array<int, array<string, mixed>>
+     */
+    private function buildLineItems(array $lineItemInputs, string $fallbackTitle): array
+    {
+        return array_map(
+            fn (array $lineItem): array => $this->buildLineItem($lineItem, $fallbackTitle),
+            $lineItemInputs
+        );
     }
 
     /**

@@ -1352,6 +1352,37 @@ body[data-role="admin"] .admin-inline-only {
     box-sizing: border-box;
 }
 
+.proposal-line-item {
+    grid-template-columns: minmax(180px, 2fr) minmax(80px, 0.6fr) minmax(110px, 0.8fr) minmax(100px, 0.7fr) auto;
+    align-items: center;
+}
+
+#proposal-line-items {
+    display: grid;
+    gap: 8px;
+}
+
+.proposal-line-total {
+    font-weight: 700;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.proposal-price-total {
+    display: flex;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 18px;
+    padding: 4px 10px 0;
+    font-size: 15px;
+}
+
+.proposal-price-total strong {
+    min-width: 100px;
+    text-align: right;
+    font-size: 20px;
+}
+
 .jobs-photos-card {
     grid-column: 1 / -1;
 }
@@ -1585,6 +1616,10 @@ body[data-role="staff"] .staff-member-only {
 
     .line-item {
         grid-template-columns: 1fr;
+    }
+
+    .proposal-line-total {
+        text-align: left;
     }
 
     .filters {

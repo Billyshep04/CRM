@@ -307,7 +307,9 @@ const dom = {
     proposalTypeSelect: document.getElementById('proposal-type-select'),
     proposalFormAnswers: document.getElementById('proposal-form-answers'),
     proposalTitle: document.getElementById('proposal-title'),
-    proposalLineItemDescription: document.getElementById('proposal-line-item-description'),
+    proposalLineItems: document.getElementById('proposal-line-items'),
+    proposalAddLineItem: document.getElementById('proposal-add-line-item'),
+    proposalPriceTotal: document.getElementById('proposal-price-total'),
     proposalsRefresh: document.getElementById('proposals-refresh'),
     invoicesTable: document.getElementById('invoices-table'),
     invoiceForm: document.getElementById('invoice-form'),
@@ -5313,13 +5315,79 @@ async function loadProposalJobsForCustomer(customerId, preferredJobId = null) {
     }
 }
 
+function updateProposalPriceTotals() {
+    if (!dom.proposalLineItems) return;
+
+    let total = 0;
+    dom.proposalLineItems.querySelectorAll('.proposal-line-item').forEach((row) => {
+        const quantity = Number(row.querySelector('input[name="quantity"]')?.value || 0);
+        const unitPrice = Number(row.querySelector('input[name="unit_price"]')?.value || 0);
+        const lineTotal = Number.isFinite(quantity) && Number.isFinite(unitPrice)
+            ? Math.max(0, quantity) * Math.max(0, unitPrice)
+            : 0;
+        const output = row.querySelector('.proposal-line-total');
+        if (output) output.textContent = formatCurrency(lineTotal);
+        total += lineTotal;
+    });
+
+    if (dom.proposalPriceTotal) dom.proposalPriceTotal.textContent = formatCurrency(total);
+}
+
+function addProposalLineItem(item = {}) {
+    const template = document.getElementById('proposal-line-item-template');
+    if (!template || !dom.proposalLineItems) return null;
+
+    const clone = template.content.cloneNode(true);
+    const row = clone.querySelector('.proposal-line-item');
+    if (!row) return null;
+
+    row.querySelector('input[name="description"]').value = item.description || '';
+    row.querySelector('input[name="quantity"]').value = normalizeQuantityDisplay(item.quantity ?? 1);
+    row.querySelector('input[name="unit_price"]').value = item.unit_price ?? '';
+    row.addEventListener('input', updateProposalPriceTotals);
+    row.addEventListener('click', (event) => {
+        if (!event.target.closest('[data-action="remove-proposal-line-item"]')) return;
+        row.remove();
+        if (!dom.proposalLineItems.querySelector('.proposal-line-item')) addProposalLineItem();
+        updateProposalPriceTotals();
+    });
+
+    dom.proposalLineItems.appendChild(clone);
+    updateProposalPriceTotals();
+    return row;
+}
+
+function resetProposalLineItems(items = []) {
+    if (!dom.proposalLineItems) return;
+    dom.proposalLineItems.innerHTML = '';
+    (items.length ? items : [{}]).forEach((item) => addProposalLineItem(item));
+    updateProposalPriceTotals();
+}
+
+function collectProposalLineItems() {
+    if (!dom.proposalLineItems) return [];
+
+    return Array.from(dom.proposalLineItems.querySelectorAll('.proposal-line-item')).map((row, index) => {
+        const description = row.querySelector('input[name="description"]')?.value.trim() || '';
+        const quantity = Number(row.querySelector('input[name="quantity"]')?.value);
+        const unitPrice = Number(row.querySelector('input[name="unit_price"]')?.value);
+
+        if (!description) throw new Error(`Line ${index + 1} needs a description.`);
+        if (!Number.isFinite(quantity) || quantity <= 0) throw new Error(`Line ${index + 1} has an invalid quantity.`);
+        if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error(`Line ${index + 1} has an invalid unit price.`);
+
+        return { description, quantity, unit_price: unitPrice };
+    });
+}
+
 function applySelectedProposalJobDetails(job, overwriteExisting = false) {
     if (!job || !dom.proposalForm) return;
 
-    const descriptionInput = dom.proposalLineItemDescription
-        || dom.proposalForm.querySelector('input[name="line_item_description"]');
+    let firstLineItem = dom.proposalLineItems?.querySelector('.proposal-line-item');
+    if (!firstLineItem) firstLineItem = addProposalLineItem();
+    const descriptionInput = firstLineItem?.querySelector('input[name="description"]');
     const titleInput = dom.proposalTitle || dom.proposalForm.querySelector('input[name="title"]');
-    const unitPriceInput = dom.proposalForm.querySelector('input[name="line_item_unit_price"]');
+    const unitPriceInput = firstLineItem?.querySelector('input[name="unit_price"]');
     const notesInput = dom.proposalForm.querySelector('textarea[name="notes"]');
 
     if (descriptionInput && (overwriteExisting || !String(descriptionInput.value || '').trim())) {
@@ -5337,6 +5405,8 @@ function applySelectedProposalJobDetails(job, overwriteExisting = false) {
     if (notesInput && (overwriteExisting || !String(notesInput.value || '').trim())) {
         notesInput.value = String(job.notes || '');
     }
+
+    updateProposalPriceTotals();
 }
 
 function resetProposalForm() {
@@ -5348,14 +5418,15 @@ function resetProposalForm() {
     setFormStatus(dom.proposalFormStatus, '');
 
     renderProposalTypeOptions();
+    resetProposalLineItems();
 }
 
 async function handleProposalCustomerChange() {
     if (!dom.proposalCustomerSelect) return;
     const customerId = Number(dom.proposalCustomerSelect.value || 0);
     if (dom.proposalForm) {
-        const descriptionInput = dom.proposalForm.querySelector('input[name="line_item_description"]');
-        const unitPriceInput = dom.proposalForm.querySelector('input[name="line_item_unit_price"]');
+        const descriptionInput = dom.proposalLineItems?.querySelector('input[name="description"]');
+        const unitPriceInput = dom.proposalLineItems?.querySelector('input[name="unit_price"]');
         if (descriptionInput) descriptionInput.value = '';
         if (unitPriceInput) unitPriceInput.value = '';
     }
@@ -5482,14 +5553,18 @@ async function handleProposalSubmit(event) {
 
     const formData = new FormData(dom.proposalForm);
     const customerId = Number(formData.get('customer_id'));
-    const quantity = 1;
-    const unitPrice = Number(formData.get('line_item_unit_price'));
-    const description = String(formData.get('line_item_description') || '').trim();
     const proposalType = String(formData.get('proposal_type') || '').trim();
     const selectedType = getSelectedProposalType();
+    let lineItems = [];
 
-    if (Number.isNaN(unitPrice) || unitPrice < 0) {
-        setFormStatus(dom.proposalFormStatus, 'Manual price is invalid.', true);
+    try {
+        lineItems = collectProposalLineItems();
+    } catch (error) {
+        setFormStatus(dom.proposalFormStatus, error.message || 'Check the proposal line items.', true);
+        return;
+    }
+    if (!lineItems.length) {
+        setFormStatus(dom.proposalFormStatus, 'Add at least one price line.', true);
         return;
     }
     if (!customerId || Number.isNaN(customerId)) {
@@ -5500,11 +5575,6 @@ async function handleProposalSubmit(event) {
         setFormStatus(dom.proposalFormStatus, 'Select a proposal type.', true);
         return;
     }
-    if (!description) {
-        setFormStatus(dom.proposalFormStatus, 'Price description is required.', true);
-        return;
-    }
-
     const formAnswers = {};
     for (const question of selectedType.questions || []) {
         const rawValue = formData.get(`form_answer_${question.key}`);
@@ -5530,11 +5600,7 @@ async function handleProposalSubmit(event) {
         notes: String(formData.get('notes') || '').trim() || null,
         terms: String(formData.get('terms') || '').trim() || null,
         form_answers: formAnswers,
-        line_item: {
-            description,
-            quantity,
-            unit_price: unitPrice,
-        },
+        line_items: lineItems,
     };
 
     if (!payload.title) {
@@ -5602,12 +5668,7 @@ async function handleProposalAction(event) {
         dom.proposalForm.querySelector('input[name="expiry_date"]').value = proposal.expiry_date || '';
         dom.proposalForm.querySelector('select[name="status"]').value = proposal.status === 'pending' ? 'pending' : 'draft';
 
-        const lineItem = Array.isArray(proposal.line_items) && proposal.line_items.length
-            ? proposal.line_items[0]
-            : null;
-        dom.proposalForm.querySelector('input[name="line_item_description"]').value = lineItem?.description || '';
-        dom.proposalForm.querySelector('input[name="line_item_quantity"]').value = normalizeQuantityDisplay(lineItem?.quantity || 1);
-        dom.proposalForm.querySelector('input[name="line_item_unit_price"]').value = normalizeQuantityDisplay(lineItem?.unit_price || 0);
+        resetProposalLineItems(Array.isArray(proposal.line_items) ? proposal.line_items : []);
         dom.proposalForm.querySelector('textarea[name="notes"]').value = proposal.notes || '';
         dom.proposalForm.querySelector('textarea[name="terms"]').value = proposal.terms || '';
         setFormStatus(dom.proposalFormStatus, 'Editing proposal.');
@@ -7151,6 +7212,11 @@ if (dom.tasksClear) {
 
 if (dom.proposalForm) {
     dom.proposalForm.addEventListener('submit', handleProposalSubmit);
+    resetProposalLineItems();
+}
+
+if (dom.proposalAddLineItem) {
+    dom.proposalAddLineItem.addEventListener('click', () => addProposalLineItem());
 }
 
 if (dom.proposalFormCancel) {
@@ -7169,8 +7235,9 @@ if (dom.proposalTypeSelect) {
         if (selectedType && !dom.proposalTitle?.value) {
             dom.proposalTitle.value = selectedType.label;
         }
-        if (selectedType && dom.proposalLineItemDescription && !dom.proposalLineItemDescription.value) {
-            dom.proposalLineItemDescription.value = selectedType.label;
+        const firstDescription = dom.proposalLineItems?.querySelector('input[name="description"]');
+        if (selectedType && firstDescription && !firstDescription.value) {
+            firstDescription.value = selectedType.label;
         }
         renderProposalFormAnswers();
     });
