@@ -131,6 +131,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::patch('customers/{customer}/unarchive', [CustomerController::class, 'unarchive']);
         Route::get('customers/{customer}/forms', [CustomerFormController::class, 'index']);
         Route::post('customers/{customer}/forms', [CustomerFormController::class, 'store']);
+        Route::delete('customers/{customer}/forms/{customerFormRequest}', [CustomerFormController::class, 'destroy']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
         Route::get('admin/staff-task-summary', [TaskController::class, 'staffSummary']);

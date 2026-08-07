@@ -996,6 +996,17 @@ body[data-role="admin"] .admin-inline-only {
     align-items: end;
 }
 
+.customer-form-delete {
+    border-color: #dc2626;
+    color: #dc2626;
+}
+
+.customer-form-delete:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #fff;
+}
+
 .customer-form-review {
     margin-top: 18px;
     padding: 18px;

@@ -103,4 +103,13 @@ class CustomerFormController extends Controller
             'warning' => $warning,
         ], 201);
     }
+
+    public function destroy(Customer $customer, CustomerFormRequest $customerFormRequest)
+    {
+        abort_unless($customerFormRequest->customer_id === $customer->id, 404);
+
+        $customerFormRequest->delete();
+
+        return response()->noContent();
+    }
 }

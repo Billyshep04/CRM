@@ -4095,7 +4095,10 @@ function renderCustomerForms(forms = []) {
             <span>${escapeHtml(formRequest.status === 'completed' ? 'Completed' : 'Pending')}</span>
             <span>${escapeHtml(formatDateWithYear(formRequest.sent_at))}</span>
             <span>${escapeHtml(formatDateWithYear(formRequest.completed_at) || '--')}</span>
-            <div class="row-actions"><button class="btn btn-outline btn-small" type="button" data-action="view-customer-form" data-id="${formRequest.id}">View</button></div>
+            <div class="row-actions">
+                <button class="btn btn-outline btn-small" type="button" data-action="view-customer-form" data-id="${formRequest.id}">View</button>
+                <button class="btn btn-outline btn-small customer-form-delete" type="button" data-action="delete-customer-form" data-id="${formRequest.id}">Delete</button>
+            </div>
         `;
         dom.customerFormsTable.appendChild(row);
     });
@@ -4140,6 +4143,25 @@ async function handleCustomerFormRequestSubmit(event) {
         await loadCustomerForms(customerId);
     } catch (error) {
         setFormStatus(dom.customerFormRequestStatus, getErrorMessage(error, 'Unable to send customer form.'), true);
+    }
+}
+
+async function deleteCustomerFormRequest(formRequest) {
+    const customerId = state.currentCustomer?.id;
+    if (!customerId || !formRequest?.id) return;
+
+    const confirmed = window.confirm(`Delete “${formRequest.template_name || 'Customer form'}”? It will be removed from the customer portal.`);
+    if (!confirmed) return;
+
+    setFormStatus(dom.customerFormRequestStatus, 'Deleting form...');
+    try {
+        await api.delete(`/api/customers/${customerId}/forms/${formRequest.id}`);
+        renderCustomerFormReview(null);
+        await loadCustomerForms(customerId);
+        setFormStatus(dom.customerFormRequestStatus, 'Form deleted.');
+        showToast('Customer form deleted');
+    } catch (error) {
+        setFormStatus(dom.customerFormRequestStatus, getErrorMessage(error, 'Unable to delete customer form.'), true);
     }
 }
 
@@ -6994,10 +7016,15 @@ if (dom.customerFormRequestForm) {
 
 if (dom.customerFormsTable) {
     dom.customerFormsTable.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-action="view-customer-form"]');
+        const button = event.target.closest('[data-action]');
         if (!button) return;
         const formRequest = state.customerForms.find((item) => item.id === Number(button.dataset.id));
-        renderCustomerFormReview(formRequest || null);
+        if (button.dataset.action === 'view-customer-form') {
+            renderCustomerFormReview(formRequest || null);
+        }
+        if (button.dataset.action === 'delete-customer-form' && formRequest) {
+            deleteCustomerFormRequest(formRequest);
+        }
     });
 }
 

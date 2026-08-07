@@ -182,6 +182,50 @@ class CustomerFormWorkflowTest extends TestCase
         ])->assertUnprocessable()->assertJsonValidationErrors('answers.service_level');
     }
 
+    public function test_admin_can_delete_a_sent_customer_form(): void
+    {
+        Storage::fake('local');
+        Mail::fake();
+        $this->seed(RolePermissionSeeder::class);
+
+        $admin = $this->userWithRole('admin');
+        $staff = $this->userWithRole('staff');
+        $portalUser = $this->userWithRole('customer', 'delete-form@example.com');
+        $customer = Customer::query()->create([
+            'name' => 'Delete Form Client',
+            'email' => $portalUser->email,
+            'billing_address' => '3 Example Street',
+            'user_id' => $portalUser->id,
+            'created_by_user_id' => $admin->id,
+        ]);
+        $otherCustomer = Customer::query()->create([
+            'name' => 'Other Client',
+            'email' => 'other-client@example.com',
+            'billing_address' => '4 Example Street',
+            'created_by_user_id' => $admin->id,
+        ]);
+
+        $this->configureTemplate();
+        $formId = (int) $this->actingAs($admin)->postJson("/api/customers/{$customer->id}/forms", [
+            'template_slug' => 'project-brief',
+        ])->assertCreated()->json('data.id');
+
+        $this->actingAs($staff)
+            ->deleteJson("/api/customers/{$customer->id}/forms/{$formId}")
+            ->assertForbidden();
+        $this->actingAs($admin)
+            ->deleteJson("/api/customers/{$otherCustomer->id}/forms/{$formId}")
+            ->assertNotFound();
+        $this->actingAs($admin)
+            ->deleteJson("/api/customers/{$customer->id}/forms/{$formId}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('customer_form_requests', ['id' => $formId]);
+        $this->actingAs($portalUser)->getJson('/api/portal/forms')
+            ->assertOk()
+            ->assertJsonCount(0, 'data');
+    }
+
     private function configureTemplate(): void
     {
         $this->app->make(CustomerFormSettings::class)->update([[
