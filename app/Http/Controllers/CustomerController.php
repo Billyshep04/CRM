@@ -6,8 +6,9 @@ use App\Http\Resources\CustomerResource;
 use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
-use Illuminate\Http\Request;
+use Closure;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -98,7 +99,7 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
+            'email' => $this->emailRules(),
             'phone' => ['nullable', 'string', 'max:50'],
             'billing_address' => ['required', 'string'],
             'notes' => ['nullable', 'string'],
@@ -137,7 +138,7 @@ class CustomerController extends Controller
     {
         $validated = $request->validate([
             'name' => ['sometimes', 'string', 'max:255'],
-            'email' => ['sometimes', 'email', 'max:255'],
+            'email' => $this->emailRules($customer, 'sometimes'),
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'billing_address' => ['sometimes', 'string'],
             'notes' => ['nullable', 'string'],
@@ -285,6 +286,35 @@ class CustomerController extends Controller
         if ($customer->user_id !== $portalUser->id) {
             $customer->forceFill(['user_id' => $portalUser->id])->saveQuietly();
         }
+    }
+
+    /**
+     * @return array<int, mixed>
+     */
+    private function emailRules(?Customer $customer = null, string $presence = 'required'): array
+    {
+        return [
+            $presence,
+            'email',
+            'max:255',
+            function (string $attribute, mixed $value, Closure $fail) use ($customer): void {
+                $email = mb_strtolower(trim((string) $value));
+
+                $customerEmailExists = Customer::query()
+                    ->whereRaw('LOWER(email) = ?', [$email])
+                    ->when($customer, static fn ($query) => $query->where('id', '!=', $customer->id))
+                    ->exists();
+
+                $userEmailExists = User::query()
+                    ->whereRaw('LOWER(email) = ?', [$email])
+                    ->when($customer?->user_id, static fn ($query, $userId) => $query->where('id', '!=', $userId))
+                    ->exists();
+
+                if ($customerEmailExists || $userEmailExists) {
+                    $fail('That email address already exists. Please use a different email address.');
+                }
+            },
+        ];
     }
 
     private function supportsCustomerArchiving(bool $attemptAutoCreate = false): bool
