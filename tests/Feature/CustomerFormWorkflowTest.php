@@ -59,6 +59,32 @@ class CustomerFormWorkflowTest extends TestCase
         );
     }
 
+    public function test_long_question_labels_generate_stable_keys_within_the_validation_limit(): void
+    {
+        Storage::fake('local');
+        $this->seed(RolePermissionSeeder::class);
+        $admin = $this->userWithRole('admin');
+        $longLabel = str_repeat('Tell us about your preferred website navigation and customer journey ', 3);
+
+        $response = $this->actingAs($admin)->putJson('/api/admin/customer-forms', [
+            'types' => [[
+                'slug' => 'long-question-form',
+                'label' => 'Long question form',
+                'questions' => [[
+                    'key' => '',
+                    'label' => $longLabel,
+                    'type' => 'textarea',
+                    'required' => false,
+                    'options' => [],
+                ]],
+            ]],
+        ])->assertOk();
+
+        $key = (string) $response->json('data.types.0.questions.0.key');
+        $this->assertLessThanOrEqual(100, mb_strlen($key));
+        $this->assertSame($key, $this->app->make(CustomerFormSettings::class)->findType('long-question-form')['questions'][0]['key']);
+    }
+
     public function test_admin_can_send_form_and_customer_can_submit_it_once(): void
     {
         Storage::fake('local');

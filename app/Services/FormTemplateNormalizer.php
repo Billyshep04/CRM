@@ -26,6 +26,7 @@ class FormTemplateNormalizer
                 if ($questionLabel === '') continue;
 
                 $questionKey = trim((string) ($question['key'] ?? '')) ?: Str::slug($questionLabel, '_');
+                $questionKey = $this->limitQuestionKey($questionKey);
                 $fieldType = (string) ($question['type'] ?? 'text');
                 if (!in_array($fieldType, ['text', 'textarea', 'number', 'date', 'select', 'checkbox'], true)) {
                     $fieldType = 'text';
@@ -56,5 +57,14 @@ class FormTemplateNormalizer
         usort($normalized, static fn (array $a, array $b): int => $a['sort_order'] <=> $b['sort_order']);
 
         return $normalized;
+    }
+
+    private function limitQuestionKey(string $key): string
+    {
+        if (Str::length($key) <= 100) {
+            return $key;
+        }
+
+        return Str::substr($key, 0, 91).'_'.substr(sha1($key), 0, 8);
     }
 }

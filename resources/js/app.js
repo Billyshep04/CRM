@@ -2731,7 +2731,9 @@ function collectProposalFormsEditorPayload() {
 
         questions.push({
             label: questionLabel,
-            key: existingType.questions?.[questionIndex]?.key || '',
+            key: String(existingType.questions?.[questionIndex]?.key || '').length <= 100
+                ? existingType.questions?.[questionIndex]?.key || ''
+                : '',
             type: questionRow.querySelector('[data-question-type]')?.value || 'text',
             required: questionRow.querySelector('[data-question-required]')?.value === '1',
             options,
@@ -2851,7 +2853,9 @@ function collectCustomerFormsEditorPayload() {
             .split(',').map((option) => option.trim()).filter(Boolean);
         questions.push({
             label: questionLabel,
-            key: existingType.questions?.[questionIndex]?.key || '',
+            key: String(existingType.questions?.[questionIndex]?.key || '').length <= 100
+                ? existingType.questions?.[questionIndex]?.key || ''
+                : '',
             type: questionRow.querySelector('[data-question-type]')?.value || 'text',
             required: questionRow.querySelector('[data-question-required]')?.value === '1',
             options,
