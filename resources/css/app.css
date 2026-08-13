@@ -966,7 +966,23 @@ body[data-role="admin"] .admin-inline-only {
 }
 
 .table-row.staff-users {
-    grid-template-columns: 1fr 1.4fr 0.7fr;
+    grid-template-columns: 1fr 1.4fr 0.7fr 1fr;
+}
+
+.staff-user-link { border: 0; padding: 0; background: transparent; color: var(--primary); font: inherit; font-weight: 700; text-align: left; cursor: pointer; }
+.staff-user-link:hover { text-decoration: underline; }
+.staff-user-detail-modal { width: min(900px, 100%); }
+.staff-overview-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.staff-overview-stat { padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-muted); }
+.staff-overview-stat span { display: block; color: var(--text-muted); font-size: 12px; }
+.staff-overview-stat strong { display: block; margin-top: 5px; font-size: 22px; }
+.staff-recent-tasks { display: grid; gap: 8px; margin-top: 18px; }
+.staff-recent-task { display: grid; grid-template-columns: minmax(180px, 1.5fr) 0.7fr 0.7fr 0.7fr; gap: 10px; padding: 12px; border-radius: 12px; background: var(--bg-muted); }
+.staff-recent-task small { display: block; margin-top: 3px; color: var(--text-muted); }
+
+@media (max-width: 780px) {
+    .staff-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .staff-recent-task { grid-template-columns: 1fr; }
 }
 
 .table-row.invoices {

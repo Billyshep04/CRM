@@ -182,6 +182,11 @@ const dom = {
     staffUserFormStatus: document.getElementById('staff-user-form-status'),
     staffUsersTable: document.getElementById('staff-users-table'),
     staffUsersRefresh: document.getElementById('staff-users-refresh'),
+    staffUserDetailModal: document.getElementById('staff-user-detail-modal'),
+    staffUserDetailTitle: document.getElementById('staff-user-detail-title'),
+    staffUserDetailSubtitle: document.getElementById('staff-user-detail-subtitle'),
+    staffUserDetailContent: document.getElementById('staff-user-detail-content'),
+    staffUserDetailClose: document.getElementById('staff-user-detail-close'),
     profileForm: document.getElementById('profile-form'),
     profileFormStatus: document.getElementById('profile-form-status'),
     profileName: document.getElementById('profile-name'),
@@ -2905,7 +2910,7 @@ function renderStaffUsers() {
     if (!state.staffUsers.length) {
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty staff-users';
-        emptyRow.innerHTML = '<span>No staff users yet.</span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>No staff users yet.</span><span></span><span></span><span></span>';
         dom.staffUsersTable.appendChild(emptyRow);
         return;
     }
@@ -2914,9 +2919,13 @@ function renderStaffUsers() {
         const row = document.createElement('div');
         row.className = 'table-row staff-users';
         row.innerHTML = `
-            <span>${escapeHtml(user.name || '')}</span>
+            <span><button class="staff-user-link" type="button" data-action="view-staff-user" data-id="${user.id}">${escapeHtml(user.name || '')}</button></span>
             <span>${formatEmailLink(user.email, '')}</span>
             <span>${formatDate(user.created_at)}</span>
+            <div class="row-actions">
+                <button class="btn btn-outline btn-small" type="button" data-action="view-staff-user" data-id="${user.id}">View</button>
+                <button class="btn btn-outline btn-small customer-form-delete" type="button" data-action="delete-staff-user" data-id="${user.id}">Delete</button>
+            </div>
         `;
         dom.staffUsersTable.appendChild(row);
     });
@@ -2929,7 +2938,7 @@ async function loadStaffUsers() {
 
     const loadingRow = document.createElement('div');
     loadingRow.className = 'table-row table-empty staff-users';
-    loadingRow.innerHTML = '<span>Loading staff users...</span><span></span><span></span>';
+    loadingRow.innerHTML = '<span>Loading staff users...</span><span></span><span></span><span></span>';
     dom.staffUsersTable.appendChild(loadingRow);
 
     try {
@@ -2941,9 +2950,85 @@ async function loadStaffUsers() {
         state.staffUsers = [];
         const emptyRow = document.createElement('div');
         emptyRow.className = 'table-row table-empty staff-users';
-        emptyRow.innerHTML = '<span>Unable to load staff users.</span><span></span><span></span>';
+        emptyRow.innerHTML = '<span>Unable to load staff users.</span><span></span><span></span><span></span>';
         resetTable(dom.staffUsersTable);
         dom.staffUsersTable.appendChild(emptyRow);
+    }
+}
+
+function closeStaffUserDetail() {
+    if (dom.staffUserDetailModal) dom.staffUserDetailModal.hidden = true;
+    if (dom.staffUserDetailContent) dom.staffUserDetailContent.innerHTML = '';
+}
+
+function renderStaffUserDetail(data) {
+    if (!dom.staffUserDetailModal || !dom.staffUserDetailContent) return;
+    const user = data?.user || {};
+    const summary = data?.summary || {};
+    const tasks = Array.isArray(data?.recent_tasks) ? data.recent_tasks : [];
+    if (dom.staffUserDetailTitle) dom.staffUserDetailTitle.textContent = user.name || 'Staff overview';
+    if (dom.staffUserDetailSubtitle) dom.staffUserDetailSubtitle.textContent = `${user.email || ''} · Staff since ${formatDate(user.created_at)}`;
+
+    const stats = [
+        ['Active tasks', Number(summary.pending_tasks || 0) + Number(summary.in_progress_tasks || 0)],
+        ['Completed tasks', summary.completed_tasks || 0],
+        ['Total hours', `${Number(summary.total_hours || 0).toFixed(2)}h`],
+        ['Overdue tasks', summary.overdue_tasks || 0],
+        ['Completed this month', summary.completed_this_month || 0],
+        ['Hours this month', `${Number(summary.hours_this_month || 0).toFixed(2)}h`],
+        ['Pending', summary.pending_tasks || 0],
+        ['In progress', summary.in_progress_tasks || 0],
+    ];
+    const taskRows = tasks.map((task) => `
+        <div class="staff-recent-task">
+            <span><strong>${escapeHtml(task.title || 'Task')}</strong><small>${escapeHtml(task.job?.customer_name || task.job?.description || 'No linked job')}</small></span>
+            <span>${escapeHtml(String(task.status || '').replace('_', ' '))}</span>
+            <span>${formatTaskTime(task)}</span>
+            <span>${task.completed_at ? formatDate(task.completed_at) : formatDate(task.due_date)}</span>
+        </div>
+    `).join('');
+
+    dom.staffUserDetailContent.innerHTML = `
+        <div class="staff-overview-grid">${stats.map(([label, value]) => `<div class="staff-overview-stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('')}</div>
+        <div class="staff-recent-tasks"><div class="card-title">Recent tasks</div>${taskRows || '<div class="form-hint">No tasks assigned yet.</div>'}</div>
+    `;
+    dom.staffUserDetailModal.hidden = false;
+}
+
+async function openStaffUserDetail(userId) {
+    if (!userId || !dom.staffUserDetailModal || !dom.staffUserDetailContent) return;
+    dom.staffUserDetailModal.hidden = false;
+    dom.staffUserDetailContent.innerHTML = '<div class="form-hint">Loading staff overview...</div>';
+    try {
+        const response = await api.get(`/api/admin/staff-users/${userId}`);
+        renderStaffUserDetail(response?.data?.data || {});
+    } catch (error) {
+        dom.staffUserDetailContent.innerHTML = `<div class="form-error">${escapeHtml(getErrorMessage(error, 'Unable to load staff overview.'))}</div>`;
+    }
+}
+
+async function handleStaffUserAction(event) {
+    const button = event.target.closest('[data-action]');
+    if (!button) return;
+    const userId = Number(button.dataset.id);
+    if (!userId) return;
+
+    if (button.dataset.action === 'view-staff-user') {
+        await openStaffUserDetail(userId);
+        return;
+    }
+
+    if (button.dataset.action === 'delete-staff-user') {
+        const user = state.staffUsers.find((item) => Number(item.id) === userId);
+        if (!window.confirm(`Delete ${user?.name || 'this staff user'}? This cannot be undone.`)) return;
+        try {
+            await api.delete(`/api/admin/staff-users/${userId}`);
+            closeStaffUserDetail();
+            showToast('Staff user deleted');
+            await Promise.all([loadStaffUsers(), loadStaffTracking()]);
+        } catch (error) {
+            setFormStatus(dom.staffUserFormStatus, getErrorMessage(error, 'Unable to delete staff user.'), true);
+        }
     }
 }
 
@@ -6988,6 +7073,20 @@ if (dom.staffUserForm) {
 
 if (dom.staffUsersRefresh) {
     dom.staffUsersRefresh.addEventListener('click', loadStaffUsers);
+}
+
+if (dom.staffUsersTable) {
+    dom.staffUsersTable.addEventListener('click', handleStaffUserAction);
+}
+
+if (dom.staffUserDetailClose) {
+    dom.staffUserDetailClose.addEventListener('click', closeStaffUserDetail);
+}
+
+if (dom.staffUserDetailModal) {
+    dom.staffUserDetailModal.addEventListener('click', (event) => {
+        if (event.target === dom.staffUserDetailModal) closeStaffUserDetail();
+    });
 }
 
 if (dom.customerForm) {

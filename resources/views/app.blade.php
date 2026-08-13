@@ -1107,9 +1107,11 @@
                                     <span>Name</span>
                                     <span>Email</span>
                                     <span>Created</span>
+                                    <span>Actions</span>
                                 </div>
                                 <div class="table-row table-empty staff-users">
                                     <span>Loading staff users...</span>
+                                    <span></span>
                                     <span></span>
                                     <span></span>
                                 </div>
@@ -2061,6 +2063,16 @@
         </div>
 
         <div id="app-toast" class="toast" role="status" aria-live="polite"></div>
+
+        <div class="crm-modal-backdrop" id="staff-user-detail-modal" hidden>
+            <section class="crm-modal customer-form-modal staff-user-detail-modal" role="dialog" aria-modal="true" aria-labelledby="staff-user-detail-title">
+                <div class="crm-modal-header">
+                    <div><div class="card-title" id="staff-user-detail-title">Staff overview</div><div class="card-subtitle" id="staff-user-detail-subtitle"></div></div>
+                    <button class="crm-modal-close" id="staff-user-detail-close" type="button" aria-label="Close">×</button>
+                </div>
+                <div id="staff-user-detail-content"><div class="form-hint">Loading staff overview...</div></div>
+            </section>
+        </div>
 
         <template id="invoice-line-item-template">
             <div class="line-item">
