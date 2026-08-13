@@ -104,14 +104,14 @@
                 </div>
                 <nav class="nav-stack">
                     <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
-                    <a href="#" class="nav-item admin-only" data-view="customers">Customers</a>
+                    <a href="#" class="nav-item staff-only" data-view="customers">Customers</a>
                     <a href="#" class="nav-item staff-only" data-view="lead-discovery">Lead Discovery</a>
                     <a href="#" class="nav-item staff-only" data-view="revenue-opportunities">Revenue Opportunities</a>
-                    <a href="#" class="nav-item admin-only" data-view="jobs">Jobs</a>
-                    <a href="#" class="nav-item admin-only" data-view="subscriptions">Subscriptions</a>
-                    <a href="#" class="nav-item admin-only" data-view="costs">Costs</a>
-                    <a href="#" class="nav-item admin-only" data-view="proposals">Proposals</a>
-                    <a href="#" class="nav-item admin-only" data-view="invoices">Invoices</a>
+                    <a href="#" class="nav-item staff-only" data-view="jobs">Jobs</a>
+                    <a href="#" class="nav-item staff-only" data-view="subscriptions">Subscriptions</a>
+                    <a href="#" class="nav-item staff-only" data-view="costs">Costs</a>
+                    <a href="#" class="nav-item staff-only" data-view="proposals">Proposals</a>
+                    <a href="#" class="nav-item staff-only" data-view="invoices">Invoices</a>
                     <a href="#" class="nav-item staff-only" data-view="tasks">Tasks</a>
                     <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
                     <a href="#" class="nav-item staff-member-only" data-view="monthly-tasks">Monthly Tasks</a>
@@ -255,7 +255,7 @@
                             </div>
                         </div>
 
-                        <div class="card admin-only">
+                        <div class="card staff-only">
                             <div class="card-header">
                                 <div>
                                     <div class="card-title">Quick actions</div>
@@ -910,7 +910,7 @@
                                         <option value="in_progress">In progress</option>
                                     </select>
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Staff</span>
                                     <select id="tasks-filter-staff"></select>
                                 </label>
@@ -943,23 +943,23 @@
                             </div>
                             <form id="task-form" class="form-stack">
                                 <input type="hidden" name="id">
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Title</span>
                                     <input type="text" name="title">
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Description</span>
                                     <textarea name="description" rows="3"></textarea>
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Assign to</span>
                                     <select name="assigned_to_user_id" id="task-staff-select"></select>
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Linked job (optional)</span>
                                     <select name="job_id" id="task-job-select"></select>
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Priority</span>
                                     <select name="priority">
                                         <option value="low">Low</option>
@@ -968,7 +968,7 @@
                                         <option value="urgent">Urgent</option>
                                     </select>
                                 </label>
-                                <label class="field admin-only">
+                                <label class="field staff-only">
                                     <span>Due date</span>
                                     <input type="date" name="due_date">
                                 </label>

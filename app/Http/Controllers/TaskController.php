@@ -30,7 +30,7 @@ class TaskController extends Controller
             ->with(['assignedTo.roles', 'job.customer', 'revenueOpportunity.customer'])
             ->latest('id');
 
-        if (! $user?->hasRole('admin')) {
+        if (! $user?->hasAnyRole(['admin', 'staff'])) {
             $query->where('assigned_to_user_id', $user?->id);
         }
 
@@ -47,7 +47,7 @@ class TaskController extends Controller
             }
         }
 
-        if ($request->query('staff_id') && $user?->hasRole('admin')) {
+        if ($request->query('staff_id') && $user?->hasAnyRole(['admin', 'staff'])) {
             $query->where('assigned_to_user_id', (int) $request->query('staff_id'));
         }
 
@@ -90,7 +90,7 @@ class TaskController extends Controller
         $this->authorizeTaskAccess($request, $task);
         $wasCompleted = $task->status === 'completed';
 
-        if ($request->user()?->hasRole('admin')) {
+        if ($request->user()?->hasAnyRole(['admin', 'staff'])) {
             $validated = $this->validateAdminPayload($request, true);
             $staffPayload = [];
             if ($request->hasAny(['hours', 'minutes', 'staff_notes'])) {
@@ -252,14 +252,14 @@ class TaskController extends Controller
 
     private function assertAdmin(Request $request): void
     {
-        if (! $request->user()?->hasRole('admin')) {
+        if (! $request->user()?->hasAnyRole(['admin', 'staff'])) {
             abort(403);
         }
     }
 
     private function authorizeTaskAccess(Request $request, CrmTask $task): void
     {
-        if ($request->user()?->hasRole('admin')) {
+        if ($request->user()?->hasAnyRole(['admin', 'staff'])) {
             return;
         }
 

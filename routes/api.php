@@ -106,7 +106,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('stats/profit-weekly', [StatsController::class, 'weeklyProfit']);
     });
 
-    Route::middleware('role:admin')->group(function (): void {
+    Route::middleware('role:admin,staff')->group(function (): void {
         Route::get('lead-scoring-profiles', [LeadScoringProfileController::class, 'index']);
         Route::post('lead-scoring-profiles', [LeadScoringProfileController::class, 'store']);
         Route::put('lead-scoring-profiles/{leadScoringProfile}', [LeadScoringProfileController::class, 'update']);
@@ -126,13 +126,16 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('invoices/{invoice}/payment', [InvoiceController::class, 'updatePaymentStatus']);
         Route::post('invoices/{invoice}/send', [InvoiceController::class, 'send']);
         Route::get('invoices/{invoice}/download', [InvoiceController::class, 'download']);
-        Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::patch('customers/{customer}/archive', [CustomerController::class, 'archive']);
         Route::patch('customers/{customer}/unarchive', [CustomerController::class, 'unarchive']);
         Route::get('customers/{customer}/forms', [CustomerFormController::class, 'index']);
         Route::post('customers/{customer}/forms', [CustomerFormController::class, 'store']);
         Route::delete('customers/{customer}/forms/{customerFormRequest}', [CustomerFormController::class, 'destroy']);
         Route::get('admin/staff-users', [AdminStaffUserController::class, 'index']);
+    });
+
+    Route::middleware('role:admin')->group(function (): void {
+        Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
         Route::get('admin/staff-task-summary', [TaskController::class, 'staffSummary']);
         Route::get('admin/stats/monthly-finance', [StatsController::class, 'monthlyFinance']);

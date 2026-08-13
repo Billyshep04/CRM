@@ -794,6 +794,10 @@ function setActiveView(view) {
     }
 }
 
+function canManageOperations() {
+    return state.role === 'admin' || state.role === 'staff';
+}
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -2919,7 +2923,7 @@ function renderStaffUsers() {
 }
 
 async function loadStaffUsers() {
-    if (!dom.staffUsersTable || state.role !== 'admin') return;
+    if (!dom.staffUsersTable || !canManageOperations()) return;
     setFormStatus(dom.staffUserFormStatus, '');
     resetTable(dom.staffUsersTable);
 
@@ -3713,7 +3717,7 @@ async function loadTasks() {
         const query = buildQuery({
             per_page: 100,
             status: state.filters.tasks.status,
-            staff_id: state.role === 'admin' ? state.filters.tasks.staff : undefined,
+            staff_id: canManageOperations() ? state.filters.tasks.staff : undefined,
             task_view: isViewingCompletedTasks() ? 'completed' : 'current',
         });
         const response = await api.get(`/api/tasks${query}`);
@@ -3745,7 +3749,7 @@ function renderTasks() {
         row.className = 'table-row tasks';
         const jobText = task.job ? `#${task.job.id} - ${task.job.description || 'Job'}` : 'No linked job';
         const actions = [];
-        if (state.role === 'admin') {
+        if (canManageOperations()) {
             actions.push(`<button class="btn btn-outline btn-small" data-action="edit-task" data-id="${task.id}">Edit</button>`);
             actions.push(`<button class="btn btn-outline btn-small" data-action="delete-task" data-id="${task.id}">Delete</button>`);
         } else {
@@ -3772,7 +3776,7 @@ function resetTaskForm() {
     dom.taskForm.querySelector('input[name="id"]').value = '';
     state.editing.task = null;
     if (dom.taskFormTitle) {
-        dom.taskFormTitle.textContent = state.role === 'staff' ? 'Update task' : 'New task';
+        dom.taskFormTitle.textContent = canManageOperations() ? 'New task' : 'Update task';
     }
     setFormStatus(dom.taskFormStatus, '');
 }
@@ -3790,7 +3794,7 @@ async function handleTaskSubmit(event) {
         staff_notes: String(formData.get('staff_notes') || '').trim() || null,
     };
 
-    if (state.role !== 'admin') {
+    if (!canManageOperations()) {
         if (!taskId) {
             setFormStatus(dom.taskFormStatus, 'Choose a task to update first.', true);
             return;
@@ -3857,7 +3861,7 @@ async function handleTaskAction(event) {
         return;
     }
 
-    if (button.dataset.action === 'edit-task' && state.role === 'admin' && dom.taskForm) {
+    if (button.dataset.action === 'edit-task' && canManageOperations() && dom.taskForm) {
         state.editing.task = task.id;
         dom.taskForm.querySelector('input[name="id"]').value = task.id;
         dom.taskForm.querySelector('input[name="title"]').value = task.title || '';
@@ -3875,7 +3879,7 @@ async function handleTaskAction(event) {
         return;
     }
 
-    if (button.dataset.action === 'delete-task' && state.role === 'admin') {
+    if (button.dataset.action === 'delete-task' && canManageOperations()) {
         if (!window.confirm('Delete this task?')) return;
         try {
             await api.delete(`/api/tasks/${task.id}`);
@@ -4818,7 +4822,7 @@ async function handleJobAction(event) {
         setFormStatus(dom.jobFormStatus, 'Editing job.');
     }
 
-    if (action === 'create-task' && job && state.role === 'admin') {
+    if (action === 'create-task' && job && canManageOperations()) {
         setActiveView('tasks');
         setTimeout(() => {
             if (dom.taskJobSelect) dom.taskJobSelect.value = String(job.id);
@@ -6681,7 +6685,7 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
-    const adminOnlyViews = ['customers', 'jobs', 'subscriptions', 'costs', 'proposals', 'invoices', 'monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'];
+    const adminOnlyViews = ['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'];
     const staffOnlyViews = ['tasks', 'monthly-tasks'];
 
     dom.navItems.forEach((item) => {
