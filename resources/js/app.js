@@ -279,6 +279,7 @@ const dom = {
     jobsRefresh: document.getElementById('jobs-refresh'),
     tasksTable: document.getElementById('tasks-table'),
     tasksRefresh: document.getElementById('tasks-refresh'),
+    tasksCompletedToggle: document.getElementById('tasks-completed-toggle'),
     tasksFilterStatus: document.getElementById('tasks-filter-status'),
     tasksFilterStaff: document.getElementById('tasks-filter-staff'),
     tasksClear: document.getElementById('tasks-clear'),
@@ -445,6 +446,7 @@ const state = {
         tasks: {
             status: 'all',
             staff: 'all',
+            completed: false,
         },
         revenueOpportunities: { status: 'all', type: 'all' },
     },
@@ -3674,8 +3676,33 @@ function formatTaskTime(task) {
     return `${hours}h ${String(minutes).padStart(2, '0')}m`;
 }
 
+function isViewingCompletedTasks() {
+    return state.filters.tasks.completed === true;
+}
+
+function updateTaskCompletedControls() {
+    const viewingCompleted = isViewingCompletedTasks();
+    if (dom.tasksCompletedToggle) {
+        dom.tasksCompletedToggle.textContent = viewingCompleted ? 'Active tasks' : 'Completed';
+        dom.tasksCompletedToggle.classList.toggle('is-active', viewingCompleted);
+    }
+    if (dom.tasksFilterStatus) {
+        dom.tasksFilterStatus.disabled = viewingCompleted;
+    }
+}
+
+function setTasksCompletedMode(showCompleted) {
+    state.filters.tasks.completed = showCompleted === true;
+    state.filters.tasks.status = 'all';
+    if (dom.tasksFilterStatus) dom.tasksFilterStatus.value = 'all';
+    resetTaskForm();
+    updateTaskCompletedControls();
+    loadTasks();
+}
+
 async function loadTasks() {
     if (!dom.tasksTable) return;
+    updateTaskCompletedControls();
     resetTable(dom.tasksTable);
     const loadingRow = document.createElement('div');
     loadingRow.className = 'table-row table-empty tasks';
@@ -3687,6 +3714,7 @@ async function loadTasks() {
             per_page: 100,
             status: state.filters.tasks.status,
             staff_id: state.role === 'admin' ? state.filters.tasks.staff : undefined,
+            task_view: isViewingCompletedTasks() ? 'completed' : 'current',
         });
         const response = await api.get(`/api/tasks${query}`);
         state.tasks = response?.data?.data ?? [];
@@ -3707,7 +3735,7 @@ function renderTasks() {
     if (!state.tasks.length) {
         const row = document.createElement('div');
         row.className = 'table-row table-empty tasks';
-        row.innerHTML = '<span>No tasks yet.</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>';
+        row.innerHTML = `<span>${isViewingCompletedTasks() ? 'No completed tasks yet.' : 'No active tasks yet.'}</span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>`;
         dom.tasksTable.appendChild(row);
         return;
     }
@@ -7217,6 +7245,12 @@ if (dom.tasksRefresh) {
     dom.tasksRefresh.addEventListener('click', loadTasks);
 }
 
+if (dom.tasksCompletedToggle) {
+    dom.tasksCompletedToggle.addEventListener('click', () => {
+        setTasksCompletedMode(!isViewingCompletedTasks());
+    });
+}
+
 if (dom.tasksFilterStatus) {
     dom.tasksFilterStatus.addEventListener('change', () => {
         state.filters.tasks.status = dom.tasksFilterStatus.value;
@@ -7237,6 +7271,8 @@ if (dom.tasksClear) {
         if (dom.tasksFilterStaff) dom.tasksFilterStaff.value = 'all';
         state.filters.tasks.status = 'all';
         state.filters.tasks.staff = 'all';
+        state.filters.tasks.completed = false;
+        updateTaskCompletedControls();
         loadTasks();
     });
 }

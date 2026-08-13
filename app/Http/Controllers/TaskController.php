@@ -34,7 +34,14 @@ class TaskController extends Controller
             $query->where('assigned_to_user_id', $user?->id);
         }
 
-        if ($status = $request->query('status')) {
+        $completedView = $request->query('task_view') === 'completed';
+        if ($completedView) {
+            $query->where('status', 'completed');
+        } else {
+            $query->where('status', '!=', 'completed');
+        }
+
+        if (! $completedView && ($status = $request->query('status'))) {
             if ($status !== 'all') {
                 $query->where('status', $status);
             }

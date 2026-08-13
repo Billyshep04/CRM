@@ -896,7 +896,10 @@
                                     <div class="card-title">Tasks</div>
                                     <div class="card-subtitle">Assigned work and completion tracking.</div>
                                 </div>
-                                <button class="btn btn-outline" id="tasks-refresh" type="button">Refresh</button>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="tasks-completed-toggle" type="button">Completed</button>
+                                    <button class="btn btn-outline" id="tasks-refresh" type="button">Refresh</button>
+                                </div>
                             </div>
                             <div class="filters">
                                 <label class="field">
@@ -905,7 +908,6 @@
                                         <option value="all">All</option>
                                         <option value="pending">Pending</option>
                                         <option value="in_progress">In progress</option>
-                                        <option value="completed">Completed</option>
                                     </select>
                                 </label>
                                 <label class="field admin-only">
