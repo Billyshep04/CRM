@@ -11,6 +11,7 @@ use App\Models\WebsiteHealthCheck;
 use App\Services\Websites\WebsiteIncidentManager;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class WebsiteHostingManagementTest extends TestCase
@@ -83,6 +84,25 @@ class WebsiteHostingManagementTest extends TestCase
         $this->assertSame(hash('sha256', $token), $website->fresh()->agent_token_hash);
         $this->withToken('old-token')->postJson("/api/website-agent/{$website->id}/status", [])->assertUnauthorized();
         $this->withToken($token)->postJson("/api/website-agent/{$website->id}/status", [])->assertAccepted();
+    }
+
+    public function test_successful_agent_check_moves_site_to_linked_and_it_stays_linked_when_stale(): void
+    {
+        config(['website-audits.enforce_public_networks' => false]);
+        Http::fake([
+            'https://example.com/wp-json/webstamp/v1/status' => Http::response(['wordpress_version' => '7.0.4', 'plugin_count' => 14, 'plugin_updates' => 0]),
+            'https://example.com*' => Http::response('OK', 200),
+        ]);
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), ['wordpress_enabled' => true, 'agent_token_hash' => hash('sha256', 'token'), 'agent_token_encrypted' => 'token']);
+
+        $this->actingAs($admin)->postJson("/api/websites/{$website->id}/check")->assertOk();
+        $this->assertNotNull($website->fresh()->agent_last_seen_at);
+        $this->actingAs($admin)->getJson('/api/websites')->assertJsonPath('data.0.id', $website->id);
+
+        $website->update(['agent_last_seen_at' => now()->subDays(3)]);
+        $this->actingAs($admin)->getJson('/api/websites')->assertJsonPath('data.0.id', $website->id)->assertJsonPath('data.0.agent_connected', false);
+        $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertJsonCount(0, 'data');
     }
 
     public function test_incidents_are_deduplicated_and_resolved(): void
