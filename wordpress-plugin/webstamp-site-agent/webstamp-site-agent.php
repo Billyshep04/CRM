@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WebStamp Site Agent
  * Description: Provides an authenticated, read-only health endpoint for the WebStamp CRM.
- * Version: 1.0.0
+ * Version: 1.1.0
  */
 
 if (!defined('ABSPATH')) exit;
@@ -25,12 +25,14 @@ add_action('rest_api_init', function (): void {
 
 function webstamp_agent_status(): WP_REST_Response {
     global $wpdb;
+    if (!function_exists('get_plugins')) require_once ABSPATH.'wp-admin/includes/plugin.php';
     $updates = wp_get_update_data();
     $theme = wp_get_theme();
     $databaseSize = (int) $wpdb->get_var("SELECT SUM(data_length + index_length) FROM information_schema.TABLES WHERE table_schema = DATABASE()");
     return new WP_REST_Response([
         'wordpress_version' => get_bloginfo('version'),
         'php_version' => PHP_VERSION,
+        'plugin_count' => count(get_plugins()),
         'plugin_updates' => (int) ($updates['counts']['plugins'] ?? 0),
         'theme_updates' => (int) ($updates['counts']['themes'] ?? 0),
         'database_size_bytes' => $databaseSize,

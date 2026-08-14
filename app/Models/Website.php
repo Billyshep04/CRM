@@ -26,6 +26,8 @@ class Website extends Model
         'login_url',
         'environment',
         'cpanel_username',
+        'google_analytics_property_id',
+        'google_analytics_dashboard_url',
         'wordpress_enabled',
         'management_enabled',
         'hosting_enabled',

@@ -30,7 +30,7 @@ class WebsiteMonitor
         $status = $critical ? 'critical' : (!$online ? 'attention' : 'healthy');
         $metrics = [];
         if ($type !== 'http' && $website->wordpress_enabled && $website->agent_token_encrypted) {
-            try { $metrics = array_intersect_key($this->client->fetchJson(rtrim($website->login_url, '/').'/wp-json/webstamp/v1/status', $website->agent_token_encrypted), array_flip(['wordpress_version', 'php_version', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status', 'performance_score'])); }
+            try { $metrics = array_intersect_key($this->client->fetchJson(rtrim($website->login_url, '/').'/wp-json/webstamp/v1/status', $website->agent_token_encrypted), array_flip(['wordpress_version', 'php_version', 'plugin_count', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status', 'performance_score'])); }
             catch (Throwable) { $errors[] = 'WordPress agent status is unavailable.'; }
         }
         if ($type !== 'http' && $website->hosting_enabled && $website->hostingServer) {

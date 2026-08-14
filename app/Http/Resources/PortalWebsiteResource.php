@@ -22,7 +22,7 @@ class PortalWebsiteResource extends JsonResource
             'ssl' => $visibility['ssl'] ? ['status' => $check?->ssl_status, 'expires_at' => $check?->ssl_expires_at] : null,
             'backups' => $visibility['backup'] ? ['status' => $check?->backup_status, 'last_successful_at' => $check?->last_successful_backup_at] : null,
             'performance' => $visibility['performance'] ? ['score' => $check?->performance_score, 'response_time_ms' => $check?->response_time_ms] : null,
-            'maintenance' => $visibility['maintenance'] ? ['plugin_updates' => $check?->plugin_updates, 'theme_updates' => $check?->theme_updates, 'status' => (($check?->plugin_updates ?? 0) + ($check?->theme_updates ?? 0)) ? 'Maintenance required' : 'Up to date'] : null,
+            'maintenance' => $visibility['maintenance'] ? ['plugin_count' => $check?->plugin_count, 'plugin_updates' => $check?->plugin_updates, 'theme_updates' => $check?->theme_updates, 'status' => (($check?->plugin_updates ?? 0) + ($check?->theme_updates ?? 0)) ? 'Maintenance required' : 'Up to date'] : null,
             'hosting_usage' => $visibility['hosting_usage'] ? ['disk_used_bytes' => $check?->disk_used_bytes, 'disk_limit_bytes' => $check?->disk_limit_bytes] : null,
             'technical_details' => $visibility['technical_details'] ? ['wordpress_version' => $check?->wordpress_version, 'php_version' => $check?->php_version] : null,
             'activities' => $this->activities->map(fn ($activity) => ['title' => $activity->title, 'description' => $activity->description, 'performed_at' => $activity->performed_at]),

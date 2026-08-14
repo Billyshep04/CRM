@@ -208,6 +208,8 @@ const dom = {
     portalWebsiteVisit: document.getElementById('portal-website-visit'),
     websitesList: document.getElementById('websites-list'),
     websitesRefresh: document.getElementById('websites-refresh'),
+    websitesUnlinkedToggle: document.getElementById('websites-unlinked-toggle'),
+    websitesListSubtitle: document.getElementById('websites-list-subtitle'),
     websitesSearch: document.getElementById('websites-search'),
     websitesStatus: document.getElementById('websites-status'),
     websiteSummary: document.getElementById('website-summary'),
@@ -223,6 +225,9 @@ const dom = {
     websiteDetailActivities: document.getElementById('website-detail-activities'),
     websiteDetailCheck: document.getElementById('website-detail-check'),
     websiteDetailBack: document.getElementById('website-detail-back'),
+    websiteAnalyticsForm: document.getElementById('website-analytics-form'),
+    websiteAnalyticsStatus: document.getElementById('website-analytics-status'),
+    websiteAnalyticsOpen: document.getElementById('website-analytics-open'),
     portalProfileForm: document.getElementById('portal-profile-form'),
     portalProfileStatus: document.getElementById('portal-profile-status'),
     portalProfileName: document.getElementById('portal-profile-name'),
@@ -385,6 +390,7 @@ const invoiceTables = {
 const api = window.axios;
 const dashboardProfitYear = 2026;
 let toastTimer = null;
+let portalWebsiteLoadSequence = 0;
 
 const monthlyFinanceBoxDefaults = {
     revenue: true,
@@ -453,6 +459,7 @@ const state = {
     currentCustomer: null,
     currentWebsite: null,
     websiteDetailReturnView: 'websites',
+    showingUnlinkedWebsites: false,
     currentLead: null,
     filters: {
         customers: {
@@ -2011,21 +2018,25 @@ async function loadPortalSubscriptions() {
 
 async function loadPortalWebsites() {
     if (!dom.portalWebsites && !dom.portalWebsitesDetail) return;
+    const requestSequence = ++portalWebsiteLoadSequence;
     if (dom.portalWebsites) dom.portalWebsites.innerHTML = '';
     if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.innerHTML = '';
 
     try {
         const response = await api.get('/api/portal/websites?per_page=20');
+        if (requestSequence !== portalWebsiteLoadSequence) return;
         const websites = response?.data?.data ?? [];
         const uniqueWebsites = [];
-        const seenWebsiteIds = new Set();
+        const seenWebsites = new Set();
 
         websites.forEach((website) => {
             const id = Number(website?.id);
-            if (!id || seenWebsiteIds.has(id)) {
+            const address = String(website?.domain || website?.public_url || website?.login_url || '').trim().toLowerCase().replace(/\/$/, '');
+            const identity = address || `id:${id}`;
+            if (!id || seenWebsites.has(identity)) {
                 return;
             }
-            seenWebsiteIds.add(id);
+            seenWebsites.add(identity);
             uniqueWebsites.push(website);
         });
 
@@ -2062,6 +2073,7 @@ async function loadPortalWebsites() {
             }
         });
     } catch (error) {
+        if (requestSequence !== portalWebsiteLoadSequence) return;
         const errorCard = document.createElement('div');
         errorCard.className = 'site-card';
         errorCard.innerHTML = `
@@ -2086,7 +2098,7 @@ function renderPortalWebsiteDetail(site) {
     if (site.ssl) care.push(['SSL certificate', site.ssl.status || 'unknown', site.ssl.expires_at ? `Expires ${formatDate(site.ssl.expires_at)}` : 'Expiry unavailable']);
     if (site.backups) care.push(['Backups', site.backups.status || 'unknown', site.backups.last_successful_at ? `Last successful ${formatDate(site.backups.last_successful_at)}` : 'No backup date available']);
     if (site.performance) care.push(['Performance', site.performance.score === null || site.performance.score === undefined ? 'Not scored' : `${site.performance.score}/100`, site.performance.response_time_ms ? `${site.performance.response_time_ms} ms response` : 'Response time unavailable']);
-    if (site.maintenance) care.push(['Maintenance', site.maintenance.status || 'unknown', `${site.maintenance.plugin_updates ?? 0} plugin and ${site.maintenance.theme_updates ?? 0} theme updates`]);
+    if (site.maintenance) care.push(['Maintenance', site.maintenance.status || 'unknown', `${site.maintenance.plugin_count ?? 'Unknown'} plugins installed · ${site.maintenance.plugin_updates ?? 0} out of date · ${site.maintenance.theme_updates ?? 0} theme updates`]);
     if (site.hosting_usage) care.push(['Hosting usage', site.hosting_usage.disk_used_bytes ? `${site.hosting_usage.disk_used_bytes} bytes used` : 'Usage unavailable', '']);
     if (site.technical_details) care.push(['Technical details', `WordPress ${site.technical_details.wordpress_version || 'unknown'}`, `PHP ${site.technical_details.php_version || 'unknown'}`]);
     if (dom.portalWebsiteDetailCare) dom.portalWebsiteDetailCare.innerHTML = care.length ? care.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(note)}</div></div>`).join('') : '<div class="table-empty">No additional website-care information is currently available.</div>';
@@ -2109,6 +2121,7 @@ async function loadPortalWebsiteDetail(websiteId) {
 async function loadManagedWebsites() {
     if (!dom.websitesList) return;
     const params = new URLSearchParams({ per_page: '100' });
+    params.set('connection', state.showingUnlinkedWebsites ? 'unlinked' : 'linked');
     if (dom.websitesSearch?.value) params.set('search', dom.websitesSearch.value);
     if (dom.websitesStatus?.value) params.set('status', dom.websitesStatus.value);
     dom.websitesList.innerHTML = '<div class="site-card"><div><div class="site-name">Loading websites…</div></div></div>';
@@ -2117,12 +2130,15 @@ async function loadManagedWebsites() {
         const websites = sitesResponse?.data?.data || [];
         const summary = summaryResponse?.data?.data || {};
         if (dom.websiteSummary) dom.websiteSummary.innerHTML = [['Total', summary.total], ['Healthy', summary.healthy], ['Needs attention', summary.needs_attention], ['Offline', summary.offline]].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value ?? 0}</strong></div>`).join('');
-        dom.websitesList.innerHTML = websites.length ? '' : '<div class="site-card"><div><div class="site-name">No websites match these filters.</div></div></div>';
+        dom.websitesList.innerHTML = websites.length ? '' : `<div class="site-card"><div><div class="site-name">${state.showingUnlinkedWebsites ? 'No unlinked websites.' : 'No linked websites match these filters.'}</div></div></div>`;
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · Agent ${site.agent_connected ? 'connected' : 'not connected'}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
+            const connection = site.agent_linked ? `<span class="connection-state"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Connected' : 'Disconnected'}</span>` : '<span>Not linked</span>';
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · ${connection}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
             dom.websitesList.appendChild(card);
         });
+        if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Back to linked' : `Unlinked (${summary.unlinked ?? 0})`;
+        if (dom.websitesListSubtitle) dom.websitesListSubtitle.textContent = state.showingUnlinkedWebsites ? 'Websites that have not connected to the WordPress agent yet.' : 'Linked websites with connection and monitoring status.';
         if (dom.managedWebsiteCustomer) {
             const current = dom.managedWebsiteCustomer.value;
             dom.managedWebsiteCustomer.innerHTML = '<option value="">Select customer</option>' + (state.customers || []).map((customer) => `<option value="${customer.id}">${escapeHtml(customer.name)}</option>`).join('');
@@ -2142,7 +2158,7 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
     if (dom.websiteDetailDomain) dom.websiteDetailDomain.textContent = site.domain || site.login_url || '';
     if (dom.websiteDetailSummary) dom.websiteDetailSummary.innerHTML = [
-        ['Overall status', site.status || 'unknown'], ['Availability', latest.uptime_status || 'not checked'], ['Response time', latest.response_time_ms ? `${latest.response_time_ms} ms` : '—'], ['SSL', latest.ssl_status || 'unknown'],
+        ['Overall status', site.status || 'unknown'], ['Availability', latest.uptime_status || 'not checked'], ['WordPress', latest.wordpress_version || 'unknown'], ['Plugins', latest.plugin_count ?? 'unknown'], ['Out-of-date plugins', latest.plugin_updates ?? 'unknown'], ['Response time', latest.response_time_ms ? `${latest.response_time_ms} ms` : '—'], ['SSL', latest.ssl_status || 'unknown'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
         ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled ? (site.hosting_server?.name || 'Enabled') : 'No'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
@@ -2153,6 +2169,15 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailIncidents) dom.websiteDetailIncidents.innerHTML = incidents.length ? incidents.map((incident) => `<div class="site-card"><div><div class="site-name">${escapeHtml(incident.title)}</div><div class="site-url">${escapeHtml(incident.message || '')} · ${incident.resolved_at ? 'Resolved' : 'Open'}</div></div></div>`).join('') : '<div class="table-empty">No incidents recorded.</div>';
     const activities = site.activities || [];
     if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
+    if (dom.websiteAnalyticsForm) {
+        dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
+        dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
+        setFormStatus(dom.websiteAnalyticsStatus, site.google_analytics_property_id ? 'GA4 property linked.' : 'No Analytics property linked yet.');
+    }
+    if (dom.websiteAnalyticsOpen) {
+        dom.websiteAnalyticsOpen.hidden = !site.google_analytics_dashboard_url;
+        dom.websiteAnalyticsOpen.href = site.google_analytics_dashboard_url || '#';
+    }
 }
 
 async function loadWebsiteDetail(websiteId) {
@@ -7825,6 +7850,10 @@ if (dom.portalDownloadLatest) {
 }
 
 if (dom.websitesRefresh) dom.websitesRefresh.addEventListener('click', loadManagedWebsites);
+if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.addEventListener('click', () => {
+    state.showingUnlinkedWebsites = !state.showingUnlinkedWebsites;
+    loadManagedWebsites();
+});
 if (dom.websitesSearch) dom.websitesSearch.addEventListener('input', loadManagedWebsites);
 if (dom.websitesStatus) dom.websitesStatus.addEventListener('change', loadManagedWebsites);
 if (dom.portalWebsitesRefresh) dom.portalWebsitesRefresh.addEventListener('click', loadPortalWebsites);
@@ -7850,6 +7879,18 @@ if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', asy
     try { await api.post(`/api/websites/${state.currentWebsite.id}/check`); await loadWebsiteDetail(state.currentWebsite.id); showToast('Website check completed.'); }
     catch (error) { showToast('Website check failed.', true); }
     finally { dom.websiteDetailCheck.disabled = false; }
+});
+if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!state.currentWebsite?.id) return;
+    const formData = new FormData(dom.websiteAnalyticsForm);
+    const payload = {
+        google_analytics_property_id: String(formData.get('google_analytics_property_id') || '').trim() || null,
+        google_analytics_dashboard_url: String(formData.get('google_analytics_dashboard_url') || '').trim() || null,
+    };
+    setFormStatus(dom.websiteAnalyticsStatus, 'Saving…');
+    try { await api.put(`/api/websites/${state.currentWebsite.id}`, payload); await loadWebsiteDetail(state.currentWebsite.id); setFormStatus(dom.websiteAnalyticsStatus, 'Google Analytics link saved.'); }
+    catch (error) { setFormStatus(dom.websiteAnalyticsStatus, getErrorMessage(error, 'Unable to save Analytics link.'), true); }
 });
 if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', async (event) => {
     event.preventDefault(); setFormStatus(dom.managedWebsiteStatus, 'Saving…');

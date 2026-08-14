@@ -15,6 +15,9 @@ class WebsiteController extends Controller
     public function index(Request $request)
     {
         $query = Website::query()->with(['customer', 'hostingServer', 'subscription', 'latestHealthCheck'])->latest();
+        $connection = $request->query('connection', 'linked');
+        if ($connection === 'unlinked') $query->whereNull('agent_last_seen_at');
+        elseif ($connection === 'linked') $query->whereNotNull('agent_last_seen_at');
         foreach (['customer_id', 'status', 'hosting_enabled', 'management_enabled'] as $filter) {
             if ($request->filled($filter)) $query->where($filter, $request->input($filter));
         }
@@ -34,6 +37,8 @@ class WebsiteController extends Controller
             'needs_attention' => (clone $base)->whereIn('status', ['attention', 'critical'])->count(),
             'offline' => (clone $base)->whereHas('latestHealthCheck', fn ($q) => $q->where('uptime_status', 'offline'))->count(),
             'updates_available' => (clone $base)->whereHas('latestHealthCheck', fn ($q) => $q->where(fn ($i) => $i->where('plugin_updates', '>', 0)->orWhere('theme_updates', '>', 0)))->count(),
+            'linked' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
+            'unlinked' => (clone $base)->whereNull('agent_last_seen_at')->count(),
         ]]);
     }
 
@@ -93,6 +98,7 @@ class WebsiteController extends Controller
             'customer_id' => [$required, 'integer', 'exists:customers,id'], 'hosting_server_id' => ['nullable', 'integer', 'exists:hosting_servers,id'], 'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
             'name' => [$required, 'string', 'max:255'], 'domain' => ['nullable', 'string', 'max:255'], 'login_url' => [$required, 'url:http,https', 'max:2048'], 'environment' => ['sometimes', Rule::in(['production', 'staging', 'development'])],
             'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'],
+            'google_analytics_property_id' => ['nullable', 'string', 'max:255'], 'google_analytics_dashboard_url' => ['nullable', 'url:http,https', 'max:2048'],
             'status' => ['sometimes', Rule::in(['unknown', 'healthy', 'attention', 'critical', 'paused'])], 'notes' => ['nullable', 'string'], 'portal_visibility' => ['sometimes', 'array'], 'portal_visibility.*' => ['boolean'], 'metadata' => ['sometimes', 'nullable', 'array'],
         ]);
     }

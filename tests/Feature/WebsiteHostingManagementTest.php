@@ -38,7 +38,17 @@ class WebsiteHostingManagementTest extends TestCase
         $admin = $this->user('admin'); $customer = $this->customer();
         $server = HostingServer::create(['name' => 'Server', 'credentials' => ['username' => 'root', 'token' => 'top-secret']]);
         $this->website($customer, ['hosting_server_id' => $server->id, 'agent_token_hash' => hash('sha256', 'agent-secret'), 'agent_token_encrypted' => 'agent-secret']);
-        $this->actingAs($admin)->getJson('/api/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'top-secret'])->assertJsonMissing(['agent_token_hash' => hash('sha256', 'agent-secret')])->assertJsonMissing(['agent_token_encrypted' => 'agent-secret']);
+        $this->actingAs($admin)->getJson('/api/websites?connection=all')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'top-secret'])->assertJsonMissing(['agent_token_hash' => hash('sha256', 'agent-secret')])->assertJsonMissing(['agent_token_encrypted' => 'agent-secret']);
+    }
+
+    public function test_main_website_list_only_contains_linked_sites_and_unlinked_has_its_own_view(): void
+    {
+        $admin = $this->user('admin'); $customer = $this->customer();
+        $linked = $this->website($customer, ['agent_last_seen_at' => now()]);
+        $unlinked = $this->website($customer, ['name' => 'Unlinked', 'domain' => 'unlinked.example.com', 'login_url' => 'https://unlinked.example.com']);
+
+        $this->actingAs($admin)->getJson('/api/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $linked->id)->assertJsonPath('data.0.agent_connected', true);
+        $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $unlinked->id)->assertJsonPath('data.0.agent_linked', false);
     }
 
     public function test_admin_can_open_a_website_with_health_incidents_and_activity(): void
@@ -57,8 +67,8 @@ class WebsiteHostingManagementTest extends TestCase
     {
         $website = $this->website($this->customer(), ['agent_token_hash' => hash('sha256', 'valid-token'), 'agent_token_encrypted' => 'valid-token']);
         $this->postJson("/api/website-agent/{$website->id}/status", [])->assertUnauthorized();
-        $this->withToken('valid-token')->postJson("/api/website-agent/{$website->id}/status", ['wordpress_version' => '6.9', 'plugin_updates' => 2])->assertAccepted();
-        $this->assertDatabaseHas('website_health_checks', ['website_id' => $website->id, 'wordpress_version' => '6.9', 'plugin_updates' => 2]);
+        $this->withToken('valid-token')->postJson("/api/website-agent/{$website->id}/status", ['wordpress_version' => '6.9', 'plugin_count' => 18, 'plugin_updates' => 2])->assertAccepted();
+        $this->assertDatabaseHas('website_health_checks', ['website_id' => $website->id, 'wordpress_version' => '6.9', 'plugin_count' => 18, 'plugin_updates' => 2]);
     }
 
     public function test_incidents_are_deduplicated_and_resolved(): void
