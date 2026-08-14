@@ -33,6 +33,8 @@ use App\Http\Controllers\TodayController;
 use App\Http\Controllers\UserPreferenceController;
 use App\Http\Controllers\WebsiteAuditController;
 use App\Http\Controllers\WebsiteController;
+use App\Http\Controllers\WebsiteAgentController;
+use App\Http\Controllers\HostingServerController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -40,6 +42,7 @@ Route::post('/auth/forgot-password', [PasswordResetController::class, 'request']
 Route::post('/auth/reset-password', [PasswordResetController::class, 'reset']);
 Route::get('brand/logo', [BrandSettingController::class, 'logo']);
 Route::get('organisation/public-settings', [OrganisationSettingController::class, 'public']);
+Route::post('website-agent/{website}/status', [WebsiteAgentController::class, 'status'])->middleware('throttle:60,1');
 
 Route::middleware('auth:sanctum')->group(function (): void {
     Route::get('/auth/me', [AuthController::class, 'me']);
@@ -101,6 +104,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('tasks/dashboard', [TaskController::class, 'dashboard']);
         Route::get('tasks/monthly', [TaskController::class, 'monthly']);
         Route::apiResource('tasks', TaskController::class);
+        Route::get('websites/summary', [WebsiteController::class, 'summary']);
+        Route::post('websites/{website}/check', [WebsiteController::class, 'check']);
+        Route::post('websites/{website}/activities', [WebsiteController::class, 'activity']);
         Route::apiResource('websites', WebsiteController::class);
         Route::get('stats/revenue', [StatsController::class, 'revenue']);
         Route::get('stats/profit-weekly', [StatsController::class, 'weeklyProfit']);
@@ -151,6 +157,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::put('admin/customer-forms', [AdminCustomerFormController::class, 'update']);
         Route::get('admin/organisation-settings', [OrganisationSettingController::class, 'show']);
         Route::put('admin/organisation-settings', [OrganisationSettingController::class, 'update']);
+        Route::post('websites/{website}/regenerate-agent-token', [WebsiteController::class, 'regenerateToken']);
+        Route::post('hosting-servers/{hostingServer}/test', [HostingServerController::class, 'test']);
+        Route::apiResource('hosting-servers', HostingServerController::class)->except(['show']);
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {
@@ -168,6 +177,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('proposals/{proposal}/download', [PortalController::class, 'downloadProposal']);
         Route::post('support', [PortalController::class, 'support']);
         Route::get('websites', [PortalController::class, 'websites']);
+        Route::get('websites/{website}', [PortalController::class, 'website']);
         Route::get('forms', [PortalController::class, 'forms']);
         Route::get('forms/{customerFormRequest}', [PortalController::class, 'form']);
         Route::post('forms/{customerFormRequest}/submit', [PortalController::class, 'submitForm']);

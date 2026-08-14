@@ -66,6 +66,17 @@ class HttpWebsiteClient
         }
     }
 
+    public function fetchJson(string $url, string $bearerToken): array
+    {
+        $this->guard->assertSafe($url);
+        $response = Http::withToken($bearerToken)->acceptJson()
+            ->timeout((int) config('website-audits.timeout_seconds', 15))
+            ->connectTimeout((int) config('website-audits.connect_timeout_seconds', 5))
+            ->withOptions(['allow_redirects' => false, 'verify' => true])->get($url);
+        if (!$response->successful()) throw new RuntimeException('The authenticated website agent did not return a successful response.');
+        return $response->json() ?: [];
+    }
+
     private function request(string $method, string $url): Response
     {
         return Http::withHeaders(['User-Agent' => config('website-audits.user_agent')])

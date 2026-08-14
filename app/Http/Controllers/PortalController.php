@@ -6,7 +6,7 @@ use App\Http\Resources\InvoiceResource;
 use App\Http\Resources\JobResource;
 use App\Http\Resources\ProposalResource;
 use App\Http\Resources\SubscriptionResource;
-use App\Http\Resources\WebsiteResource;
+use App\Http\Resources\PortalWebsiteResource;
 use App\Jobs\SendProposalAcceptedNotification;
 use App\Models\Customer;
 use App\Models\CustomerFormRequest;
@@ -135,14 +135,20 @@ class PortalController extends Controller
         $customerIds = $this->resolveCustomerIds($request);
 
         $query = Website::query()
-            ->whereIn('customer_id', $customerIds)
+            ->whereIn('customer_id', $customerIds)->with(['latestHealthCheck', 'healthChecks' => fn ($q) => $q->where('checked_at', '>=', now()->subDays(30)), 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)])
             ->latest();
 
         $perPage = $request->integer('per_page', 25);
 
-        return WebsiteResource::collection(
+        return PortalWebsiteResource::collection(
             $query->paginate($perPage)
         );
+    }
+
+    public function website(Request $request, Website $website)
+    {
+        if (!in_array((int) $website->customer_id, $this->resolveCustomerIds($request), true)) abort(404);
+        return new PortalWebsiteResource($website->load(['latestHealthCheck', 'healthChecks' => fn ($q) => $q->where('checked_at', '>=', now()->subDays(30)), 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)]));
     }
 
     public function forms(Request $request)

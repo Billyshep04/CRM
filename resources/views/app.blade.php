@@ -108,6 +108,7 @@
                     <a href="#" class="nav-item staff-only" data-view="lead-discovery">Lead Discovery</a>
                     <a href="#" class="nav-item staff-only" data-view="revenue-opportunities">Revenue Opportunities</a>
                     <a href="#" class="nav-item staff-only" data-view="jobs">Jobs</a>
+                    <a href="#" class="nav-item staff-only" data-view="websites">Websites</a>
                     <a href="#" class="nav-item staff-only" data-view="subscriptions">Subscriptions</a>
                     <a href="#" class="nav-item staff-only" data-view="costs">Costs</a>
                     <a href="#" class="nav-item staff-only" data-view="proposals">Proposals</a>
@@ -118,6 +119,7 @@
                     <a href="#" class="nav-item admin-only" data-view="staff-tracking">Staff</a>
                     <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
                     <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-websites">Websites</a>
                     <a href="#" class="nav-item customer-only" data-view="portal-proposals" id="portal-proposals-nav">
                         Proposals
                         <span class="portal-forms-notification" id="portal-proposals-notification" aria-hidden="true" hidden></span>
@@ -486,6 +488,29 @@
                                     </label>
                                 </div>
                             </div>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view" data-view="websites">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header"><div><div class="card-title">Website hosting &amp; management</div><div class="card-subtitle">Monitor availability, maintenance, SSL, backups and hosting in one place.</div></div><button class="btn btn-outline" id="websites-refresh" type="button">Refresh</button></div>
+                            <div class="stats-grid" id="website-summary"><div class="stat-card"><span>Total</span><strong>—</strong></div><div class="stat-card"><span>Healthy</span><strong>—</strong></div><div class="stat-card"><span>Needs attention</span><strong>—</strong></div><div class="stat-card"><span>Offline</span><strong>—</strong></div></div>
+                            <div class="filters"><label class="field"><span>Search</span><input id="websites-search" placeholder="Name or domain"></label><label class="field"><span>Status</span><select id="websites-status"><option value="">All statuses</option><option>healthy</option><option>attention</option><option>critical</option><option>unknown</option><option>paused</option></select></label></div>
+                            <div class="stack" id="websites-list"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div>
+                        </div>
+                        <div class="card">
+                            <div class="card-header"><div><div class="card-title">Add website</div><div class="card-subtitle">A secure agent token is shown once after saving.</div></div></div>
+                            <form id="managed-website-form" class="form-stack">
+                                <label class="field"><span>Customer</span><select name="customer_id" id="managed-website-customer" required><option value="">Select customer</option></select></label>
+                                <label class="field"><span>Website name</span><input name="name" required></label>
+                                <label class="field"><span>Public URL</span><input name="login_url" type="url" placeholder="https://example.com" required></label>
+                                <label class="field"><span>Environment</span><select name="environment"><option>production</option><option>staging</option><option>development</option></select></label>
+                                <label class="check-row"><input name="wordpress_enabled" type="checkbox"><span>WordPress site</span></label><label class="check-row"><input name="management_enabled" type="checkbox" checked><span>Managed by us</span></label><label class="check-row"><input name="hosting_enabled" type="checkbox"><span>Hosted by us</span></label>
+                                <label class="field"><span>Internal notes</span><textarea name="notes" rows="3"></textarea></label>
+                                <div class="form-hint" id="managed-website-status"></div><button class="btn btn-primary" type="submit">Save website</button>
+                            </form>
                         </div>
                     </section>
                 </section>
@@ -1891,6 +1916,10 @@
                             </div>
                         </div>
                     </section>
+                </section>
+
+                <section class="view portal-view" data-view="portal-websites">
+                    <section class="content-grid"><div class="card wide"><div class="card-header"><div><div class="card-title">Your websites</div><div class="card-subtitle">Current availability, maintenance and service information.</div></div><button class="btn btn-outline" id="portal-websites-refresh" type="button">Refresh</button></div><div class="stack" id="portal-websites-detail"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div></div></section>
                 </section>
 
                 <section class="view portal-view" data-view="portal-proposals">

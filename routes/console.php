@@ -24,3 +24,6 @@ Schedule::command('follow-ups:process')
     ->timezone('Europe/London')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('websites:monitor --type=http')->everyTenMinutes()->withoutOverlapping()->onOneServer();
+Schedule::command('websites:monitor --type=full')->everyFourHours()->withoutOverlapping()->onOneServer();
