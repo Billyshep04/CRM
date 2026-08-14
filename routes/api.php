@@ -35,6 +35,8 @@ use App\Http\Controllers\WebsiteAuditController;
 use App\Http\Controllers\WebsiteController;
 use App\Http\Controllers\WebsiteAgentController;
 use App\Http\Controllers\HostingServerController;
+use App\Http\Controllers\HostingAccountController;
+use App\Http\Controllers\WebsiteProvisioningController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -160,6 +162,14 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('websites/{website}/regenerate-agent-token', [WebsiteController::class, 'regenerateToken']);
         Route::post('hosting-servers/{hostingServer}/test', [HostingServerController::class, 'test']);
         Route::apiResource('hosting-servers', HostingServerController::class)->except(['show']);
+        Route::get('hosting-accounts', [HostingAccountController::class, 'index'])->middleware('permission:hosting_view');
+        Route::put('hosting-accounts/{hostingAccount}', [HostingAccountController::class, 'update'])->middleware('permission:hosting_manage');
+        Route::post('hosting-servers/{hostingServer}/sync', [HostingAccountController::class, 'sync'])->middleware('permission:hosting_manage');
+        Route::post('hosting-accounts/{hostingAccount}/session', [HostingAccountController::class, 'session'])->middleware('permission:hosting_manage');
+        Route::get('website-provisioning/options', [WebsiteProvisioningController::class, 'options'])->middleware('permission:hosting_view');
+        Route::post('website-provisioning', [WebsiteProvisioningController::class, 'store'])->middleware('permission:hosting_provision');
+        Route::get('website-provisioning/{websiteProvisioningRun}', [WebsiteProvisioningController::class, 'show'])->middleware('permission:hosting_view');
+        Route::post('website-provisioning/{websiteProvisioningRun}/retry', [WebsiteProvisioningController::class, 'retry'])->middleware('permission:hosting_provision');
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {

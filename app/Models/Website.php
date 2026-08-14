@@ -20,6 +20,7 @@ class Website extends Model
     protected $fillable = [
         'customer_id',
         'hosting_server_id',
+        'hosting_account_id',
         'subscription_id',
         'name',
         'domain',
@@ -32,6 +33,7 @@ class Website extends Model
         'management_enabled',
         'hosting_enabled',
         'status',
+        'provisioning_status',
         'agent_token_hash',
         'agent_token_encrypted',
         'agent_last_seen_at',
@@ -61,11 +63,13 @@ class Website extends Model
     }
 
     public function hostingServer(): BelongsTo { return $this->belongsTo(HostingServer::class); }
+    public function hostingAccount(): BelongsTo { return $this->belongsTo(HostingAccount::class); }
     public function subscription(): BelongsTo { return $this->belongsTo(Subscription::class); }
     public function healthChecks(): HasMany { return $this->hasMany(WebsiteHealthCheck::class)->latest('checked_at'); }
     public function incidents(): HasMany { return $this->hasMany(WebsiteIncident::class)->latest('opened_at'); }
     public function activities(): HasMany { return $this->hasMany(WebsiteActivity::class)->latest('performed_at'); }
     public function latestHealthCheck(): HasOne { return $this->hasOne(WebsiteHealthCheck::class)->latestOfMany('checked_at'); }
+    public function provisioningRuns(): HasMany { return $this->hasMany(WebsiteProvisioningRun::class)->latest(); }
 
     public static function defaultPortalVisibility(): array
     {

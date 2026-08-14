@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
     {
         $this->call(RolePermissionSeeder::class);
         $this->call(LeadScoringProfileSeeder::class);
+        $this->call(WordpressProfileSeeder::class);
 
         $adminRole = Role::query()->where('slug', 'admin')->first();
         $staffRole = Role::query()->where('slug', 'staff')->first();

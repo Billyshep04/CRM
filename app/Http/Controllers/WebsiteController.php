@@ -14,7 +14,7 @@ class WebsiteController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Website::query()->with(['customer', 'hostingServer', 'subscription', 'latestHealthCheck'])->latest();
+        $query = Website::query()->with(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck'])->latest();
         $connection = $request->query('connection', 'linked');
         if ($connection === 'unlinked') $query->whereNull('agent_last_seen_at');
         elseif ($connection === 'linked') $query->whereNotNull('agent_last_seen_at');
@@ -53,7 +53,7 @@ class WebsiteController extends Controller
 
     public function show(Website $website)
     {
-        return new WebsiteResource($website->load(['customer', 'hostingServer', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100)]));
+        return new WebsiteResource($website->load(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100), 'provisioningRuns.steps']));
     }
 
     public function update(Request $request, Website $website)
@@ -95,7 +95,7 @@ class WebsiteController extends Controller
     {
         $required = $sometimes ? 'sometimes' : 'required';
         return $request->validate([
-            'customer_id' => [$required, 'integer', 'exists:customers,id'], 'hosting_server_id' => ['nullable', 'integer', 'exists:hosting_servers,id'], 'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
+            'customer_id' => [$required, 'integer', 'exists:customers,id'], 'hosting_server_id' => ['nullable', 'integer', 'exists:hosting_servers,id'], 'hosting_account_id' => ['nullable', 'integer', 'exists:hosting_accounts,id'], 'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
             'name' => [$required, 'string', 'max:255'], 'domain' => ['nullable', 'string', 'max:255'], 'login_url' => [$required, 'url:http,https', 'max:2048'], 'environment' => ['sometimes', Rule::in(['production', 'staging', 'development'])],
             'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'],
             'google_analytics_property_id' => ['nullable', 'string', 'max:255'], 'google_analytics_dashboard_url' => ['nullable', 'url:http,https', 'max:2048'],

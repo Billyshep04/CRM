@@ -104,6 +104,11 @@ class RolePermissionSeeder extends Seeder
                 'slug' => 'complete_customer_forms',
                 'description' => 'View and complete forms assigned through the customer portal.',
             ],
+            ['name'=>'View hosting','slug'=>'hosting_view','description'=>'View hosting accounts and status.'],
+            ['name'=>'Manage hosting','slug'=>'hosting_manage','description'=>'Configure and synchronise hosting.'],
+            ['name'=>'Provision hosting','slug'=>'hosting_provision','description'=>'Create hosting accounts and websites.'],
+            ['name'=>'Manage hosting credentials','slug'=>'hosting_credentials','description'=>'Manage encrypted hosting provider credentials.'],
+            ['name'=>'Terminate hosting','slug'=>'hosting_terminate','description'=>'Reserved for explicitly authorised termination workflows.'],
         ];
 
         foreach ($permissions as $permissionData) {

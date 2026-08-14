@@ -5,6 +5,7 @@ namespace App\Services\Hosting;
 use App\Contracts\HostingProviderInterface;
 use App\Models\HostingServer;
 use App\Models\Website;
+use App\Models\HostingAccount;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -29,4 +30,8 @@ class CpanelHostingProvider implements HostingProviderInterface
         if (!$response->successful()) throw new RuntimeException('Unable to read cPanel resource usage.');
         return ['hosting_status' => 'active', 'provider_payload' => $response->json('data')];
     }
+    public function accounts(HostingServer $server): array { return []; }
+    public function packages(HostingServer $server): array { return []; }
+    public function createAccount(HostingServer $server, array $data): array { throw new RuntimeException('Account creation requires a WHM provider.'); }
+    public function cpanelSession(HostingServer $server, HostingAccount $account): ?string { return null; }
 }

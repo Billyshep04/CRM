@@ -10,4 +10,5 @@ deployment:
     - php $DEPLOYPATH/artisan migrate --force
     - php $DEPLOYPATH/artisan db:seed --class=RolePermissionSeeder --force
     - php $DEPLOYPATH/artisan db:seed --class=LeadScoringProfileSeeder --force
+    - php $DEPLOYPATH/artisan db:seed --class=WordpressProfileSeeder --force
     - php $DEPLOYPATH/artisan queue:restart || true

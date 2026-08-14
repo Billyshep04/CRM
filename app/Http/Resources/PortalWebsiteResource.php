@@ -17,6 +17,7 @@ class PortalWebsiteResource extends JsonResource
         return array_filter([
             'id' => $this->id, 'name' => $this->name, 'domain' => $this->domain, 'public_url' => $this->login_url, 'login_url' => $this->login_url,
             'status' => $visibility['status'] ? $this->status : null, 'last_monitored_at' => $this->last_checked_at,
+            'project_status' => $this->provisioning_status ? match ($this->provisioning_status) { 'complete' => 'Ready', 'failed' => 'Needs attention', default => 'In development' } : null,
             'availability' => $visibility['status'] ? ($check?->uptime_status === 'online' ? 'Online' : ($check?->uptime_status === 'offline' ? 'Offline' : 'Not checked')) : null,
             'uptime_percent' => $visibility['uptime'] ? $uptime : null,
             'ssl' => $visibility['ssl'] ? ['status' => $check?->ssl_status, 'expires_at' => $check?->ssl_expires_at] : null,

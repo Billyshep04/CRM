@@ -11,4 +11,6 @@ class HostingServer extends Model
     protected $hidden = ['credentials'];
     protected $casts = ['credentials' => 'encrypted:array', 'metadata' => 'array'];
     public function websites(): HasMany { return $this->hasMany(Website::class); }
+    public function accounts(): HasMany { return $this->hasMany(HostingAccount::class); }
+    public function packages(): HasMany { return $this->hasMany(HostingPackage::class); }
 }

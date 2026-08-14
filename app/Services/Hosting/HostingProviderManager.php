@@ -10,7 +10,8 @@ class HostingProviderManager
     public function for(HostingServer $server): HostingProviderInterface
     {
         return match ($server->api_type) {
-            'cpanel', 'whm' => app(CpanelHostingProvider::class),
+            'whm' => app(KrystalWhmProvider::class),
+            'cpanel' => app(CpanelHostingProvider::class),
             default => app(MockHostingProvider::class),
         };
     }

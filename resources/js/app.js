@@ -221,6 +221,14 @@ const dom = {
     managedWebsiteForm: document.getElementById('managed-website-form'),
     managedWebsiteCustomer: document.getElementById('managed-website-customer'),
     managedWebsiteStatus: document.getElementById('managed-website-status'),
+    managedWebsiteServer: document.getElementById('managed-website-server'),
+    managedWebsitePackage: document.getElementById('managed-website-package'),
+    managedWebsiteProfile: document.getElementById('managed-website-profile'),
+    hostingServerForm: document.getElementById('hosting-server-form'),
+    hostingServerStatus: document.getElementById('hosting-server-status'),
+    hostingTest: document.getElementById('hosting-test'),
+    hostingSync: document.getElementById('hosting-sync'),
+    hostingAccountsList: document.getElementById('hosting-accounts-list'),
     websiteDetailTitle: document.getElementById('website-detail-title'),
     websiteDetailDomain: document.getElementById('website-detail-domain'),
     websiteDetailSummary: document.getElementById('website-detail-summary'),
@@ -230,6 +238,7 @@ const dom = {
     websiteDetailActivities: document.getElementById('website-detail-activities'),
     websiteDetailCheck: document.getElementById('website-detail-check'),
     websiteDetailBack: document.getElementById('website-detail-back'),
+    websiteDetailProvisioning: document.getElementById('website-detail-provisioning'),
     websiteAnalyticsForm: document.getElementById('website-analytics-form'),
     websiteAnalyticsStatus: document.getElementById('website-analytics-status'),
     websiteAnalyticsOpen: document.getElementById('website-analytics-open'),
@@ -465,6 +474,7 @@ const state = {
     currentWebsite: null,
     websiteDetailReturnView: 'websites',
     showingUnlinkedWebsites: false,
+    hostingOptions: { servers: [], profiles: [], mode: 'mock', live_enabled: false },
     currentLead: null,
     filters: {
         customers: {
@@ -754,7 +764,7 @@ function setActiveView(view) {
     if (view === 'jobs') {
         ensureCustomersLoaded().then(loadJobs);
     }
-    if (view === 'websites') ensureCustomersLoaded().then(loadManagedWebsites);
+    if (view === 'websites') ensureCustomersLoaded().then(() => Promise.all([loadManagedWebsites(), loadHostingOptions()]));
     if (view === 'website-detail' && state.currentWebsite?.id) loadWebsiteDetail(state.currentWebsite.id);
     if (view === 'revenue-opportunities') {
         ensureCustomersLoaded().then(() => {
@@ -2097,7 +2107,7 @@ function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.textContent = site.domain || site.public_url || '';
     if (dom.portalWebsiteVisit) dom.portalWebsiteVisit.href = site.public_url || site.login_url || '#';
     if (dom.portalWebsiteDetailSummary) dom.portalWebsiteDetailSummary.innerHTML = [
-        ['Status', site.status || 'Not available'], ['Availability', site.availability || 'Not checked'], ['30-day uptime', site.uptime_percent === undefined ? 'Not available' : `${site.uptime_percent}%`], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Not checked'],
+        ['Status', site.status || 'Not available'], ['Project', site.project_status || 'Active'], ['Availability', site.availability || 'Not checked'], ['30-day uptime', site.uptime_percent === undefined ? 'Not available' : `${site.uptime_percent}%`], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Not checked'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     const care = [];
     if (site.ssl) care.push(['SSL certificate', site.ssl.status || 'unknown', site.ssl.expires_at ? `Expires ${formatDate(site.ssl.expires_at)}` : 'Expiry unavailable']);
@@ -2153,6 +2163,28 @@ async function loadManagedWebsites() {
     } catch (error) { dom.websitesList.innerHTML = '<div class="site-card"><div><div class="site-name">Unable to load websites.</div></div></div>'; }
 }
 
+function populateHostingPackageOptions() {
+    if (!dom.managedWebsitePackage) return;
+    const server = state.hostingOptions.servers.find((item) => Number(item.id) === Number(dom.managedWebsiteServer?.value));
+    dom.managedWebsitePackage.innerHTML = '<option value="">Select package</option>' + (server?.packages || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+}
+
+async function loadHostingOptions() {
+    if (state.role !== 'admin') return;
+    try {
+        const [optionsResponse, accountsResponse, websitesResponse] = await Promise.all([api.get('/api/website-provisioning/options'), api.get('/api/hosting-accounts'), api.get('/api/websites?connection=all&per_page=100')]);
+        state.hostingOptions = optionsResponse?.data?.data || state.hostingOptions;
+        const servers = state.hostingOptions.servers || [];
+        if (dom.managedWebsiteServer) dom.managedWebsiteServer.innerHTML = '<option value="">No hosting provisioning</option>' + servers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+        if (dom.managedWebsiteProfile) dom.managedWebsiteProfile.innerHTML = '<option value="">No profile</option>' + (state.hostingOptions.profiles || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+        const server = servers[0];
+        if (server && dom.hostingServerForm) { dom.hostingServerForm.elements.id.value = server.id; dom.hostingServerForm.elements.name.value = server.name || 'Krystal Trinity'; dom.hostingServerForm.elements.hostname.value = server.hostname || ''; dom.hostingServerForm.elements.username.value = server.credential_username || ''; }
+        if (dom.hostingServerStatus) dom.hostingServerStatus.textContent = `Provisioning mode: ${state.hostingOptions.mode}. Live provisioning: ${state.hostingOptions.live_enabled ? 'enabled' : 'disabled'}.`;
+        if (dom.hostingAccountsList) { const accounts=accountsResponse?.data?.data||[]; const sites=websitesResponse?.data?.data||[]; const customerOptions=(state.customerOptions||state.customers||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); const siteOptions=sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(s.domain||'')}</option>`).join(''); dom.hostingAccountsList.innerHTML=accounts.length?accounts.map(a=>`<div class="site-card"><div><div class="site-name">${escapeHtml(a.username)} · ${escapeHtml(a.primary_domain||'No primary domain')}</div><div class="site-url">${escapeHtml(a.customer?.name||'Unassigned')} · ${escapeHtml(a.package_name||'Package unavailable')} · ${escapeHtml(a.status||'unknown')}</div><div class="form-actions"><select data-hosting-customer="${a.id}"><option value="">Unassigned customer</option>${customerOptions}</select><select data-hosting-website="${a.id}"><option value="">No website</option>${siteOptions}</select><button class="btn btn-primary btn-small" data-map-hosting="${a.id}">Save mapping</button><button class="btn btn-outline btn-small" data-open-cpanel="${a.id}">Open cPanel</button></div></div></div>`).join(''):'<div class="table-empty">No hosting accounts synced yet.</div>'; accounts.forEach(a=>{const c=dom.hostingAccountsList.querySelector(`[data-hosting-customer="${a.id}"]`);if(c)c.value=a.customer_id||'';const w=dom.hostingAccountsList.querySelector(`[data-hosting-website="${a.id}"]`);if(w&&a.websites?.[0])w.value=a.websites[0].id;}); }
+        populateHostingPackageOptions();
+    } catch (error) { if(dom.hostingServerStatus)setFormStatus(dom.hostingServerStatus,getErrorMessage(error,'Unable to load hosting settings.'),true); }
+}
+
 function openWebsiteDetail(websiteId, returnView = 'websites') {
     state.currentWebsite = { id: Number(websiteId) };
     state.websiteDetailReturnView = returnView;
@@ -2175,6 +2207,8 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailIncidents) dom.websiteDetailIncidents.innerHTML = incidents.length ? incidents.map((incident) => `<div class="site-card"><div><div class="site-name">${escapeHtml(incident.title)}</div><div class="site-url">${escapeHtml(incident.message || '')} · ${incident.resolved_at ? 'Resolved' : 'Open'}</div></div></div>`).join('') : '<div class="table-empty">No incidents recorded.</div>';
     const activities = site.activities || [];
     if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
+    const runs = site.provisioning_runs || [];
+    if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => `<div class="site-card"><div><div class="site-name">${escapeHtml(run.state)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div></div>`).join('') : '<div class="table-empty">No provisioning history.</div>';
     if (dom.websiteAnalyticsForm) {
         dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
         dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
@@ -7862,6 +7896,14 @@ if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.addEventListener('cli
 });
 if (dom.websitesSearch) dom.websitesSearch.addEventListener('input', loadManagedWebsites);
 if (dom.websitesStatus) dom.websitesStatus.addEventListener('change', loadManagedWebsites);
+if (dom.managedWebsiteServer) dom.managedWebsiteServer.addEventListener('change', populateHostingPackageOptions);
+if (dom.hostingServerForm) dom.hostingServerForm.addEventListener('submit', async (event) => {
+    event.preventDefault(); const f=new FormData(dom.hostingServerForm); const id=f.get('id'); const payload={name:String(f.get('name')||''),provider:'krystal',server_type:'reseller',api_type:'whm',hostname:String(f.get('hostname')||''),credentials:{username:String(f.get('username')||''),token:String(f.get('token')||'')},status:'active'};
+    try { if(id)await api.put(`/api/hosting-servers/${id}`,payload);else await api.post('/api/hosting-servers',payload); dom.hostingServerForm.elements.token.value=''; await loadHostingOptions(); setFormStatus(dom.hostingServerStatus,'WHM connection saved securely.'); } catch(error){setFormStatus(dom.hostingServerStatus,getErrorMessage(error,'Unable to save WHM connection.'),true);}
+});
+if (dom.hostingTest) dom.hostingTest.addEventListener('click', async()=>{const id=dom.hostingServerForm?.elements.id.value;if(!id)return showToast('Save the WHM connection first.',true);try{const r=await api.post(`/api/hosting-servers/${id}/test`);showToast(r?.data?.data?.message||'Connection successful.');}catch(e){showToast(getErrorMessage(e,'WHM connection failed.'),true);}});
+if (dom.hostingSync) dom.hostingSync.addEventListener('click', async()=>{const id=dom.hostingServerForm?.elements.id.value;if(!id)return showToast('Save the WHM connection first.',true);dom.hostingSync.disabled=true;try{const r=await api.post(`/api/hosting-servers/${id}/sync`);await loadHostingOptions();showToast(`Synced ${r?.data?.data?.accounts??0} accounts and ${r?.data?.data?.packages??0} packages.`);}catch(e){showToast(getErrorMessage(e,'Hosting sync failed.'),true);}finally{dom.hostingSync.disabled=false;}});
+if (dom.hostingAccountsList) dom.hostingAccountsList.addEventListener('click',async(event)=>{const map=event.target.closest('[data-map-hosting]');if(map){const id=map.dataset.mapHosting;const customerId=dom.hostingAccountsList.querySelector(`[data-hosting-customer="${id}"]`)?.value;const websiteId=dom.hostingAccountsList.querySelector(`[data-hosting-website="${id}"]`)?.value;try{await api.put(`/api/hosting-accounts/${id}`,{customer_id:customerId?Number(customerId):null,website_id:websiteId?Number(websiteId):null});await loadHostingOptions();showToast('Hosting account mapping saved.');}catch(e){showToast(getErrorMessage(e,'Unable to save mapping.'),true);}return;}const open=event.target.closest('[data-open-cpanel]');if(open){try{const r=await api.post(`/api/hosting-accounts/${open.dataset.openCpanel}/session`);window.open(r?.data?.data?.url,'_blank','noopener');}catch(e){showToast(getErrorMessage(e,'Temporary cPanel login is unavailable.'),true);}}});
 if (dom.portalWebsitesRefresh) dom.portalWebsitesRefresh.addEventListener('click', loadPortalWebsites);
 if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click', (event) => {
     const button = event.target.closest('[data-open-portal-website]');
@@ -7929,11 +7971,21 @@ if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', as
     event.preventDefault(); setFormStatus(dom.managedWebsiteStatus, 'Saving…');
     const values = Object.fromEntries(new FormData(dom.managedWebsiteForm).entries());
     const payload = { ...values, customer_id: Number(values.customer_id), wordpress_enabled: dom.managedWebsiteForm.elements.wordpress_enabled.checked, management_enabled: dom.managedWebsiteForm.elements.management_enabled.checked, hosting_enabled: dom.managedWebsiteForm.elements.hosting_enabled.checked };
+    const submit=dom.managedWebsiteForm.querySelector('button[type="submit"]'); if(submit)submit.disabled=true;
     try {
-        const response = await api.post('/api/websites', payload); const token = response?.data?.agent_token;
+        let response;
+        if (dom.managedWebsiteForm.elements.create_cpanel_account?.checked) {
+            let domain; try { domain=new URL(values.login_url).hostname; } catch(error) { throw new Error('Enter a valid website URL.'); }
+            const server=state.hostingOptions.servers.find(item=>Number(item.id)===Number(values.hosting_server_id)); const packageItem=(server?.packages||[]).find(item=>Number(item.id)===Number(values.hosting_package_id));
+            if(!server||!packageItem)throw new Error('Select a hosting provider and package.');
+            if(!window.confirm(`Create website for ${domain}?\n\nCustomer: ${dom.managedWebsiteCustomer?.selectedOptions[0]?.textContent||''}\nHosting: ${server.name}\nPackage: ${packageItem.name}\nAction: Create cPanel account${values.website_type==='wordpress'?' and prepare WordPress':''}.`))return;
+            response=await api.post('/api/website-provisioning',{customer_id:Number(values.customer_id),name:values.name,domain,environment:values.environment,hosting_server_id:Number(values.hosting_server_id),hosting_package_id:Number(values.hosting_package_id),wordpress_profile_id:values.wordpress_profile_id?Number(values.wordpress_profile_id):null,website_type:values.website_type,options:{install_agent:true,enable_monitoring:true,initial_check:true},idempotency_key:crypto.randomUUID()});
+        } else response = await api.post('/api/websites', payload);
+        const token = response?.data?.agent_token;
         dom.managedWebsiteForm.reset(); dom.managedWebsiteForm.elements.management_enabled.checked = true;
-        setFormStatus(dom.managedWebsiteStatus, token ? `Saved. Copy this agent token now: ${token}` : 'Website saved.', 'success'); await loadManagedWebsites();
-    } catch (error) { setFormStatus(dom.managedWebsiteStatus, error?.response?.data?.message || 'Unable to save website.', 'error'); }
+        setFormStatus(dom.managedWebsiteStatus, token ? `Saved. Copy this agent token now: ${token}` : 'Website created. Open its details to review provisioning progress.', 'success'); await Promise.all([loadManagedWebsites(),loadHostingOptions()]);
+    } catch (error) { setFormStatus(dom.managedWebsiteStatus, getErrorMessage(error,error?.message||'Unable to save website.'), true); }
+    finally { if(submit)submit.disabled=false; }
 });
 
 if (invoiceTables.portal) {

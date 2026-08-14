@@ -1,0 +1,4 @@
+<?php
+namespace Database\Seeders;
+use App\Models\WordpressProfile; use Illuminate\Database\Seeder;
+class WordpressProfileSeeder extends Seeder { public function run():void { foreach([['Web Stamp Standard','web-stamp-standard',['plugins'=>['webstamp-site-agent'],'permalink'=>'/%postname%/','timezone'=>'Europe/London']],['Web Stamp Bricks','web-stamp-bricks',['plugins'=>['webstamp-site-agent','seo','cache'],'theme'=>'bricks','child_theme'=>true,'permalink'=>'/%postname%/','timezone'=>'Europe/London']],['Web Stamp WooCommerce','web-stamp-woocommerce',['plugins'=>['webstamp-site-agent','woocommerce','seo','cache'],'woocommerce'=>true,'permalink'=>'/%postname%/','timezone'=>'Europe/London']]]as[$name,$slug,$config])WordpressProfile::updateOrCreate(['slug'=>$slug],['name'=>$name,'configuration'=>$config,'active'=>true]); } }
