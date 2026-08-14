@@ -210,6 +210,11 @@ const dom = {
     websitesRefresh: document.getElementById('websites-refresh'),
     websitesUnlinkedToggle: document.getElementById('websites-unlinked-toggle'),
     websitesListSubtitle: document.getElementById('websites-list-subtitle'),
+    websiteAgentTokenPanel: document.getElementById('website-agent-token-panel'),
+    websiteAgentTokenSite: document.getElementById('website-agent-token-site'),
+    websiteAgentTokenValue: document.getElementById('website-agent-token-value'),
+    websiteAgentTokenCopy: document.getElementById('website-agent-token-copy'),
+    websiteAgentTokenClose: document.getElementById('website-agent-token-close'),
     websitesSearch: document.getElementById('websites-search'),
     websitesStatus: document.getElementById('websites-status'),
     websiteSummary: document.getElementById('website-summary'),
@@ -2134,7 +2139,8 @@ async function loadManagedWebsites() {
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
             const connection = site.agent_linked ? `<span class="connection-state"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Connected' : 'Disconnected'}</span>` : '<span>Not linked</span>';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · ${connection}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
+            const tokenAction = state.showingUnlinkedWebsites && state.role === 'admin' ? `<button class="btn btn-primary btn-small" data-get-agent-token="${site.id}" data-site-name="${escapeHtml(site.name)}">Get connection token</button>` : '';
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · ${connection}</div></div><div class="form-actions">${tokenAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
             dom.websitesList.appendChild(card);
         });
         if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Back to linked' : `Unlinked (${summary.unlinked ?? 0})`;
@@ -7865,12 +7871,39 @@ if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click',
 });
 if (dom.portalWebsiteDetailBack) dom.portalWebsiteDetailBack.addEventListener('click', () => setActiveView('portal-websites'));
 if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) => {
+    const tokenButton = event.target.closest('[data-get-agent-token]');
+    if (tokenButton) {
+        if (!window.confirm('Generate a new connection token? Any previous token for this website will stop working.')) return;
+        tokenButton.disabled = true;
+        try {
+            const response = await api.post(`/api/websites/${tokenButton.dataset.getAgentToken}/regenerate-agent-token`);
+            const token = response?.data?.data?.agent_token || '';
+            if (dom.websiteAgentTokenValue) dom.websiteAgentTokenValue.value = token;
+            if (dom.websiteAgentTokenSite) dom.websiteAgentTokenSite.textContent = `${tokenButton.dataset.siteName || 'Website'} — copy this into WordPress → Settings → WebStamp Agent.`;
+            if (dom.websiteAgentTokenPanel) dom.websiteAgentTokenPanel.hidden = false;
+            dom.websiteAgentTokenValue?.focus(); dom.websiteAgentTokenValue?.select();
+            showToast('New connection token generated.');
+        } catch (error) { showToast(getErrorMessage(error, 'Unable to generate a connection token.'), true); }
+        finally { tokenButton.disabled = false; }
+        return;
+    }
     const openButton = event.target.closest('[data-open-website]');
     if (openButton) { openWebsiteDetail(openButton.dataset.openWebsite, 'websites'); return; }
     const button = event.target.closest('[data-check-website]'); if (!button) return;
     button.disabled = true; button.textContent = 'Checking…';
     try { await api.post(`/api/websites/${button.dataset.checkWebsite}/check`); await loadManagedWebsites(); showToast('Website check completed.'); }
     catch (error) { button.disabled = false; button.textContent = 'Check now'; showToast(error?.response?.data?.message || 'Website check failed.', 'error'); }
+});
+if (dom.websiteAgentTokenCopy) dom.websiteAgentTokenCopy.addEventListener('click', async () => {
+    const token = dom.websiteAgentTokenValue?.value || '';
+    if (!token) return;
+    try { await navigator.clipboard.writeText(token); }
+    catch (error) { dom.websiteAgentTokenValue.focus(); dom.websiteAgentTokenValue.select(); document.execCommand('copy'); }
+    showToast('Connection token copied.');
+});
+if (dom.websiteAgentTokenClose) dom.websiteAgentTokenClose.addEventListener('click', () => {
+    if (dom.websiteAgentTokenValue) dom.websiteAgentTokenValue.value = '';
+    if (dom.websiteAgentTokenPanel) dom.websiteAgentTokenPanel.hidden = true;
 });
 if (dom.websiteDetailBack) dom.websiteDetailBack.addEventListener('click', () => setActiveView(state.websiteDetailReturnView || 'websites'));
 if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', async () => {

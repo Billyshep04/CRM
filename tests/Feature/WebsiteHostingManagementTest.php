@@ -71,6 +71,20 @@ class WebsiteHostingManagementTest extends TestCase
         $this->assertDatabaseHas('website_health_checks', ['website_id' => $website->id, 'wordpress_version' => '6.9', 'plugin_count' => 18, 'plugin_updates' => 2]);
     }
 
+    public function test_admin_can_generate_a_one_time_connection_token_for_an_unlinked_site(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), ['agent_token_hash' => hash('sha256', 'old-token'), 'agent_token_encrypted' => 'old-token']);
+
+        $token = $this->actingAs($admin)->postJson("/api/websites/{$website->id}/regenerate-agent-token")
+            ->assertOk()->assertJsonStructure(['data' => ['agent_token']])->json('data.agent_token');
+
+        $this->assertNotSame('old-token', $token);
+        $this->assertSame(hash('sha256', $token), $website->fresh()->agent_token_hash);
+        $this->withToken('old-token')->postJson("/api/website-agent/{$website->id}/status", [])->assertUnauthorized();
+        $this->withToken($token)->postJson("/api/website-agent/{$website->id}/status", [])->assertAccepted();
+    }
+
     public function test_incidents_are_deduplicated_and_resolved(): void
     {
         $website = $this->website($this->customer()); $manager = app(WebsiteIncidentManager::class);
