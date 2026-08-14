@@ -515,6 +515,19 @@
                     </section>
                 </section>
 
+                <section class="view staff-view" data-view="website-detail">
+                    <section class="content-grid">
+                        <div class="card wide">
+                            <div class="card-header"><div><div class="card-title" id="website-detail-title">Website</div><div class="card-subtitle" id="website-detail-domain">Loading details…</div></div><div class="card-header-actions"><button class="btn btn-outline" id="website-detail-check" type="button">Check now</button><button class="btn btn-outline" id="website-detail-back" type="button">Back</button></div></div>
+                            <div class="stats-grid" id="website-detail-summary"></div>
+                        </div>
+                        <div class="card wide"><div class="card-header"><div><div class="card-title">Overview</div><div class="card-subtitle">Ownership, service and connection information.</div></div></div><div class="detail-grid" id="website-detail-overview"></div></div>
+                        <div class="card wide"><div class="card-header"><div><div class="card-title">Health history</div><div class="card-subtitle">Latest monitoring results and response times.</div></div></div><div class="stack" id="website-detail-health"></div></div>
+                        <div class="card"><div class="card-header"><div><div class="card-title">Incidents</div><div class="card-subtitle">Current and resolved warnings.</div></div></div><div class="stack" id="website-detail-incidents"></div></div>
+                        <div class="card"><div class="card-header"><div><div class="card-title">Activity</div><div class="card-subtitle">Maintenance and website changes.</div></div></div><div class="stack" id="website-detail-activities"></div></div>
+                    </section>
+                </section>
+
                 <section class="view staff-view" data-view="customers">
                     <section class="content-grid">
                         <div class="card wide">
@@ -1920,6 +1933,14 @@
 
                 <section class="view portal-view" data-view="portal-websites">
                     <section class="content-grid"><div class="card wide"><div class="card-header"><div><div class="card-title">Your websites</div><div class="card-subtitle">Current availability, maintenance and service information.</div></div><button class="btn btn-outline" id="portal-websites-refresh" type="button">Refresh</button></div><div class="stack" id="portal-websites-detail"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div></div></section>
+                </section>
+
+                <section class="view portal-view" data-view="portal-website-detail">
+                    <section class="content-grid">
+                        <div class="card wide"><div class="card-header"><div><div class="card-title" id="portal-website-detail-title">Website</div><div class="card-subtitle" id="portal-website-detail-domain">Loading details…</div></div><div class="card-header-actions"><a class="btn btn-primary" id="portal-website-visit" href="#" target="_blank" rel="noopener">Visit website</a><button class="btn btn-outline" id="portal-website-detail-back" type="button">Back</button></div></div><div class="stats-grid" id="portal-website-detail-summary"></div></div>
+                        <div class="card wide"><div class="card-header"><div><div class="card-title">Website care</div><div class="card-subtitle">Availability, security, backups, performance and maintenance.</div></div></div><div class="detail-grid" id="portal-website-detail-care"></div></div>
+                        <div class="card wide"><div class="card-header"><div><div class="card-title">Recent work</div><div class="card-subtitle">Customer-visible maintenance and website activity.</div></div></div><div class="stack" id="portal-website-detail-activities"></div></div>
+                    </section>
                 </section>
 
                 <section class="view portal-view" data-view="portal-proposals">

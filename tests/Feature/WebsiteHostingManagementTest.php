@@ -29,6 +29,7 @@ class WebsiteHostingManagementTest extends TestCase
         WebsiteHealthCheck::create(['website_id' => $mine->id, 'checked_at' => now(), 'uptime_status' => 'online', 'ssl_status' => 'valid', 'wordpress_version' => '6.9', 'overall_status' => 'healthy']);
 
         $this->actingAs($portal)->getJson('/api/portal/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine->id)->assertJsonMissing(['wordpress_version' => '6.9']);
+        $this->actingAs($portal)->getJson("/api/portal/websites/{$mine->id}")->assertOk()->assertJsonPath('data.id', $mine->id)->assertJsonPath('data.availability', 'Online');
         $this->actingAs($portal)->getJson("/api/portal/websites/{$theirs->id}")->assertNotFound();
     }
 
@@ -38,6 +39,18 @@ class WebsiteHostingManagementTest extends TestCase
         $server = HostingServer::create(['name' => 'Server', 'credentials' => ['username' => 'root', 'token' => 'top-secret']]);
         $this->website($customer, ['hosting_server_id' => $server->id, 'agent_token_hash' => hash('sha256', 'agent-secret'), 'agent_token_encrypted' => 'agent-secret']);
         $this->actingAs($admin)->getJson('/api/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'top-secret'])->assertJsonMissing(['agent_token_hash' => hash('sha256', 'agent-secret')])->assertJsonMissing(['agent_token_encrypted' => 'agent-secret']);
+    }
+
+    public function test_admin_can_open_a_website_with_health_incidents_and_activity(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer());
+        WebsiteHealthCheck::create(['website_id' => $website->id, 'checked_at' => now(), 'uptime_status' => 'online', 'overall_status' => 'healthy']);
+        app(WebsiteIncidentManager::class)->sync($website, 'ssl', true, 'warning', 'SSL warning', 'Certificate needs attention.');
+
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}")
+            ->assertOk()->assertJsonPath('data.id', $website->id)
+            ->assertJsonCount(1, 'data.health_checks')->assertJsonCount(1, 'data.incidents');
     }
 
     public function test_agent_rejects_bad_token_and_accepts_valid_status(): void

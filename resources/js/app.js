@@ -199,6 +199,13 @@ const dom = {
     portalWebsites: document.getElementById('portal-websites'),
     portalWebsitesDetail: document.getElementById('portal-websites-detail'),
     portalWebsitesRefresh: document.getElementById('portal-websites-refresh'),
+    portalWebsiteDetailTitle: document.getElementById('portal-website-detail-title'),
+    portalWebsiteDetailDomain: document.getElementById('portal-website-detail-domain'),
+    portalWebsiteDetailSummary: document.getElementById('portal-website-detail-summary'),
+    portalWebsiteDetailCare: document.getElementById('portal-website-detail-care'),
+    portalWebsiteDetailActivities: document.getElementById('portal-website-detail-activities'),
+    portalWebsiteDetailBack: document.getElementById('portal-website-detail-back'),
+    portalWebsiteVisit: document.getElementById('portal-website-visit'),
     websitesList: document.getElementById('websites-list'),
     websitesRefresh: document.getElementById('websites-refresh'),
     websitesSearch: document.getElementById('websites-search'),
@@ -207,6 +214,15 @@ const dom = {
     managedWebsiteForm: document.getElementById('managed-website-form'),
     managedWebsiteCustomer: document.getElementById('managed-website-customer'),
     managedWebsiteStatus: document.getElementById('managed-website-status'),
+    websiteDetailTitle: document.getElementById('website-detail-title'),
+    websiteDetailDomain: document.getElementById('website-detail-domain'),
+    websiteDetailSummary: document.getElementById('website-detail-summary'),
+    websiteDetailOverview: document.getElementById('website-detail-overview'),
+    websiteDetailHealth: document.getElementById('website-detail-health'),
+    websiteDetailIncidents: document.getElementById('website-detail-incidents'),
+    websiteDetailActivities: document.getElementById('website-detail-activities'),
+    websiteDetailCheck: document.getElementById('website-detail-check'),
+    websiteDetailBack: document.getElementById('website-detail-back'),
     portalProfileForm: document.getElementById('portal-profile-form'),
     portalProfileStatus: document.getElementById('portal-profile-status'),
     portalProfileName: document.getElementById('portal-profile-name'),
@@ -433,7 +449,10 @@ const state = {
     portalPendingForms: 0,
     portalPendingProposals: 0,
     currentPortalForm: null,
+    currentPortalWebsite: null,
     currentCustomer: null,
+    currentWebsite: null,
+    websiteDetailReturnView: 'websites',
     currentLead: null,
     filters: {
         customers: {
@@ -569,6 +588,7 @@ const viewMeta = {
         title: 'Customer overview',
         subtitle: 'Jobs, subscriptions, and websites for this customer.',
     },
+    'website-detail': { title: 'Website overview', subtitle: 'Health, hosting, maintenance and activity.' },
     portal: {
         title: 'Customer Portal',
         subtitle: 'Review invoices and quick-login links.',
@@ -578,6 +598,7 @@ const viewMeta = {
         subtitle: 'Review, approve, decline, and download your proposals.',
     },
     'portal-websites': { title: 'Websites', subtitle: 'Availability, maintenance and service updates.' },
+    'portal-website-detail': { title: 'Website overview', subtitle: 'Your website health and maintenance information.' },
     'portal-forms': {
         title: 'Forms',
         subtitle: 'Complete requested forms and review previous submissions.',
@@ -690,7 +711,7 @@ function setActiveView(view) {
 
     const meta = viewMeta[view] || viewMeta.dashboard;
     state.view = view;
-    const navView = view === 'customer-detail' ? 'customers' : (view === 'lead-detail' ? 'lead-discovery' : view);
+    const navView = view === 'customer-detail' ? 'customers' : (view === 'website-detail' ? 'websites' : (view === 'lead-detail' ? 'lead-discovery' : view));
 
     dom.views.forEach((section) => {
         section.classList.toggle('active', section.dataset.view === view);
@@ -722,6 +743,7 @@ function setActiveView(view) {
         ensureCustomersLoaded().then(loadJobs);
     }
     if (view === 'websites') ensureCustomersLoaded().then(loadManagedWebsites);
+    if (view === 'website-detail' && state.currentWebsite?.id) loadWebsiteDetail(state.currentWebsite.id);
     if (view === 'revenue-opportunities') {
         ensureCustomersLoaded().then(() => {
             populateOpportunityCustomerSelect();
@@ -778,6 +800,7 @@ function setActiveView(view) {
         loadPortalProposals();
     }
     if (view === 'portal-websites') loadPortalWebsites();
+    if (view === 'portal-website-detail' && state.currentPortalWebsite?.id) loadPortalWebsiteDetail(state.currentPortalWebsite.id);
     if (view === 'portal-forms') {
         loadPortalForms();
     }
@@ -2034,7 +2057,7 @@ async function loadPortalWebsites() {
             if (dom.portalWebsitesDetail) {
                 const detail = document.createElement('div');
                 detail.className = 'site-card';
-                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)}</div><div class="site-url">${escapeHtml(website.domain || website.login_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Not checked')} · Uptime ${website.uptime_percent ?? '—'}% · SSL ${escapeHtml(website.ssl?.status || 'unknown')} · ${escapeHtml(website.maintenance?.status || 'Maintenance status unavailable')}</div></div><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url || website.login_url)}" target="_blank" rel="noopener">Visit website</a>`;
+                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)}</div><div class="site-url">${escapeHtml(website.domain || website.login_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Not checked')} · Uptime ${website.uptime_percent ?? '—'}% · SSL ${escapeHtml(website.ssl?.status || 'unknown')} · ${escapeHtml(website.maintenance?.status || 'Maintenance status unavailable')}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-portal-website="${website.id}">View details</button><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url || website.login_url)}" target="_blank" rel="noopener">Visit website</a></div>`;
                 dom.portalWebsitesDetail.appendChild(detail);
             }
         });
@@ -2052,6 +2075,37 @@ async function loadPortalWebsites() {
     }
 }
 
+function renderPortalWebsiteDetail(site) {
+    if (dom.portalWebsiteDetailTitle) dom.portalWebsiteDetailTitle.textContent = site.name || 'Website';
+    if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.textContent = site.domain || site.public_url || '';
+    if (dom.portalWebsiteVisit) dom.portalWebsiteVisit.href = site.public_url || site.login_url || '#';
+    if (dom.portalWebsiteDetailSummary) dom.portalWebsiteDetailSummary.innerHTML = [
+        ['Status', site.status || 'Not available'], ['Availability', site.availability || 'Not checked'], ['30-day uptime', site.uptime_percent === undefined ? 'Not available' : `${site.uptime_percent}%`], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Not checked'],
+    ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
+    const care = [];
+    if (site.ssl) care.push(['SSL certificate', site.ssl.status || 'unknown', site.ssl.expires_at ? `Expires ${formatDate(site.ssl.expires_at)}` : 'Expiry unavailable']);
+    if (site.backups) care.push(['Backups', site.backups.status || 'unknown', site.backups.last_successful_at ? `Last successful ${formatDate(site.backups.last_successful_at)}` : 'No backup date available']);
+    if (site.performance) care.push(['Performance', site.performance.score === null || site.performance.score === undefined ? 'Not scored' : `${site.performance.score}/100`, site.performance.response_time_ms ? `${site.performance.response_time_ms} ms response` : 'Response time unavailable']);
+    if (site.maintenance) care.push(['Maintenance', site.maintenance.status || 'unknown', `${site.maintenance.plugin_updates ?? 0} plugin and ${site.maintenance.theme_updates ?? 0} theme updates`]);
+    if (site.hosting_usage) care.push(['Hosting usage', site.hosting_usage.disk_used_bytes ? `${site.hosting_usage.disk_used_bytes} bytes used` : 'Usage unavailable', '']);
+    if (site.technical_details) care.push(['Technical details', `WordPress ${site.technical_details.wordpress_version || 'unknown'}`, `PHP ${site.technical_details.php_version || 'unknown'}`]);
+    if (dom.portalWebsiteDetailCare) dom.portalWebsiteDetailCare.innerHTML = care.length ? care.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(note)}</div></div>`).join('') : '<div class="table-empty">No additional website-care information is currently available.</div>';
+    const activities = site.activities || [];
+    if (dom.portalWebsiteDetailActivities) dom.portalWebsiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No recent customer-visible activity.</div>';
+}
+
+async function loadPortalWebsiteDetail(websiteId) {
+    try {
+        const response = await api.get(`/api/portal/websites/${websiteId}`);
+        const site = response?.data?.data || response?.data;
+        state.currentPortalWebsite = site;
+        renderPortalWebsiteDetail(site);
+    } catch (error) {
+        showToast(error?.response?.status === 404 ? 'Website not found.' : 'Unable to load website details.', true);
+        setActiveView('portal-websites');
+    }
+}
+
 async function loadManagedWebsites() {
     if (!dom.websitesList) return;
     const params = new URLSearchParams({ per_page: '100' });
@@ -2066,7 +2120,7 @@ async function loadManagedWebsites() {
         dom.websitesList.innerHTML = websites.length ? '' : '<div class="site-card"><div><div class="site-name">No websites match these filters.</div></div></div>';
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · Agent ${site.agent_connected ? 'connected' : 'not connected'}</div></div><div class="form-actions"><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · Agent ${site.agent_connected ? 'connected' : 'not connected'}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
             dom.websitesList.appendChild(card);
         });
         if (dom.managedWebsiteCustomer) {
@@ -2075,6 +2129,39 @@ async function loadManagedWebsites() {
             dom.managedWebsiteCustomer.value = current;
         }
     } catch (error) { dom.websitesList.innerHTML = '<div class="site-card"><div><div class="site-name">Unable to load websites.</div></div></div>'; }
+}
+
+function openWebsiteDetail(websiteId, returnView = 'websites') {
+    state.currentWebsite = { id: Number(websiteId) };
+    state.websiteDetailReturnView = returnView;
+    setActiveView('website-detail');
+}
+
+function renderWebsiteDetail(site) {
+    const latest = site.latest_health_check || {};
+    if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
+    if (dom.websiteDetailDomain) dom.websiteDetailDomain.textContent = site.domain || site.login_url || '';
+    if (dom.websiteDetailSummary) dom.websiteDetailSummary.innerHTML = [
+        ['Overall status', site.status || 'unknown'], ['Availability', latest.uptime_status || 'not checked'], ['Response time', latest.response_time_ms ? `${latest.response_time_ms} ms` : '—'], ['SSL', latest.ssl_status || 'unknown'],
+    ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
+    if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
+        ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled ? (site.hosting_server?.name || 'Enabled') : 'No'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
+    ].map(([label, value]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
+    const checks = site.health_checks || [];
+    if (dom.websiteDetailHealth) dom.websiteDetailHealth.innerHTML = checks.length ? checks.map((check) => `<div class="site-card"><div><div class="site-name">${escapeHtml(check.check_type || 'Health check')} · ${escapeHtml(check.overall_status || 'unknown')}</div><div class="site-url">${formatDate(check.checked_at)} · HTTP ${check.http_status ?? '—'} · ${check.response_time_ms ?? '—'} ms · Updates ${(check.plugin_updates ?? 0) + (check.theme_updates ?? 0)}</div></div></div>`).join('') : '<div class="table-empty">No monitoring history yet.</div>';
+    const incidents = site.incidents || [];
+    if (dom.websiteDetailIncidents) dom.websiteDetailIncidents.innerHTML = incidents.length ? incidents.map((incident) => `<div class="site-card"><div><div class="site-name">${escapeHtml(incident.title)}</div><div class="site-url">${escapeHtml(incident.message || '')} · ${incident.resolved_at ? 'Resolved' : 'Open'}</div></div></div>`).join('') : '<div class="table-empty">No incidents recorded.</div>';
+    const activities = site.activities || [];
+    if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
+}
+
+async function loadWebsiteDetail(websiteId) {
+    try {
+        const response = await api.get(`/api/websites/${websiteId}`);
+        const site = response?.data?.data || response?.data;
+        state.currentWebsite = site;
+        renderWebsiteDetail(site);
+    } catch (error) { showToast('Unable to load website details.', true); }
 }
 
 function resolveRole(user) {
@@ -4182,6 +4269,7 @@ function renderCustomerWebsites(websites = []) {
                 <div class="site-url">${escapeHtml(website.login_url)}</div>
             </div>
             <div class="site-actions">
+                <button class="btn btn-primary btn-small" data-action="view" data-id="${website.id}">View details</button>
                 <a class="btn btn-primary btn-small" href="${escapeHtml(website.login_url)}" target="_blank" rel="noopener">Quick login</a>
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${website.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${website.id}">Delete</button>
@@ -4588,6 +4676,11 @@ async function handleCustomerWebsiteAction(event) {
     const action = actionButton.dataset.action;
     const websites = state.currentCustomer?.websites || [];
     const website = websites.find((item) => item.id === id);
+
+    if (action === 'view' && website) {
+        openWebsiteDetail(id, 'customer-detail');
+        return;
+    }
 
     if (action === 'edit' && website && dom.customerWebsiteForm) {
         state.editing.website = id;
@@ -6824,7 +6917,7 @@ function initializeNavigation() {
     dom.navItems.forEach((item) => {
         item.addEventListener('click', (event) => {
             event.preventDefault();
-            if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
+            if (state.role === 'customer' && !['portal', 'portal-websites', 'portal-website-detail', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(item.dataset.view)) return;
             if (adminOnlyViews.includes(item.dataset.view) && state.role !== 'admin') return;
             if (item.dataset.view === 'monthly-tasks' && state.role !== 'staff') return;
             setActiveView(item.dataset.view);
@@ -6844,7 +6937,7 @@ function initializeNavigation() {
                 if (button.dataset.goView === 'monthly-tasks' && state.role !== 'staff') {
                     return;
                 }
-                if (state.role === 'customer' && !['portal', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
+                if (state.role === 'customer' && !['portal', 'portal-websites', 'portal-website-detail', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(button.dataset.goView)) {
                     return;
                 }
                 setActiveView(button.dataset.goView);
@@ -7735,11 +7828,28 @@ if (dom.websitesRefresh) dom.websitesRefresh.addEventListener('click', loadManag
 if (dom.websitesSearch) dom.websitesSearch.addEventListener('input', loadManagedWebsites);
 if (dom.websitesStatus) dom.websitesStatus.addEventListener('change', loadManagedWebsites);
 if (dom.portalWebsitesRefresh) dom.portalWebsitesRefresh.addEventListener('click', loadPortalWebsites);
+if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-open-portal-website]');
+    if (!button) return;
+    state.currentPortalWebsite = { id: Number(button.dataset.openPortalWebsite) };
+    setActiveView('portal-website-detail');
+});
+if (dom.portalWebsiteDetailBack) dom.portalWebsiteDetailBack.addEventListener('click', () => setActiveView('portal-websites'));
 if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) => {
+    const openButton = event.target.closest('[data-open-website]');
+    if (openButton) { openWebsiteDetail(openButton.dataset.openWebsite, 'websites'); return; }
     const button = event.target.closest('[data-check-website]'); if (!button) return;
     button.disabled = true; button.textContent = 'Checking…';
     try { await api.post(`/api/websites/${button.dataset.checkWebsite}/check`); await loadManagedWebsites(); showToast('Website check completed.'); }
     catch (error) { button.disabled = false; button.textContent = 'Check now'; showToast(error?.response?.data?.message || 'Website check failed.', 'error'); }
+});
+if (dom.websiteDetailBack) dom.websiteDetailBack.addEventListener('click', () => setActiveView(state.websiteDetailReturnView || 'websites'));
+if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', async () => {
+    if (!state.currentWebsite?.id) return;
+    dom.websiteDetailCheck.disabled = true;
+    try { await api.post(`/api/websites/${state.currentWebsite.id}/check`); await loadWebsiteDetail(state.currentWebsite.id); showToast('Website check completed.'); }
+    catch (error) { showToast('Website check failed.', true); }
+    finally { dom.websiteDetailCheck.disabled = false; }
 });
 if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', async (event) => {
     event.preventDefault(); setFormStatus(dom.managedWebsiteStatus, 'Saving…');
