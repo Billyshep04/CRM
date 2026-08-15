@@ -7970,12 +7970,19 @@ if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit'
 if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', async (event) => {
     event.preventDefault(); setFormStatus(dom.managedWebsiteStatus, 'Saving…');
     const values = Object.fromEntries(new FormData(dom.managedWebsiteForm).entries());
-    const payload = { ...values, customer_id: Number(values.customer_id), wordpress_enabled: dom.managedWebsiteForm.elements.wordpress_enabled.checked, management_enabled: dom.managedWebsiteForm.elements.management_enabled.checked, hosting_enabled: dom.managedWebsiteForm.elements.hosting_enabled.checked };
     const submit=dom.managedWebsiteForm.querySelector('button[type="submit"]'); if(submit)submit.disabled=true;
     try {
+        const enteredDomain=String(values.login_url||'').trim();
+        let domain;
+        try {
+            const parsed=new URL(/^https?:\/\//i.test(enteredDomain)?enteredDomain:`https://${enteredDomain}`);
+            if(!parsed.hostname)throw new Error();
+            domain=parsed.hostname.toLowerCase();
+        } catch(error) { throw new Error('Enter a valid domain, for example example.co.uk.'); }
+        values.login_url=`https://${domain}`;
+        const payload = { ...values, customer_id: Number(values.customer_id), wordpress_enabled: dom.managedWebsiteForm.elements.wordpress_enabled.checked, management_enabled: dom.managedWebsiteForm.elements.management_enabled.checked, hosting_enabled: dom.managedWebsiteForm.elements.hosting_enabled.checked };
         let response;
         if (dom.managedWebsiteForm.elements.create_cpanel_account?.checked) {
-            let domain; try { domain=new URL(values.login_url).hostname; } catch(error) { throw new Error('Enter a valid website URL.'); }
             const server=state.hostingOptions.servers.find(item=>Number(item.id)===Number(values.hosting_server_id)); const packageItem=(server?.packages||[]).find(item=>Number(item.id)===Number(values.hosting_package_id));
             if(!server||!packageItem)throw new Error('Select a hosting provider and package.');
             if(!window.confirm(`Create website for ${domain}?\n\nCustomer: ${dom.managedWebsiteCustomer?.selectedOptions[0]?.textContent||''}\nHosting: ${server.name}\nPackage: ${packageItem.name}\nAction: Create cPanel account${values.website_type==='wordpress'?' and prepare WordPress':''}.`))return;

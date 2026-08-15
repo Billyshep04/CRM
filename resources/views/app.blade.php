@@ -506,7 +506,7 @@
                             <form id="managed-website-form" class="form-stack">
                                 <label class="field"><span>Customer</span><select name="customer_id" id="managed-website-customer" required><option value="">Select customer</option></select></label>
                                 <label class="field"><span>Website name</span><input name="name" required></label>
-                                <label class="field"><span>Public URL</span><input name="login_url" type="url" placeholder="https://example.com" required></label>
+                                <label class="field"><span>Domain</span><input name="login_url" type="text" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="example.co.uk" required></label>
                                 <label class="field"><span>Environment</span><select name="environment"><option>production</option><option>staging</option><option>development</option></select></label>
                                 <label class="field"><span>Hosting provider</span><select name="hosting_server_id" id="managed-website-server"><option value="">No hosting provisioning</option></select></label>
                                 <label class="field"><span>Hosting package</span><select name="hosting_package_id" id="managed-website-package"><option value="">Select package</option></select></label>
