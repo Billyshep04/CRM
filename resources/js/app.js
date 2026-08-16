@@ -2172,7 +2172,7 @@ function populateHostingPackageOptions() {
 async function loadHostingOptions() {
     if (state.role !== 'admin') return;
     try {
-        const [optionsResponse, accountsResponse, websitesResponse] = await Promise.all([api.get('/api/website-provisioning/options'), api.get('/api/hosting-accounts'), api.get('/api/websites?connection=all&per_page=100')]);
+        const [optionsResponse, accountsResponse, websitesResponse] = await Promise.all([api.get('/api/website-provisioning/options'), api.get('/api/website-provisioning/hosting-accounts'), api.get('/api/websites?connection=all&per_page=100')]);
         state.hostingOptions = optionsResponse?.data?.data || state.hostingOptions;
         const servers = state.hostingOptions.servers || [];
         if (dom.managedWebsiteServer) dom.managedWebsiteServer.innerHTML = '<option value="">No hosting provisioning</option>' + servers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
