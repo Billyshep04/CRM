@@ -1516,6 +1516,9 @@ body[data-role="admin"] .admin-only[hidden] {
 .customer-connect-domain small { color: var(--text-muted); overflow-wrap: anywhere; }
 .connected-token-result { display: grid; gap: 12px; padding: 14px; border-radius: 14px; background: var(--bg-muted); }
 .connected-token-result input { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.website-edit-modal { width: min(760px, 100%); }
+.website-edit-switches { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-muted); }
+.website-edit-switches .check-row { margin: 0; }
 
 @media (max-width: 900px) {
     .website-setup-steps, .form-grid { grid-template-columns: 1fr; }

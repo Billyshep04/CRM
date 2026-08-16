@@ -218,6 +218,11 @@ const dom = {
     websitesSearch: document.getElementById('websites-search'),
     websitesStatus: document.getElementById('websites-status'),
     websiteSummary: document.getElementById('website-summary'),
+    websiteEditModal: document.getElementById('website-edit-modal'),
+    websiteEditClose: document.getElementById('website-edit-close'),
+    websiteEditCancel: document.getElementById('website-edit-cancel'),
+    websiteEditForm: document.getElementById('website-edit-form'),
+    websiteEditStatus: document.getElementById('website-edit-status'),
     managedWebsiteForm: document.getElementById('managed-website-form'),
     managedWebsiteCustomer: document.getElementById('managed-website-customer'),
     managedWebsiteStatus: document.getElementById('managed-website-status'),
@@ -495,6 +500,7 @@ const state = {
     currentPortalWebsite: null,
     currentCustomer: null,
     currentWebsite: null,
+    managedWebsites: [],
     websiteDetailReturnView: 'websites',
     showingUnlinkedWebsites: false,
     hostingOptions: { servers: [], profiles: [], mode: 'mock', live_enabled: false },
@@ -2167,6 +2173,7 @@ async function loadManagedWebsites() {
     try {
         const [sitesResponse, summaryResponse] = await Promise.all([api.get(`/api/websites?${params}`), api.get('/api/websites/summary')]);
         const websites = sitesResponse?.data?.data || [];
+        state.managedWebsites = websites;
         const summary = summaryResponse?.data?.data || {};
         if (dom.websiteSummary) dom.websiteSummary.innerHTML = [['Websites', summary.total], ['Krystal hosting', summary.hosting_connected], ['Monitoring', summary.monitoring_connected], ['Setup required', summary.setup_required]].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value ?? 0}</strong></div>`).join('');
         dom.websitesList.innerHTML = websites.length ? '' : `<div class="site-card"><div><div class="site-name">${state.showingUnlinkedWebsites ? 'Everything is set up.' : 'No websites match these filters.'}</div><div class="site-url">${state.showingUnlinkedWebsites ? 'There are no websites waiting for hosting or monitoring setup.' : 'Import from Krystal or add a website manually.'}</div></div></div>`;
@@ -2175,12 +2182,15 @@ async function loadManagedWebsites() {
             const hostingState = site.hosting_account_id
                 ? '<span class="setup-pill setup-pill-success"><span class="connection-dot connected"></span>Krystal hosting</span>'
                 : (site.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
-            const monitoringState = site.agent_linked
-                ? `<span class="setup-pill ${site.agent_connected ? 'setup-pill-success' : 'setup-pill-danger'}"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Monitoring connected' : 'Monitoring offline'}</span>`
-                : (site.wordpress_enabled ? '<span class="setup-pill setup-pill-warning">Monitoring plugin needed</span>' : '<span class="setup-pill">Monitoring not required</span>');
+            const monitoringState = site.wordpress_enabled
+                ? (site.agent_linked
+                    ? `<span class="setup-pill ${site.agent_connected ? 'setup-pill-success' : 'setup-pill-danger'}"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Monitoring connected' : 'Monitoring offline'}</span>`
+                    : '<span class="setup-pill setup-pill-warning">Monitoring plugin needed</span>')
+                : '<span class="setup-pill">Monitoring not required</span>';
             const tokenAction = !site.agent_linked && site.wordpress_enabled && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-get-agent-token="${site.id}" data-site-name="${escapeHtml(site.name)}">Install monitoring</button>` : '';
             const cpanelAction = site.hosting_account_id && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-open-website-cpanel="${site.hosting_account_id}">Open cPanel</button>` : '';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${cpanelAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
+            const editAction = state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-edit-website="${site.id}">Edit</button>` : '';
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${cpanelAction}${editAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
             dom.websitesList.appendChild(card);
         });
         if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Show all websites' : `Setup required (${summary.setup_required ?? 0})`;
@@ -2191,6 +2201,76 @@ async function loadManagedWebsites() {
             dom.managedWebsiteCustomer.value = current;
         }
     } catch (error) { dom.websitesList.innerHTML = '<div class="site-card"><div><div class="site-name">Unable to load websites.</div></div></div>'; }
+}
+
+function closeWebsiteEditModal() {
+    if (dom.websiteEditModal) dom.websiteEditModal.hidden = true;
+    dom.websiteEditForm?.reset();
+    setFormStatus(dom.websiteEditStatus, '');
+}
+
+function openWebsiteEditModal(websiteId) {
+    const website = state.managedWebsites.find((item) => Number(item.id) === Number(websiteId));
+    if (!website || !dom.websiteEditForm || !dom.websiteEditModal) return;
+    const customers = state.customerOptions.length ? state.customerOptions : state.customers;
+    const form = dom.websiteEditForm;
+    form.elements.customer_id.innerHTML = '<option value="">Select customer</option>' + customers.map((customer) => `<option value="${customer.id}">${escapeHtml(customer.name)}</option>`).join('');
+    form.elements.id.value = website.id;
+    form.elements.customer_id.value = String(website.customer_id || '');
+    form.elements.name.value = website.name || '';
+    form.elements.domain.value = website.domain || '';
+    form.elements.login_url.value = website.login_url || '';
+    form.elements.environment.value = website.environment || 'production';
+    form.elements.wordpress_enabled.checked = Boolean(website.wordpress_enabled);
+    form.elements.management_enabled.checked = Boolean(website.management_enabled);
+    form.elements.hosting_enabled.checked = Boolean(website.hosting_enabled);
+    form.elements.google_analytics_property_id.value = website.google_analytics_property_id || '';
+    form.elements.google_analytics_dashboard_url.value = website.google_analytics_dashboard_url || '';
+    form.elements.notes.value = website.notes || '';
+    setFormStatus(dom.websiteEditStatus, website.wordpress_enabled ? 'WordPress monitoring is enabled for this website.' : 'Enable WordPress website to make monitoring setup available.');
+    dom.websiteEditModal.hidden = false;
+}
+
+async function handleWebsiteEditSubmit(event) {
+    event.preventDefault();
+    if (!dom.websiteEditForm) return;
+    const form = dom.websiteEditForm;
+    const data = new FormData(form);
+    const enteredDomain = String(data.get('domain') || '').trim();
+    let domain;
+    try {
+        const parsed = new URL(/^https?:\/\//i.test(enteredDomain) ? enteredDomain : `https://${enteredDomain}`);
+        if (!parsed.hostname) throw new Error();
+        domain = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    } catch (error) {
+        setFormStatus(dom.websiteEditStatus, 'Enter a valid domain, for example example.co.uk.', true);
+        return;
+    }
+    const submit = form.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    setFormStatus(dom.websiteEditStatus, 'Saving…');
+    try {
+        await api.put(`/api/websites/${form.elements.id.value}`, {
+            customer_id: Number(data.get('customer_id')),
+            name: String(data.get('name') || '').trim(),
+            domain,
+            login_url: String(data.get('login_url') || '').trim(),
+            environment: String(data.get('environment') || 'production'),
+            wordpress_enabled: form.elements.wordpress_enabled.checked,
+            management_enabled: form.elements.management_enabled.checked,
+            hosting_enabled: form.elements.hosting_enabled.checked,
+            google_analytics_property_id: String(data.get('google_analytics_property_id') || '').trim() || null,
+            google_analytics_dashboard_url: String(data.get('google_analytics_dashboard_url') || '').trim() || null,
+            notes: String(data.get('notes') || '').trim() || null,
+        });
+        closeWebsiteEditModal();
+        await loadManagedWebsites();
+        showToast('Website details updated.');
+    } catch (error) {
+        setFormStatus(dom.websiteEditStatus, getErrorMessage(error, 'Unable to update the website.'), true);
+    } finally {
+        if (submit) submit.disabled = false;
+    }
 }
 
 function populateHostingPackageOptions() {
@@ -8238,7 +8318,15 @@ if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click',
     setActiveView('portal-website-detail');
 });
 if (dom.portalWebsiteDetailBack) dom.portalWebsiteDetailBack.addEventListener('click', () => setActiveView('portal-websites'));
+if (dom.websiteEditForm) dom.websiteEditForm.addEventListener('submit', handleWebsiteEditSubmit);
+if (dom.websiteEditClose) dom.websiteEditClose.addEventListener('click', closeWebsiteEditModal);
+if (dom.websiteEditCancel) dom.websiteEditCancel.addEventListener('click', closeWebsiteEditModal);
+if (dom.websiteEditModal) dom.websiteEditModal.addEventListener('click', (event) => {
+    if (event.target === dom.websiteEditModal) closeWebsiteEditModal();
+});
 if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) => {
+    const editButton = event.target.closest('[data-edit-website]');
+    if (editButton) { openWebsiteEditModal(editButton.dataset.editWebsite); return; }
     const cpanelButton = event.target.closest('[data-open-website-cpanel]');
     if (cpanelButton) {
         try { const response = await api.post(`/api/hosting-accounts/${cpanelButton.dataset.openWebsiteCpanel}/session`); window.open(response?.data?.data?.url, '_blank', 'noopener'); }

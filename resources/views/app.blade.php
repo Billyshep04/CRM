@@ -2156,6 +2156,33 @@
             </section>
         </div>
 
+        <div class="crm-modal-backdrop" id="website-edit-modal" hidden>
+            <section class="crm-modal customer-form-modal website-edit-modal" role="dialog" aria-modal="true" aria-labelledby="website-edit-title">
+                <div class="crm-modal-header">
+                    <div><div class="card-title" id="website-edit-title">Edit website</div><div class="card-subtitle">Update the CRM details and choose whether WordPress monitoring is required.</div></div>
+                    <button class="crm-modal-close" id="website-edit-close" type="button" aria-label="Close">×</button>
+                </div>
+                <form id="website-edit-form" class="form-stack">
+                    <input type="hidden" name="id">
+                    <label class="field"><span>Customer</span><select name="customer_id" required><option value="">Select customer</option></select></label>
+                    <label class="field"><span>Website name</span><input name="name" required></label>
+                    <label class="field"><span>Domain</span><input name="domain" required placeholder="example.co.uk" inputmode="url" autocapitalize="none" spellcheck="false"></label>
+                    <label class="field"><span>Website URL</span><input name="login_url" type="url" required placeholder="https://example.co.uk"></label>
+                    <label class="field"><span>Environment</span><select name="environment"><option value="production">Production</option><option value="staging">Staging</option><option value="development">Development</option></select></label>
+                    <div class="website-edit-switches">
+                        <label class="check-row"><input name="wordpress_enabled" type="checkbox"><span>WordPress website — monitoring can be connected</span></label>
+                        <label class="check-row"><input name="management_enabled" type="checkbox"><span>Managed by us</span></label>
+                        <label class="check-row"><input name="hosting_enabled" type="checkbox"><span>Hosted by us</span></label>
+                    </div>
+                    <label class="field"><span>GA4 Property ID</span><input name="google_analytics_property_id"></label>
+                    <label class="field"><span>Google Analytics dashboard URL</span><input name="google_analytics_dashboard_url" type="url" placeholder="https://analytics.google.com/..."></label>
+                    <label class="field"><span>Internal notes</span><textarea name="notes" rows="4"></textarea></label>
+                    <div id="website-edit-status" class="form-hint"></div>
+                    <div class="form-actions"><button class="btn btn-outline" id="website-edit-cancel" type="button">Cancel</button><button class="btn btn-primary" type="submit">Save changes</button></div>
+                </form>
+            </section>
+        </div>
+
         <div id="app-toast" class="toast" role="status" aria-live="polite"></div>
 
         <div class="crm-modal-backdrop" id="staff-user-detail-modal" hidden>

@@ -42,14 +42,27 @@ class WebsiteHostingManagementTest extends TestCase
         $this->actingAs($admin)->getJson('/api/websites?connection=all')->assertOk()->assertJsonCount(1, 'data')->assertJsonMissing(['token' => 'top-secret'])->assertJsonMissing(['agent_token_hash' => hash('sha256', 'agent-secret')])->assertJsonMissing(['agent_token_encrypted' => 'agent-secret']);
     }
 
-    public function test_main_website_list_only_contains_linked_sites_and_unlinked_has_its_own_view(): void
+    public function test_main_website_list_contains_all_sites_and_supports_connection_filters(): void
     {
         $admin = $this->user('admin'); $customer = $this->customer();
         $linked = $this->website($customer, ['agent_last_seen_at' => now()]);
         $unlinked = $this->website($customer, ['name' => 'Unlinked', 'domain' => 'unlinked.example.com', 'login_url' => 'https://unlinked.example.com']);
 
-        $this->actingAs($admin)->getJson('/api/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $linked->id)->assertJsonPath('data.0.agent_connected', true);
+        $this->actingAs($admin)->getJson('/api/websites')->assertOk()->assertJsonCount(2, 'data');
+        $this->actingAs($admin)->getJson('/api/websites?connection=linked')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $linked->id)->assertJsonPath('data.0.agent_connected', true);
         $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $unlinked->id)->assertJsonPath('data.0.agent_linked', false);
+    }
+
+    public function test_admin_can_enable_wordpress_monitoring_when_editing_a_website(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), ['wordpress_enabled' => false]);
+
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", [
+            'wordpress_enabled' => true,
+        ])->assertOk()->assertJsonPath('data.wordpress_enabled', true);
+
+        $this->assertTrue($website->fresh()->wordpress_enabled);
     }
 
     public function test_admin_can_open_a_website_with_health_incidents_and_activity(): void
