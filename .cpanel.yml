@@ -4,7 +4,7 @@ deployment:
     - export DEPLOYPATH=/home/webstamp/public_html/crm/
     - /bin/rsync -rltD --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r --exclude='.git/' --exclude='.env' --exclude='storage/' --exclude='bootstrap/cache/' --exclude='vendor/' ./ $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/storage/framework/cache/data $DEPLOYPATH/storage/framework/sessions $DEPLOYPATH/storage/framework/views $DEPLOYPATH/storage/logs
-    - /bin/chmod -R 775 $DEPLOYPATH/storage $DEPLOYPATH/bootstrap/cache
+    - /bin/chmod 775 $DEPLOYPATH/storage $DEPLOYPATH/storage/framework $DEPLOYPATH/storage/framework/cache $DEPLOYPATH/storage/framework/cache/data $DEPLOYPATH/storage/framework/sessions $DEPLOYPATH/storage/framework/views $DEPLOYPATH/storage/logs $DEPLOYPATH/bootstrap/cache
     - /bin/rm -f $DEPLOYPATH/bootstrap/cache/*.php
     - php $DEPLOYPATH/artisan optimize:clear || true
     - php $DEPLOYPATH/artisan migrate --force
