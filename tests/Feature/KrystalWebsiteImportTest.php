@@ -32,6 +32,7 @@ class KrystalWebsiteImportTest extends TestCase
             'name' => 'Existing Client',
             'domain' => 'client-one.test',
             'login_url' => 'https://client-one.test',
+            'hosting_enabled' => true,
         ]);
 
         $response = $this->actingAs($admin)
@@ -45,6 +46,54 @@ class KrystalWebsiteImportTest extends TestCase
         $this->assertSame('connected', $domains['client-one.test']['state']);
         $this->assertSame('addon', $domains['client-two.test']['domain_type']);
         $this->assertStringNotContainsString('secret-token', $response->getContent());
+    }
+
+    public function test_discovery_does_not_label_an_external_website_as_krystal_hosted(): void
+    {
+        $admin = $this->user('admin');
+        $customer = $this->customer();
+        $server = $this->server();
+        $website = Website::create([
+            'customer_id' => $customer->id,
+            'name' => 'Externally hosted client',
+            'domain' => 'client-one.test',
+            'login_url' => 'https://client-one.test',
+            'hosting_enabled' => false,
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/hosting-servers/{$server->id}/discover-websites")
+            ->assertOk()
+            ->assertJsonPath('data.domains.0.state', 'matched');
+
+        $website->refresh();
+        $this->assertFalse($website->hosting_enabled);
+        $this->assertNull($website->hosting_account_id);
+    }
+
+    public function test_external_hosting_override_survives_future_krystal_scans(): void
+    {
+        $admin = $this->user('admin');
+        $customer = $this->customer();
+        $server = $this->server();
+        $website = Website::create([
+            'customer_id' => $customer->id,
+            'name' => 'Pirate Lures',
+            'domain' => 'client-one.test',
+            'login_url' => 'https://client-one.test/wp-admin/',
+            'hosting_enabled' => true,
+        ]);
+
+        $this->actingAs($admin)->postJson("/api/hosting-servers/{$server->id}/discover-websites")->assertOk();
+        $this->assertNotNull($website->fresh()->hosting_account_id);
+
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", ['hosting_enabled' => false])->assertOk();
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", ['hosting_enabled' => true])->assertOk();
+        $this->actingAs($admin)->postJson("/api/hosting-servers/{$server->id}/discover-websites")->assertOk();
+
+        $website->refresh();
+        $this->assertNull($website->hosting_account_id);
+        $this->assertTrue($website->metadata['hosting_assignment_excluded']);
     }
 
     public function test_admin_can_import_an_addon_domain_and_repeat_safely(): void

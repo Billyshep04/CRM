@@ -43,7 +43,7 @@ class WebsiteController extends Controller
             'updates_available' => (clone $base)->whereHas('latestHealthCheck', fn ($q) => $q->where(fn ($i) => $i->where('plugin_updates', '>', 0)->orWhere('theme_updates', '>', 0)))->count(),
             'linked' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
             'unlinked' => (clone $base)->whereNull('agent_last_seen_at')->count(),
-            'hosting_connected' => (clone $base)->whereNotNull('hosting_account_id')->count(),
+            'hosting_connected' => (clone $base)->where('hosting_enabled', true)->whereNotNull('hosting_account_id')->count(),
             'monitoring_connected' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
             'setup_required' => $setup->count(),
         ]]);
@@ -67,6 +67,22 @@ class WebsiteController extends Controller
     {
         $data = $this->validated($request, true);
         if (isset($data['login_url']) && !array_key_exists('domain', $data)) $data['domain'] = $this->domain($data['login_url']);
+
+        if (array_key_exists('hosting_enabled', $data)) {
+            $metadata = $data['metadata'] ?? $website->metadata ?? [];
+
+            if (! $data['hosting_enabled']) {
+                $metadata['hosting_assignment_excluded'] = true;
+                $data['hosting_server_id'] = null;
+                $data['hosting_account_id'] = null;
+                $data['cpanel_username'] = null;
+            } elseif ($website->hosting_account_id) {
+                unset($metadata['hosting_assignment_excluded']);
+            }
+
+            $data['metadata'] = $metadata;
+        }
+
         $website->update($data);
         WebsiteActivity::create(['website_id' => $website->id, 'created_by_user_id' => $request->user()?->id, 'type' => 'website_updated', 'title' => 'Website details updated', 'performed_at' => now()]);
         return new WebsiteResource($website->fresh()->load(['customer', 'hostingServer', 'subscription', 'latestHealthCheck']));

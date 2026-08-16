@@ -109,12 +109,15 @@ class KrystalWebsiteImportController extends Controller
             ]);
             $activityTitle = 'Website imported from Krystal';
         } else {
+            $metadata = $website->metadata ?? [];
+            unset($metadata['hosting_assignment_excluded']);
             $website->update([
                 'customer_id' => $data['customer_id'],
                 'hosting_server_id' => $hostingAccount->hosting_server_id,
                 'hosting_account_id' => $hostingAccount->id,
                 'cpanel_username' => $hostingAccount->username,
                 'hosting_enabled' => true,
+                'metadata' => $metadata,
             ]);
             $activityTitle = 'Krystal hosting connected';
         }

@@ -65,6 +65,38 @@ class WebsiteHostingManagementTest extends TestCase
         $this->assertTrue($website->fresh()->wordpress_enabled);
     }
 
+    public function test_marking_a_website_as_externally_hosted_removes_and_blocks_krystal_mapping(): void
+    {
+        $admin = $this->user('admin');
+        $server = HostingServer::create(['name' => 'Krystal', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = \App\Models\HostingAccount::create([
+            'hosting_server_id' => $server->id,
+            'external_id' => 'piratelures',
+            'username' => 'piratelures',
+            'primary_domain' => 'piratelures.com',
+        ]);
+        $website = $this->website($this->customer(), [
+            'name' => 'Pirate Lures',
+            'domain' => 'piratelures.com',
+            'login_url' => 'https://piratelures.com/wp-admin/',
+            'hosting_enabled' => true,
+            'hosting_server_id' => $server->id,
+            'hosting_account_id' => $account->id,
+            'cpanel_username' => 'piratelures',
+        ]);
+
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", [
+            'hosting_enabled' => false,
+        ])->assertOk()
+            ->assertJsonPath('data.hosting_enabled', false)
+            ->assertJsonPath('data.hosting_account_id', null);
+
+        $website->refresh();
+        $this->assertNull($website->hosting_server_id);
+        $this->assertNull($website->cpanel_username);
+        $this->assertTrue($website->metadata['hosting_assignment_excluded']);
+    }
+
     public function test_admin_can_open_a_website_with_health_incidents_and_activity(): void
     {
         $admin = $this->user('admin');
@@ -107,7 +139,7 @@ class WebsiteHostingManagementTest extends TestCase
             'https://example.com*' => Http::response('OK', 200),
         ]);
         $admin = $this->user('admin');
-        $website = $this->website($this->customer(), ['wordpress_enabled' => true, 'agent_token_hash' => hash('sha256', 'token'), 'agent_token_encrypted' => 'token']);
+        $website = $this->website($this->customer(), ['login_url' => 'https://example.com/wp-admin/', 'wordpress_enabled' => true, 'agent_token_hash' => hash('sha256', 'token'), 'agent_token_encrypted' => 'token']);
 
         $this->actingAs($admin)->postJson("/api/websites/{$website->id}/check")->assertOk();
         $this->assertNotNull($website->fresh()->agent_last_seen_at);
@@ -116,6 +148,7 @@ class WebsiteHostingManagementTest extends TestCase
         $website->update(['agent_last_seen_at' => now()->subDays(3)]);
         $this->actingAs($admin)->getJson('/api/websites')->assertJsonPath('data.0.id', $website->id)->assertJsonPath('data.0.agent_connected', false);
         $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertJsonCount(0, 'data');
+        Http::assertSent(fn ($request) => $request->url() === 'https://example.com/wp-json/webstamp/v1/status');
     }
 
     public function test_incidents_are_deduplicated_and_resolved(): void

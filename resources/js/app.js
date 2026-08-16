@@ -2179,18 +2179,20 @@ async function loadManagedWebsites() {
         dom.websitesList.innerHTML = websites.length ? '' : `<div class="site-card"><div><div class="site-name">${state.showingUnlinkedWebsites ? 'Everything is set up.' : 'No websites match these filters.'}</div><div class="site-url">${state.showingUnlinkedWebsites ? 'There are no websites waiting for hosting or monitoring setup.' : 'Import from Krystal or add a website manually.'}</div></div></div>`;
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
-            const hostingState = site.hosting_account_id
+            const isKrystalHosted = Boolean(site.hosting_enabled && site.hosting_account_id);
+            const hostingState = isKrystalHosted
                 ? '<span class="setup-pill setup-pill-success"><span class="connection-dot connected"></span>Krystal hosting</span>'
                 : (site.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
             const monitoringState = site.wordpress_enabled
                 ? (site.agent_linked
                     ? `<span class="setup-pill ${site.agent_connected ? 'setup-pill-success' : 'setup-pill-danger'}"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Monitoring connected' : 'Monitoring offline'}</span>`
-                    : '<span class="setup-pill setup-pill-warning">Monitoring plugin needed</span>')
+                    : '<span class="setup-pill setup-pill-warning">Monitoring not connected</span>')
                 : '<span class="setup-pill">Monitoring not required</span>';
             const tokenAction = !site.agent_linked && site.wordpress_enabled && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-get-agent-token="${site.id}" data-site-name="${escapeHtml(site.name)}">Install monitoring</button>` : '';
-            const cpanelAction = site.hosting_account_id && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-open-website-cpanel="${site.hosting_account_id}">Open cPanel</button>` : '';
+            const monitoringAction = site.wordpress_enabled && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-check-website="${site.id}">${site.agent_connected ? 'Check monitoring' : 'Check connection'}</button>` : '';
+            const cpanelAction = isKrystalHosted && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-open-website-cpanel="${site.hosting_account_id}">Open cPanel</button>` : '';
             const editAction = state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-edit-website="${site.id}">Edit</button>` : '';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${cpanelAction}${editAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${monitoringAction}${cpanelAction}${editAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
             dom.websitesList.appendChild(card);
         });
         if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Show all websites' : `Setup required (${summary.setup_required ?? 0})`;
@@ -2365,7 +2367,7 @@ function renderWebsiteDetail(site) {
         ['Overall status', site.status || 'unknown'], ['Availability', latest.uptime_status || 'not checked'], ['WordPress', latest.wordpress_version || 'unknown'], ['Plugins', latest.plugin_count ?? 'unknown'], ['Out-of-date plugins', latest.plugin_updates ?? 'unknown'], ['Response time', latest.response_time_ms ? `${latest.response_time_ms} ms` : '—'], ['SSL', latest.ssl_status || 'unknown'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
-        ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled ? (site.hosting_server?.name || 'Enabled') : 'No'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
+        ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled && site.hosting_account_id ? (site.hosting_server?.name || 'Krystal') : 'External'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
     ].map(([label, value]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
     const checks = site.health_checks || [];
     if (dom.websiteDetailHealth) dom.websiteDetailHealth.innerHTML = checks.length ? checks.map((check) => `<div class="site-card"><div><div class="site-name">${escapeHtml(check.check_type || 'Health check')} · ${escapeHtml(check.overall_status || 'unknown')}</div><div class="site-url">${formatDate(check.checked_at)} · HTTP ${check.http_status ?? '—'} · ${check.response_time_ms ?? '—'} ms · Updates ${(check.plugin_updates ?? 0) + (check.theme_updates ?? 0)}</div></div></div>`).join('') : '<div class="table-empty">No monitoring history yet.</div>';
@@ -4494,7 +4496,7 @@ function renderCustomerWebsites(websites = []) {
     websites.forEach((website) => {
         const card = document.createElement('div');
         card.className = 'site-card';
-        const hostingState = website.hosting_account_id
+        const hostingState = website.hosting_enabled && website.hosting_account_id
             ? '<span class="setup-pill setup-pill-success">Krystal hosting connected</span>'
             : (website.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
         const monitoringState = website.agent_last_seen_at
@@ -8341,7 +8343,7 @@ if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) =
             const response = await api.post(`/api/websites/${tokenButton.dataset.getAgentToken}/regenerate-agent-token`);
             const token = response?.data?.data?.agent_token || '';
             if (dom.websiteAgentTokenValue) dom.websiteAgentTokenValue.value = token;
-            if (dom.websiteAgentTokenSite) dom.websiteAgentTokenSite.textContent = `${tokenButton.dataset.siteName || 'Website'} — copy this into WordPress → Settings → WebStamp Agent.`;
+            if (dom.websiteAgentTokenSite) dom.websiteAgentTokenSite.textContent = `${tokenButton.dataset.siteName || 'Website'} — copy this into WordPress → Settings → WebStamp Agent, save it, then select Check connection.`;
             if (dom.websiteAgentTokenPanel) dom.websiteAgentTokenPanel.hidden = false;
             dom.websiteAgentTokenValue?.focus(); dom.websiteAgentTokenValue?.select();
             showToast('New connection token generated.');
@@ -8352,9 +8354,16 @@ if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) =
     const openButton = event.target.closest('[data-open-website]');
     if (openButton) { openWebsiteDetail(openButton.dataset.openWebsite, 'websites'); return; }
     const button = event.target.closest('[data-check-website]'); if (!button) return;
+    const originalLabel = button.textContent;
     button.disabled = true; button.textContent = 'Checking…';
-    try { await api.post(`/api/websites/${button.dataset.checkWebsite}/check`); await loadManagedWebsites(); showToast('Website check completed.'); }
-    catch (error) { button.disabled = false; button.textContent = 'Check now'; showToast(error?.response?.data?.message || 'Website check failed.', 'error'); }
+    try {
+        const response = await api.post(`/api/websites/${button.dataset.checkWebsite}/check`);
+        const errors = response?.data?.data?.errors || [];
+        await loadManagedWebsites();
+        if (errors.includes('WordPress agent status is unavailable.')) showToast('The monitoring plugin could not be reached. Check the saved token and try again.', true);
+        else showToast('Monitoring connected and website status updated.');
+    }
+    catch (error) { button.disabled = false; button.textContent = originalLabel; showToast(error?.response?.data?.message || 'Website check failed.', true); }
 });
 if (dom.websiteAgentTokenCopy) dom.websiteAgentTokenCopy.addEventListener('click', async () => {
     const token = dom.websiteAgentTokenValue?.value || '';

@@ -16,7 +16,7 @@ class WebsiteMonitor
     {
         $started = hrtime(true); $httpStatus = null; $errors = []; $online = false;
         try {
-            $result = $this->client->fetch($website->login_url);
+            $result = $this->client->fetch($this->publicUrl($website));
             $httpStatus = $result['response']->status();
             $online = $httpStatus >= 200 && $httpStatus < 500;
             $responseTime = $result['duration_ms'];
@@ -32,7 +32,7 @@ class WebsiteMonitor
         $agentReached = false;
         if ($type !== 'http' && $website->wordpress_enabled && $website->agent_token_encrypted) {
             try {
-                $metrics = array_intersect_key($this->client->fetchJson(rtrim($website->login_url, '/').'/wp-json/webstamp/v1/status', $website->agent_token_encrypted), array_flip(['wordpress_version', 'php_version', 'plugin_count', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status', 'performance_score']));
+                $metrics = array_intersect_key($this->client->fetchJson($this->publicUrl($website).'/wp-json/webstamp/v1/status', $website->agent_token_encrypted), array_flip(['wordpress_version', 'php_version', 'plugin_count', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status', 'performance_score']));
                 $agentReached = true;
             }
             catch (Throwable) { $errors[] = 'WordPress agent status is unavailable.'; }
@@ -48,5 +48,22 @@ class WebsiteMonitor
         $updates = (($metrics['plugin_updates'] ?? 0) + ($metrics['theme_updates'] ?? 0)) > 0;
         $this->incidents->sync($website, 'updates_available', $updates, 'warning', 'Updates available', 'WordPress plugins or themes need maintenance.');
         return $check;
+    }
+
+    private function publicUrl(Website $website): string
+    {
+        $loginUrl = trim((string) $website->login_url);
+        $scheme = strtolower((string) parse_url($loginUrl, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true)) $scheme = 'https';
+
+        $domain = trim((string) $website->domain);
+        $host = parse_url(str_contains($domain, '://') ? $domain : "{$scheme}://{$domain}", PHP_URL_HOST);
+        $port = parse_url($loginUrl, PHP_URL_PORT);
+
+        if (! $host) {
+            $host = parse_url($loginUrl, PHP_URL_HOST);
+        }
+
+        return $scheme.'://'.$host.($port ? ':'.$port : '');
     }
 }

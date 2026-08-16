@@ -66,16 +66,21 @@ class HostingAccountSyncService
             ->map(fn ($domain) => $this->normaliseDomain($domain))
             ->unique();
 
-        Website::query()->whereNull('hosting_account_id')->get()->each(function (Website $website) use ($account, $domains): void {
-            if (! $domains->contains($this->normaliseDomain($website->domain ?: $website->login_url))) return;
+        Website::query()
+            ->whereNull('hosting_account_id')
+            ->where('hosting_enabled', true)
+            ->get()
+            ->each(function (Website $website) use ($account, $domains): void {
+                if (data_get($website->metadata, 'hosting_assignment_excluded', false)) return;
+                if (! $domains->contains($this->normaliseDomain($website->domain ?: $website->login_url))) return;
 
-            $website->update([
-                'hosting_server_id' => $account->hosting_server_id,
-                'hosting_account_id' => $account->id,
-                'cpanel_username' => $account->username,
-                'hosting_enabled' => true,
-            ]);
-        });
+                $website->update([
+                    'hosting_server_id' => $account->hosting_server_id,
+                    'hosting_account_id' => $account->id,
+                    'cpanel_username' => $account->username,
+                    'hosting_enabled' => true,
+                ]);
+            });
     }
 
     private function normaliseDomain(?string $value): string
