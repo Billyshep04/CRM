@@ -15,9 +15,10 @@ class WebsiteController extends Controller
     public function index(Request $request)
     {
         $query = Website::query()->with(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck'])->latest();
-        $connection = $request->query('connection', 'linked');
+        $connection = $request->query('connection', 'all');
         if ($connection === 'unlinked') $query->whereNull('agent_last_seen_at');
         elseif ($connection === 'linked') $query->whereNotNull('agent_last_seen_at');
+        elseif ($connection === 'setup') $this->needsSetup($query);
         foreach (['customer_id', 'status', 'hosting_enabled', 'management_enabled'] as $filter) {
             if ($request->filled($filter)) $query->where($filter, $request->input($filter));
         }
@@ -31,6 +32,9 @@ class WebsiteController extends Controller
     public function summary()
     {
         $base = Website::query();
+        $setup = Website::query();
+        $this->needsSetup($setup);
+
         return response()->json(['data' => [
             'total' => (clone $base)->count(),
             'healthy' => (clone $base)->where('status', 'healthy')->count(),
@@ -39,6 +43,9 @@ class WebsiteController extends Controller
             'updates_available' => (clone $base)->whereHas('latestHealthCheck', fn ($q) => $q->where(fn ($i) => $i->where('plugin_updates', '>', 0)->orWhere('theme_updates', '>', 0)))->count(),
             'linked' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
             'unlinked' => (clone $base)->whereNull('agent_last_seen_at')->count(),
+            'hosting_connected' => (clone $base)->whereNotNull('hosting_account_id')->count(),
+            'monitoring_connected' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
+            'setup_required' => $setup->count(),
         ]]);
     }
 
@@ -104,4 +111,15 @@ class WebsiteController extends Controller
     }
 
     private function domain(string $url): ?string { return parse_url($url, PHP_URL_HOST) ?: null; }
+
+    private function needsSetup($query): void
+    {
+        $query->where(function ($outer): void {
+            $outer->where(function ($hosting): void {
+                $hosting->where('hosting_enabled', true)->whereNull('hosting_account_id');
+            })->orWhere(function ($monitoring): void {
+                $monitoring->where('wordpress_enabled', true)->whereNull('agent_last_seen_at');
+            });
+        });
+    }
 }

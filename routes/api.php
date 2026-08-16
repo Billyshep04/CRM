@@ -37,6 +37,7 @@ use App\Http\Controllers\WebsiteAgentController;
 use App\Http\Controllers\HostingServerController;
 use App\Http\Controllers\HostingAccountController;
 use App\Http\Controllers\WebsiteProvisioningController;
+use App\Http\Controllers\KrystalWebsiteImportController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -168,6 +169,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('hosting-accounts', [HostingAccountController::class, 'index'])->middleware('permission:hosting_view');
         Route::put('hosting-accounts/{hostingAccount}', [HostingAccountController::class, 'update'])->middleware('permission:hosting_manage');
         Route::post('hosting-servers/{hostingServer}/sync', [HostingAccountController::class, 'sync'])->middleware('permission:hosting_manage');
+        Route::post('hosting-servers/{hostingServer}/discover-websites', [KrystalWebsiteImportController::class, 'discover'])->middleware('permission:hosting_manage');
+        Route::post('hosting-accounts/{hostingAccount}/import-website', [KrystalWebsiteImportController::class, 'import'])->middleware('permission:hosting_manage');
         Route::post('hosting-accounts/{hostingAccount}/session', [HostingAccountController::class, 'session'])->middleware('permission:hosting_manage');
         Route::get('website-provisioning/options', [WebsiteProvisioningController::class, 'options'])->middleware('permission:hosting_view');
         Route::get('website-provisioning/hosting-accounts', [HostingAccountController::class, 'index'])->middleware('permission:hosting_view');

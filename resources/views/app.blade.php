@@ -493,16 +493,31 @@
                 </section>
 
                 <section class="view staff-view" data-view="websites">
-                    <section class="content-grid">
-                        <div class="card wide">
-                            <div class="card-header"><div><div class="card-title">Website hosting &amp; management</div><div class="card-subtitle" id="websites-list-subtitle">Linked websites with active monitoring history.</div></div><div class="card-header-actions"><button class="btn btn-outline" id="websites-unlinked-toggle" type="button">Unlinked</button><button class="btn btn-outline" id="websites-refresh" type="button">Refresh</button></div></div>
+                    <section class="content-grid websites-workspace">
+                        <div class="card wide websites-directory-card">
+                            <div class="card-header"><div><div class="card-title">Your websites</div><div class="card-subtitle" id="websites-list-subtitle">Every website, with hosting and monitoring shown separately.</div></div><div class="card-header-actions"><button class="btn btn-primary admin-only" id="krystal-import-open" type="button">Import from Krystal</button><button class="btn btn-outline" id="manual-website-toggle" type="button">Add manually</button><button class="btn btn-outline" id="websites-unlinked-toggle" type="button">Setup required</button><button class="btn btn-outline" id="websites-refresh" type="button">Refresh</button></div></div>
                             <div class="stats-grid" id="website-summary"><div class="stat-card"><span>Total</span><strong>—</strong></div><div class="stat-card"><span>Healthy</span><strong>—</strong></div><div class="stat-card"><span>Needs attention</span><strong>—</strong></div><div class="stat-card"><span>Offline</span><strong>—</strong></div></div>
                             <div class="filters"><label class="field"><span>Search</span><input id="websites-search" placeholder="Name or domain"></label><label class="field"><span>Status</span><select id="websites-status"><option value="">All statuses</option><option>healthy</option><option>attention</option><option>critical</option><option>unknown</option><option>paused</option></select></label></div>
                             <div class="site-card" id="website-agent-token-panel" hidden><div><div class="site-name">WordPress connection token</div><div class="site-url" id="website-agent-token-site">Copy this token into WordPress → Settings → WebStamp Agent.</div><input id="website-agent-token-value" type="text" readonly aria-label="Website agent token"></div><div class="site-actions"><button class="btn btn-primary btn-small" id="website-agent-token-copy" type="button">Copy token</button><button class="btn btn-outline btn-small" id="website-agent-token-close" type="button">Close</button></div></div>
                             <div class="stack" id="websites-list"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div>
                         </div>
-                        <div class="card">
-                            <div class="card-header"><div><div class="card-title">Add website</div><div class="card-subtitle">A secure agent token is shown once after saving.</div></div></div>
+
+                        <div class="card wide admin-only krystal-import-card" id="krystal-import-panel" hidden>
+                            <div class="card-header"><div><div class="card-title">Import websites from Krystal</div><div class="card-subtitle">We find the domains. You only choose the customer where a match is not already available.</div></div><div class="card-header-actions"><span class="connection-badge" id="krystal-connection-summary">Checking connection…</span><button class="btn btn-primary" id="hosting-sync" type="button">Scan Krystal</button><button class="btn btn-outline" id="krystal-import-close" type="button">Close</button></div></div>
+                            <div class="website-setup-steps" aria-label="Website import steps"><div><span>1</span><strong>Scan Krystal</strong><small>Primary and addon domains</small></div><div><span>2</span><strong>Choose customer</strong><small>Only when we cannot match one</small></div><div><span>3</span><strong>Connect</strong><small>Hosting details are mapped automatically</small></div></div>
+                            <div class="form-hint" id="krystal-import-summary">Select Scan Krystal to find websites.</div>
+                            <div class="stack krystal-import-list" id="krystal-import-list"><div class="table-empty">No scan has been run yet.</div></div>
+                            <details class="integration-settings">
+                                <summary>Krystal connection settings</summary>
+                                <div class="integration-settings-body">
+                                    <div class="card-header"><div><div class="card-title">Krystal WHM connection</div><div class="card-subtitle">These settings apply once to the whole Websites section.</div></div><button class="btn btn-outline" id="hosting-test" type="button">Test connection</button></div>
+                                    <form id="hosting-server-form" class="form-grid"><input name="id" type="hidden"><label class="field"><span>Connection name</span><input name="name" value="Krystal Trinity" required></label><label class="field"><span>WHM hostname</span><input name="hostname" placeholder="server.example.com" required></label><label class="field"><span>WHM reseller username</span><input name="username" autocomplete="off" required></label><label class="field"><span>WHM API token</span><input name="token" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved token"></label><div class="form-hint form-grid-wide" id="hosting-server-status">Checking Krystal settings…</div><div class="form-grid-wide"><button class="btn btn-primary" type="submit">Save connection</button></div></form>
+                                </div>
+                            </details>
+                        </div>
+
+                        <div class="card wide" id="manual-website-panel" hidden>
+                            <div class="card-header"><div><div class="card-title">Add a website manually</div><div class="card-subtitle">For websites that are not being imported from your Krystal account.</div></div><button class="btn btn-outline" id="manual-website-close" type="button">Close</button></div>
                             <form id="managed-website-form" class="form-stack">
                                 <label class="field"><span>Customer</span><select name="customer_id" id="managed-website-customer" required><option value="">Select customer</option></select></label>
                                 <label class="field"><span>Website name</span><input name="name" required></label>
@@ -521,7 +536,6 @@
                             </form>
                         </div>
                     </section>
-                    <section class="content-grid admin-only"><div class="card wide"><div class="card-header"><div><div class="card-title">Krystal Trinity / WHM</div><div class="card-subtitle">One encrypted reseller connection for all cPanel accounts.</div></div><div class="card-header-actions"><button class="btn btn-outline" id="hosting-sync" type="button">Sync Hosting Accounts</button><button class="btn btn-outline" id="hosting-test" type="button">Test Connection</button></div></div><form id="hosting-server-form" class="form-stack"><input name="id" type="hidden"><label class="field"><span>Connection name</span><input name="name" value="Krystal Trinity" required></label><label class="field"><span>WHM hostname</span><input name="hostname" placeholder="server.example.com" required></label><label class="field"><span>WHM reseller username</span><input name="username" autocomplete="off" required></label><label class="field"><span>WHM API token</span><input name="token" type="password" autocomplete="new-password" placeholder="Leave blank to keep saved token"></label><div class="form-hint" id="hosting-server-status">Provisioning mode is loaded from the server and defaults to mock.</div><button class="btn btn-primary" type="submit">Save WHM connection</button></form></div><div class="card"><div class="card-header"><div><div class="card-title">Hosting accounts</div><div class="card-subtitle">Synced cPanel accounts and customer assignments.</div></div></div><div class="stack" id="hosting-accounts-list"><div class="table-empty">Save and sync a WHM connection.</div></div></div></section>
                 </section>
 
                 <section class="view staff-view" data-view="website-detail">
@@ -751,46 +765,18 @@
                                 <div class="card-header">
                                     <div>
                                         <div class="card-title">Websites</div>
-                                        <div class="card-subtitle">Quick login links for this customer.</div>
+                                        <div class="card-subtitle">Websites connected to this customer, Krystal hosting and monitoring.</div>
                                     </div>
+                                    <button class="btn btn-primary admin-inline-only" id="customer-website-add" type="button">Add website</button>
                                 </div>
                                 <div class="stack" id="customer-websites-list">
                                     <div class="site-card">
                                         <div>
                                             <div class="site-name">No websites yet</div>
-                                            <div class="site-url">Add one to enable quick login.</div>
+                                            <div class="site-url">Select Add website to connect one.</div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div class="card">
-                                <div class="card-header">
-                                    <div>
-                                        <div class="card-title" id="customer-website-title">Add website</div>
-                                        <div class="card-subtitle">Store a login link (no passwords).</div>
-                                    </div>
-                                </div>
-                                <form id="customer-website-form" class="form-stack">
-                                    <input type="hidden" name="id">
-                                    <label class="field">
-                                        <span>Website name</span>
-                                        <input type="text" name="name" required>
-                                    </label>
-                                    <label class="field">
-                                        <span>Login URL</span>
-                                        <input type="url" name="login_url" placeholder="https://example.com/login" required>
-                                    </label>
-                                    <label class="field">
-                                        <span>Notes</span>
-                                        <textarea name="notes" rows="3"></textarea>
-                                    </label>
-                                    <div id="customer-website-status" class="form-hint"></div>
-                                    <div class="form-actions">
-                                        <button type="submit" class="btn btn-primary">Save website</button>
-                                        <button type="button" class="btn btn-outline" id="customer-website-cancel">Cancel</button>
-                                    </div>
-                                </form>
                             </div>
                         </div>
                     </section>
@@ -2119,6 +2105,53 @@
                     <label class="field"><span>Notes</span><textarea name="notes" rows="5" placeholder="What should you discuss or prepare for this follow-up?"></textarea></label>
                     <div id="opportunity-follow-up-status" class="form-hint"></div>
                     <button class="btn btn-primary" type="submit">Save follow-up</button>
+                </form>
+            </section>
+        </div>
+
+        <div class="crm-modal-backdrop" id="customer-website-modal" hidden>
+            <section class="crm-modal customer-form-modal customer-website-modal" role="dialog" aria-modal="true" aria-labelledby="customer-website-title">
+                <div class="crm-modal-header">
+                    <div><div class="card-title" id="customer-website-title">Add website</div><div class="card-subtitle" id="customer-website-modal-subtitle">Choose how this website should be connected.</div></div>
+                    <button class="crm-modal-close" id="customer-website-modal-close" type="button" aria-label="Close">×</button>
+                </div>
+
+                <div id="customer-website-choice" class="website-add-choices">
+                    <button class="website-add-choice" type="button" data-customer-website-mode="create">
+                        <strong>Create with Krystal</strong><span>Create a new cPanel account and add it to the CRM automatically.</span><small>Recommended for a new hosted website</small>
+                    </button>
+                    <button class="website-add-choice" type="button" data-customer-website-mode="connect">
+                        <strong>Connect existing Krystal website</strong><span>Find a domain already hosted in your Krystal account and link it to this customer.</span><small>No technical mapping required</small>
+                    </button>
+                    <button class="website-add-choice website-add-choice-secondary" type="button" data-customer-website-mode="external">
+                        <strong>Add externally hosted website</strong><span>Add a website that is not hosted through your Krystal account.</span>
+                    </button>
+                </div>
+
+                <form id="customer-website-krystal-form" class="form-stack" hidden>
+                    <div class="guided-customer-label">Customer: <strong id="customer-website-krystal-customer">—</strong></div>
+                    <label class="field"><span>Website name</span><input name="name" required placeholder="Customer website"></label>
+                    <label class="field"><span>Domain</span><input name="domain" required placeholder="example.co.uk" inputmode="url" autocapitalize="none" spellcheck="false"></label>
+                    <label class="field"><span>Krystal hosting package</span><select name="hosting_package_id" id="customer-website-krystal-package" required><option value="">Select package</option></select></label>
+                    <label class="field"><span>Website type</span><select name="website_type"><option value="wordpress">WordPress</option><option value="blank">Blank hosting</option></select></label>
+                    <div id="customer-website-krystal-status" class="form-hint"></div>
+                    <div class="form-actions"><button type="button" class="btn btn-outline" data-customer-website-back>Back</button><button type="submit" class="btn btn-primary">Create and connect website</button></div>
+                </form>
+
+                <div id="customer-website-connect-panel" hidden>
+                    <div class="guided-customer-label">Connecting to: <strong id="customer-website-connect-customer">—</strong></div>
+                    <div id="customer-website-connect-status" class="form-hint">Scanning Krystal for websites…</div>
+                    <div id="customer-website-connect-list" class="stack customer-website-connect-list"></div>
+                    <div class="form-actions"><button type="button" class="btn btn-outline" data-customer-website-back>Back</button><button type="button" class="btn btn-outline" id="customer-website-connect-refresh">Scan again</button></div>
+                </div>
+
+                <form id="customer-website-form" class="form-stack" hidden>
+                    <input type="hidden" name="id">
+                    <label class="field"><span>Website name</span><input type="text" name="name" required></label>
+                    <label class="field"><span>Website URL</span><input type="url" name="login_url" placeholder="https://example.com" required></label>
+                    <label class="field"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+                    <div id="customer-website-status" class="form-hint"></div>
+                    <div class="form-actions"><button type="button" class="btn btn-outline" id="customer-website-cancel">Back</button><button type="submit" class="btn btn-primary">Save website</button></div>
                 </form>
             </section>
         </div>

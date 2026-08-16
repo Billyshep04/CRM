@@ -224,6 +224,15 @@ const dom = {
     managedWebsiteServer: document.getElementById('managed-website-server'),
     managedWebsitePackage: document.getElementById('managed-website-package'),
     managedWebsiteProfile: document.getElementById('managed-website-profile'),
+    manualWebsiteToggle: document.getElementById('manual-website-toggle'),
+    manualWebsitePanel: document.getElementById('manual-website-panel'),
+    manualWebsiteClose: document.getElementById('manual-website-close'),
+    krystalImportOpen: document.getElementById('krystal-import-open'),
+    krystalImportPanel: document.getElementById('krystal-import-panel'),
+    krystalImportClose: document.getElementById('krystal-import-close'),
+    krystalImportList: document.getElementById('krystal-import-list'),
+    krystalImportSummary: document.getElementById('krystal-import-summary'),
+    krystalConnectionSummary: document.getElementById('krystal-connection-summary'),
     hostingServerForm: document.getElementById('hosting-server-form'),
     hostingServerStatus: document.getElementById('hosting-server-status'),
     hostingTest: document.getElementById('hosting-test'),
@@ -264,10 +273,24 @@ const dom = {
     customerJobsTable: document.getElementById('customer-jobs-table'),
     customerSubscriptionsTable: document.getElementById('customer-subscriptions-table'),
     customerWebsitesList: document.getElementById('customer-websites-list'),
+    customerWebsiteAdd: document.getElementById('customer-website-add'),
+    customerWebsiteModal: document.getElementById('customer-website-modal'),
+    customerWebsiteModalClose: document.getElementById('customer-website-modal-close'),
+    customerWebsiteModalSubtitle: document.getElementById('customer-website-modal-subtitle'),
+    customerWebsiteChoice: document.getElementById('customer-website-choice'),
     customerWebsiteForm: document.getElementById('customer-website-form'),
     customerWebsiteStatus: document.getElementById('customer-website-status'),
     customerWebsiteCancel: document.getElementById('customer-website-cancel'),
     customerWebsiteTitle: document.getElementById('customer-website-title'),
+    customerWebsiteKrystalForm: document.getElementById('customer-website-krystal-form'),
+    customerWebsiteKrystalCustomer: document.getElementById('customer-website-krystal-customer'),
+    customerWebsiteKrystalPackage: document.getElementById('customer-website-krystal-package'),
+    customerWebsiteKrystalStatus: document.getElementById('customer-website-krystal-status'),
+    customerWebsiteConnectPanel: document.getElementById('customer-website-connect-panel'),
+    customerWebsiteConnectCustomer: document.getElementById('customer-website-connect-customer'),
+    customerWebsiteConnectStatus: document.getElementById('customer-website-connect-status'),
+    customerWebsiteConnectList: document.getElementById('customer-website-connect-list'),
+    customerWebsiteConnectRefresh: document.getElementById('customer-website-connect-refresh'),
     customerFormRequestForm: document.getElementById('customer-form-request-form'),
     customerFormTemplate: document.getElementById('customer-form-template'),
     customerFormRequestStatus: document.getElementById('customer-form-request-status'),
@@ -475,6 +498,7 @@ const state = {
     websiteDetailReturnView: 'websites',
     showingUnlinkedWebsites: false,
     hostingOptions: { servers: [], profiles: [], mode: 'mock', live_enabled: false },
+    krystalDomains: [],
     currentLead: null,
     filters: {
         customers: {
@@ -2136,7 +2160,7 @@ async function loadPortalWebsiteDetail(websiteId) {
 async function loadManagedWebsites() {
     if (!dom.websitesList) return;
     const params = new URLSearchParams({ per_page: '100' });
-    params.set('connection', state.showingUnlinkedWebsites ? 'unlinked' : 'linked');
+    params.set('connection', state.showingUnlinkedWebsites ? 'setup' : 'all');
     if (dom.websitesSearch?.value) params.set('search', dom.websitesSearch.value);
     if (dom.websitesStatus?.value) params.set('status', dom.websitesStatus.value);
     dom.websitesList.innerHTML = '<div class="site-card"><div><div class="site-name">Loading websites…</div></div></div>';
@@ -2144,17 +2168,23 @@ async function loadManagedWebsites() {
         const [sitesResponse, summaryResponse] = await Promise.all([api.get(`/api/websites?${params}`), api.get('/api/websites/summary')]);
         const websites = sitesResponse?.data?.data || [];
         const summary = summaryResponse?.data?.data || {};
-        if (dom.websiteSummary) dom.websiteSummary.innerHTML = [['Total', summary.total], ['Healthy', summary.healthy], ['Needs attention', summary.needs_attention], ['Offline', summary.offline]].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value ?? 0}</strong></div>`).join('');
-        dom.websitesList.innerHTML = websites.length ? '' : `<div class="site-card"><div><div class="site-name">${state.showingUnlinkedWebsites ? 'No unlinked websites.' : 'No linked websites match these filters.'}</div></div></div>`;
+        if (dom.websiteSummary) dom.websiteSummary.innerHTML = [['Websites', summary.total], ['Krystal hosting', summary.hosting_connected], ['Monitoring', summary.monitoring_connected], ['Setup required', summary.setup_required]].map(([label, value]) => `<div class="stat-card"><span>${label}</span><strong>${value ?? 0}</strong></div>`).join('');
+        dom.websitesList.innerHTML = websites.length ? '' : `<div class="site-card"><div><div class="site-name">${state.showingUnlinkedWebsites ? 'Everything is set up.' : 'No websites match these filters.'}</div><div class="site-url">${state.showingUnlinkedWebsites ? 'There are no websites waiting for hosting or monitoring setup.' : 'Import from Krystal or add a website manually.'}</div></div></div>`;
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
-            const connection = site.agent_linked ? `<span class="connection-state"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Connected' : 'Disconnected'}</span>` : '<span>Not linked</span>';
-            const tokenAction = state.showingUnlinkedWebsites && state.role === 'admin' ? `<button class="btn btn-primary btn-small" data-get-agent-token="${site.id}" data-site-name="${escapeHtml(site.name)}">Get connection token</button>` : '';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} <span class="badge">${escapeHtml(site.status || 'unknown')}</span></div><div class="site-url">${escapeHtml(site.domain || site.login_url)}</div><div class="card-subtitle">${escapeHtml(site.customer?.name || 'No customer')} · Last checked ${site.last_checked_at ? formatDate(site.last_checked_at) : 'never'} · ${connection}</div></div><div class="form-actions">${tokenAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><button class="btn btn-outline btn-small" data-check-website="${site.id}">Check now</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Open</a></div>`;
+            const hostingState = site.hosting_account_id
+                ? '<span class="setup-pill setup-pill-success"><span class="connection-dot connected"></span>Krystal hosting</span>'
+                : (site.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
+            const monitoringState = site.agent_linked
+                ? `<span class="setup-pill ${site.agent_connected ? 'setup-pill-success' : 'setup-pill-danger'}"><span class="connection-dot ${site.agent_connected ? 'connected' : 'disconnected'}"></span>${site.agent_connected ? 'Monitoring connected' : 'Monitoring offline'}</span>`
+                : (site.wordpress_enabled ? '<span class="setup-pill setup-pill-warning">Monitoring plugin needed</span>' : '<span class="setup-pill">Monitoring not required</span>');
+            const tokenAction = !site.agent_linked && site.wordpress_enabled && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-get-agent-token="${site.id}" data-site-name="${escapeHtml(site.name)}">Install monitoring</button>` : '';
+            const cpanelAction = site.hosting_account_id && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-open-website-cpanel="${site.hosting_account_id}">Open cPanel</button>` : '';
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${cpanelAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
             dom.websitesList.appendChild(card);
         });
-        if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Back to linked' : `Unlinked (${summary.unlinked ?? 0})`;
-        if (dom.websitesListSubtitle) dom.websitesListSubtitle.textContent = state.showingUnlinkedWebsites ? 'Websites that have not connected to the WordPress agent yet.' : 'Linked websites with connection and monitoring status.';
+        if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Show all websites' : `Setup required (${summary.setup_required ?? 0})`;
+        if (dom.websitesListSubtitle) dom.websitesListSubtitle.textContent = state.showingUnlinkedWebsites ? 'Only websites that still need hosting or WordPress monitoring setup.' : 'Every website, with hosting and monitoring shown separately.';
         if (dom.managedWebsiteCustomer) {
             const current = dom.managedWebsiteCustomer.value;
             dom.managedWebsiteCustomer.innerHTML = '<option value="">Select customer</option>' + (state.customers || []).map((customer) => `<option value="${customer.id}">${escapeHtml(customer.name)}</option>`).join('');
@@ -2172,17 +2202,73 @@ function populateHostingPackageOptions() {
 async function loadHostingOptions() {
     if (state.role !== 'admin') return;
     try {
-        const [optionsResponse, accountsResponse, websitesResponse] = await Promise.all([api.get('/api/website-provisioning/options'), api.get('/api/website-provisioning/hosting-accounts'), api.get('/api/websites?connection=all&per_page=100')]);
+        const optionsResponse = await api.get('/api/website-provisioning/options');
         state.hostingOptions = optionsResponse?.data?.data || state.hostingOptions;
         const servers = state.hostingOptions.servers || [];
         if (dom.managedWebsiteServer) dom.managedWebsiteServer.innerHTML = '<option value="">No hosting provisioning</option>' + servers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
         if (dom.managedWebsiteProfile) dom.managedWebsiteProfile.innerHTML = '<option value="">No profile</option>' + (state.hostingOptions.profiles || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
         const server = servers[0];
         if (server && dom.hostingServerForm) { dom.hostingServerForm.elements.id.value = server.id; dom.hostingServerForm.elements.name.value = server.name || 'Krystal Trinity'; dom.hostingServerForm.elements.hostname.value = server.hostname || ''; dom.hostingServerForm.elements.username.value = server.credential_username || ''; }
-        if (dom.hostingServerStatus) dom.hostingServerStatus.textContent = `Provisioning mode: ${state.hostingOptions.mode}. Live provisioning: ${state.hostingOptions.live_enabled ? 'enabled' : 'disabled'}.`;
-        if (dom.hostingAccountsList) { const accounts=accountsResponse?.data?.data||[]; const sites=websitesResponse?.data?.data||[]; const customerOptions=(state.customerOptions||state.customers||[]).map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join(''); const siteOptions=sites.map(s=>`<option value="${s.id}">${escapeHtml(s.name)} · ${escapeHtml(s.domain||'')}</option>`).join(''); dom.hostingAccountsList.innerHTML=accounts.length?accounts.map(a=>`<div class="site-card"><div><div class="site-name">${escapeHtml(a.username)} · ${escapeHtml(a.primary_domain||'No primary domain')}</div><div class="site-url">${escapeHtml(a.customer?.name||'Unassigned')} · ${escapeHtml(a.package_name||'Package unavailable')} · ${escapeHtml(a.status||'unknown')}</div><div class="form-actions"><select data-hosting-customer="${a.id}"><option value="">Unassigned customer</option>${customerOptions}</select><select data-hosting-website="${a.id}"><option value="">No website</option>${siteOptions}</select><button class="btn btn-primary btn-small" data-map-hosting="${a.id}">Save mapping</button><button class="btn btn-outline btn-small" data-open-cpanel="${a.id}">Open cPanel</button></div></div></div>`).join(''):'<div class="table-empty">No hosting accounts synced yet.</div>'; accounts.forEach(a=>{const c=dom.hostingAccountsList.querySelector(`[data-hosting-customer="${a.id}"]`);if(c)c.value=a.customer_id||'';const w=dom.hostingAccountsList.querySelector(`[data-hosting-website="${a.id}"]`);if(w&&a.websites?.[0])w.value=a.websites[0].id;}); }
+        if (dom.hostingServerStatus) dom.hostingServerStatus.textContent = server ? `Connected server: ${server.hostname || server.name}. The API token remains hidden.` : 'No Krystal connection has been saved yet.';
+        if (dom.krystalConnectionSummary) {
+            dom.krystalConnectionSummary.textContent = server?.has_token ? 'Krystal connected' : 'Connection required';
+            dom.krystalConnectionSummary.classList.toggle('connected', Boolean(server?.has_token));
+        }
         populateHostingPackageOptions();
     } catch (error) { if(dom.hostingServerStatus)setFormStatus(dom.hostingServerStatus,getErrorMessage(error,'Unable to load hosting settings.'),true); }
+}
+
+function renderKrystalImport(domains = [], warnings = []) {
+    if (!dom.krystalImportList) return;
+    state.krystalDomains = domains;
+    const customers = state.customerOptions.length ? state.customerOptions : (state.customers || []);
+    const customerOptions = customers.map((customer) => `<option value="${customer.id}">${escapeHtml(customer.name)}</option>`).join('');
+    const pending = domains.filter((item) => item.state !== 'connected').length;
+    if (dom.krystalImportSummary) {
+        const warningText = warnings.length ? ` ${warnings.join(' ')}` : '';
+        dom.krystalImportSummary.textContent = `${domains.length} domain${domains.length === 1 ? '' : 's'} found · ${pending} waiting to be connected.${warningText}`;
+        dom.krystalImportSummary.classList.toggle('error', warnings.length > 0);
+    }
+    dom.krystalImportList.innerHTML = domains.length ? domains.map((item) => {
+        const status = item.state === 'connected'
+            ? '<span class="setup-pill setup-pill-success">Connected</span>'
+            : (item.state === 'matched' ? '<span class="setup-pill setup-pill-info">CRM match found</span>' : '<span class="setup-pill setup-pill-warning">Choose customer</span>');
+        const customer = item.state === 'connected'
+            ? `<div class="import-customer-name">${escapeHtml(item.customer_name || 'Customer assigned')}</div>`
+            : `<label class="field import-customer"><span>Customer</span><select data-import-customer="${item.hosting_account_id}:${escapeHtml(item.domain)}"><option value="">Select customer</option>${customerOptions}</select></label>`;
+        const action = item.state === 'connected'
+            ? `<button class="btn btn-outline btn-small" data-open-cpanel="${item.hosting_account_id}">Open cPanel</button><button class="btn btn-primary btn-small" data-open-website="${item.website_id}">View website</button>`
+            : `<button class="btn btn-primary btn-small" data-import-krystal-domain="${escapeHtml(item.domain)}" data-import-hosting-account="${item.hosting_account_id}">${item.state === 'matched' ? 'Connect match' : 'Connect website'}</button>`;
+        return `<div class="krystal-domain-row"><div class="krystal-domain-main"><div class="site-name">${escapeHtml(item.domain)}</div><div class="site-url">${escapeHtml(item.domain_type === 'primary' ? 'Primary domain' : 'Addon domain')} · cPanel ${escapeHtml(item.cpanel_username)} · ${escapeHtml(item.package_name || 'No package')}</div></div>${status}${customer}<div class="site-actions">${action}</div></div>`;
+    }).join('') : '<div class="table-empty">No primary or addon domains were found in this Krystal account.</div>';
+
+    domains.forEach((item) => {
+        const select = [...dom.krystalImportList.querySelectorAll('[data-import-customer]')]
+            .find((element) => element.dataset.importCustomer === `${item.hosting_account_id}:${item.domain}`);
+        if (select && item.customer_id) select.value = String(item.customer_id);
+    });
+}
+
+async function scanKrystalWebsites() {
+    const server = state.hostingOptions.servers?.[0];
+    if (!server) {
+        if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = false;
+        if (dom.krystalImportSummary) setFormStatus(dom.krystalImportSummary, 'Open Krystal connection settings and save your connection first.', true);
+        return;
+    }
+    if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = false;
+    if (dom.hostingSync) dom.hostingSync.disabled = true;
+    if (dom.krystalImportList) dom.krystalImportList.innerHTML = '<div class="table-empty">Scanning Krystal for primary and addon domains…</div>';
+    try {
+        const response = await api.post(`/api/hosting-servers/${server.id}/discover-websites`);
+        const result = response?.data?.data || {};
+        renderKrystalImport(result.domains || [], result.warnings || []);
+        await loadManagedWebsites();
+    } catch (error) {
+        if (dom.krystalImportList) dom.krystalImportList.innerHTML = `<div class="table-empty error">${escapeHtml(getErrorMessage(error, 'Unable to scan Krystal websites.'))}</div>`;
+    } finally {
+        if (dom.hostingSync) dom.hostingSync.disabled = false;
+    }
 }
 
 function openWebsiteDetail(websiteId, returnView = 'websites') {
@@ -4318,7 +4404,7 @@ function renderCustomerWebsites(websites = []) {
         emptyCard.innerHTML = `
             <div>
                 <div class="site-name">No websites yet</div>
-                <div class="site-url">Add one to enable quick login.</div>
+                <div class="site-url">Select Add website to create or connect one.</div>
             </div>
         `;
         dom.customerWebsitesList.appendChild(emptyCard);
@@ -4328,10 +4414,17 @@ function renderCustomerWebsites(websites = []) {
     websites.forEach((website) => {
         const card = document.createElement('div');
         card.className = 'site-card';
+        const hostingState = website.hosting_account_id
+            ? '<span class="setup-pill setup-pill-success">Krystal hosting connected</span>'
+            : (website.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
+        const monitoringState = website.agent_last_seen_at
+            ? '<span class="setup-pill setup-pill-success">Monitoring connected</span>'
+            : (website.wordpress_enabled ? '<span class="setup-pill setup-pill-warning">Monitoring setup needed</span>' : '');
         card.innerHTML = `
             <div>
                 <div class="site-name">${escapeHtml(website.name)}</div>
                 <div class="site-url">${escapeHtml(website.login_url)}</div>
+                <div class="website-connection-states">${hostingState}${monitoringState}</div>
             </div>
             <div class="site-actions">
                 <button class="btn btn-primary btn-small" data-action="view" data-id="${website.id}">View details</button>
@@ -4567,6 +4660,130 @@ function resetCustomerWebsiteForm() {
     setFormStatus(dom.customerWebsiteStatus, '');
 }
 
+function setCustomerWebsiteMode(mode = 'choice') {
+    if (dom.customerWebsiteChoice) dom.customerWebsiteChoice.hidden = mode !== 'choice';
+    if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.hidden = mode !== 'create';
+    if (dom.customerWebsiteConnectPanel) dom.customerWebsiteConnectPanel.hidden = mode !== 'connect';
+    if (dom.customerWebsiteForm) dom.customerWebsiteForm.hidden = mode !== 'external' && mode !== 'edit';
+    if (dom.customerWebsiteTitle) dom.customerWebsiteTitle.textContent = mode === 'edit' ? 'Edit website' : 'Add website';
+    if (dom.customerWebsiteModalSubtitle) {
+        dom.customerWebsiteModalSubtitle.textContent = mode === 'create'
+            ? 'Create the hosting account and CRM website together.'
+            : (mode === 'connect'
+                ? 'Select a domain already hosted in Krystal.'
+                : (mode === 'external' ? 'Add a website hosted somewhere else.' : (mode === 'edit' ? 'Update the website details.' : 'Choose how this website should be connected.')));
+    }
+}
+
+function closeCustomerWebsiteModal() {
+    if (dom.customerWebsiteModal) dom.customerWebsiteModal.hidden = true;
+    resetCustomerWebsiteForm();
+    dom.customerWebsiteKrystalForm?.reset();
+    setCustomerWebsiteMode('choice');
+}
+
+function populateCustomerKrystalPackages() {
+    if (!dom.customerWebsiteKrystalPackage) return;
+    const server = state.hostingOptions.servers?.[0];
+    dom.customerWebsiteKrystalPackage.innerHTML = '<option value="">Select package</option>'
+        + (server?.packages || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+    if (dom.customerWebsiteKrystalStatus) {
+        if (!server) setFormStatus(dom.customerWebsiteKrystalStatus, 'Save the Krystal connection in Websites before creating hosted sites.', true);
+        else if (!server.packages?.length) setFormStatus(dom.customerWebsiteKrystalStatus, 'No Krystal packages are available. Scan Krystal from the Websites page first.', true);
+        else {
+            const mode = state.hostingOptions.mode || 'mock';
+            const live = Boolean(state.hostingOptions.live_enabled);
+            setFormStatus(dom.customerWebsiteKrystalStatus, mode === 'live' && live
+                ? 'This will create a real cPanel account in Krystal.'
+                : 'Preview mode is active. Enable live provisioning before creating a real Krystal account.');
+        }
+    }
+}
+
+async function openCustomerWebsiteModal() {
+    if (!state.currentCustomer?.id || !dom.customerWebsiteModal) return;
+    resetCustomerWebsiteForm();
+    setCustomerWebsiteMode('choice');
+    dom.customerWebsiteModal.hidden = false;
+    if (dom.customerWebsiteKrystalCustomer) dom.customerWebsiteKrystalCustomer.textContent = state.currentCustomer.name || 'Current customer';
+    if (dom.customerWebsiteConnectCustomer) dom.customerWebsiteConnectCustomer.textContent = state.currentCustomer.name || 'Current customer';
+    await loadHostingOptions();
+    populateCustomerKrystalPackages();
+}
+
+async function scanCustomerKrystalWebsites() {
+    if (!dom.customerWebsiteConnectList || !state.currentCustomer?.id) return;
+    const server = state.hostingOptions.servers?.[0];
+    dom.customerWebsiteConnectList.innerHTML = '<div class="table-empty">Scanning Krystal…</div>';
+    if (!server) {
+        setFormStatus(dom.customerWebsiteConnectStatus, 'Save the Krystal connection from the Websites page first.', true);
+        dom.customerWebsiteConnectList.innerHTML = '';
+        return;
+    }
+    setFormStatus(dom.customerWebsiteConnectStatus, 'Looking for primary and addon domains…');
+    try {
+        const response = await api.post(`/api/hosting-servers/${server.id}/discover-websites`);
+        const domains = response?.data?.data?.domains || [];
+        const available = domains.filter((item) => item.state !== 'connected' || Number(item.customer_id) === Number(state.currentCustomer.id));
+        setFormStatus(dom.customerWebsiteConnectStatus, `${domains.length} domain${domains.length === 1 ? '' : 's'} found in Krystal.`);
+        dom.customerWebsiteConnectList.innerHTML = available.length ? available.map((item) => {
+            const sameCustomer = item.state === 'connected' && Number(item.customer_id) === Number(state.currentCustomer.id);
+            const action = sameCustomer
+                ? '<span class="setup-pill setup-pill-success">Already connected</span>'
+                : `<button class="btn btn-primary btn-small" type="button" data-connect-customer-domain="${escapeHtml(item.domain)}" data-hosting-account="${item.hosting_account_id}">Connect</button>`;
+            return `<div class="customer-connect-domain"><div><strong>${escapeHtml(item.domain)}</strong><small>${escapeHtml(item.domain_type === 'primary' ? 'Primary domain' : 'Addon domain')} · cPanel ${escapeHtml(item.cpanel_username)}</small></div>${action}</div>`;
+        }).join('') : '<div class="table-empty">No unassigned Krystal websites were found.</div>';
+    } catch (error) {
+        setFormStatus(dom.customerWebsiteConnectStatus, getErrorMessage(error, 'Unable to scan Krystal websites.'), true);
+        dom.customerWebsiteConnectList.innerHTML = '';
+    }
+}
+
+async function handleCustomerKrystalCreate(event) {
+    event.preventDefault();
+    if (!state.currentCustomer?.id || !dom.customerWebsiteKrystalForm) return;
+    const server = state.hostingOptions.servers?.[0];
+    const formData = new FormData(dom.customerWebsiteKrystalForm);
+    const enteredDomain = String(formData.get('domain') || '').trim();
+    let domain;
+    try {
+        const parsed = new URL(/^https?:\/\//i.test(enteredDomain) ? enteredDomain : `https://${enteredDomain}`);
+        if (!parsed.hostname) throw new Error();
+        domain = parsed.hostname.toLowerCase().replace(/^www\./, '');
+    } catch (error) {
+        setFormStatus(dom.customerWebsiteKrystalStatus, 'Enter a valid domain, for example example.co.uk.', true);
+        return;
+    }
+    if (!server || !formData.get('hosting_package_id')) {
+        setFormStatus(dom.customerWebsiteKrystalStatus, 'Select an available Krystal hosting package.', true);
+        return;
+    }
+    const submit = dom.customerWebsiteKrystalForm.querySelector('button[type="submit"]');
+    if (submit) submit.disabled = true;
+    setFormStatus(dom.customerWebsiteKrystalStatus, 'Creating the website and Krystal hosting…');
+    try {
+        await api.post('/api/website-provisioning', {
+            customer_id: Number(state.currentCustomer.id),
+            name: String(formData.get('name') || '').trim(),
+            domain,
+            environment: 'production',
+            hosting_server_id: Number(server.id),
+            hosting_package_id: Number(formData.get('hosting_package_id')),
+            wordpress_profile_id: null,
+            website_type: String(formData.get('website_type') || 'wordpress'),
+            options: { install_agent: true, enable_monitoring: true, initial_check: true },
+            idempotency_key: crypto.randomUUID(),
+        });
+        showToast('Website creation started.');
+        closeCustomerWebsiteModal();
+        await loadCustomerDetail(state.currentCustomer.id);
+    } catch (error) {
+        setFormStatus(dom.customerWebsiteKrystalStatus, getErrorMessage(error, 'Unable to create the website.'), true);
+    } finally {
+        if (submit) submit.disabled = false;
+    }
+}
+
 async function handleCustomerSubmit(event) {
     event.preventDefault();
     if (!dom.customerForm) return;
@@ -4722,13 +4939,13 @@ async function handleCustomerWebsiteSubmit(event) {
     try {
         if (editingId) {
             await api.put(`/api/websites/${editingId}`, payload);
-            setFormStatus(dom.customerWebsiteStatus, 'Website updated.');
+            showToast('Website updated.');
         } else {
             await api.post('/api/websites', payload);
-            setFormStatus(dom.customerWebsiteStatus, 'Website saved.');
+            showToast('External website added.');
         }
         await loadCustomerDetail(state.currentCustomer.id);
-        resetCustomerWebsiteForm();
+        closeCustomerWebsiteModal();
     } catch (error) {
         setFormStatus(dom.customerWebsiteStatus, 'Unable to save website.', true);
     }
@@ -4749,7 +4966,8 @@ async function handleCustomerWebsiteAction(event) {
 
     if (action === 'edit' && website && dom.customerWebsiteForm) {
         state.editing.website = id;
-        if (dom.customerWebsiteTitle) dom.customerWebsiteTitle.textContent = 'Edit website';
+        if (dom.customerWebsiteModal) dom.customerWebsiteModal.hidden = false;
+        setCustomerWebsiteMode('edit');
         const idField = dom.customerWebsiteForm.querySelector('input[name="id"]');
         if (idField) idField.value = website.id;
         dom.customerWebsiteForm.querySelector('input[name="name"]').value = website.name || '';
@@ -7344,8 +7562,66 @@ if (dom.customerWebsiteForm) {
 }
 
 if (dom.customerWebsiteCancel) {
-    dom.customerWebsiteCancel.addEventListener('click', resetCustomerWebsiteForm);
+    dom.customerWebsiteCancel.addEventListener('click', () => {
+        resetCustomerWebsiteForm();
+        setCustomerWebsiteMode('choice');
+    });
 }
+
+if (dom.customerWebsiteAdd) dom.customerWebsiteAdd.addEventListener('click', openCustomerWebsiteModal);
+if (dom.customerWebsiteModalClose) dom.customerWebsiteModalClose.addEventListener('click', closeCustomerWebsiteModal);
+if (dom.customerWebsiteModal) dom.customerWebsiteModal.addEventListener('click', (event) => {
+    if (event.target === dom.customerWebsiteModal) closeCustomerWebsiteModal();
+});
+if (dom.customerWebsiteChoice) dom.customerWebsiteChoice.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-customer-website-mode]');
+    if (!button) return;
+    const mode = button.dataset.customerWebsiteMode;
+    setCustomerWebsiteMode(mode);
+    if (mode === 'create') populateCustomerKrystalPackages();
+    if (mode === 'connect') await scanCustomerKrystalWebsites();
+});
+document.querySelectorAll('[data-customer-website-back]').forEach((button) => button.addEventListener('click', () => setCustomerWebsiteMode('choice')));
+if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.addEventListener('submit', handleCustomerKrystalCreate);
+if (dom.customerWebsiteConnectRefresh) dom.customerWebsiteConnectRefresh.addEventListener('click', scanCustomerKrystalWebsites);
+if (dom.customerWebsiteConnectList) dom.customerWebsiteConnectList.addEventListener('click', async (event) => {
+    const copyButton = event.target.closest('[data-copy-customer-agent-token]');
+    if (copyButton) {
+        const input = dom.customerWebsiteConnectList.querySelector('[data-customer-agent-token]');
+        if (!input?.value) return;
+        try { await navigator.clipboard.writeText(input.value); }
+        catch (error) { input.focus(); input.select(); document.execCommand('copy'); }
+        showToast('Monitoring token copied.');
+        return;
+    }
+    if (event.target.closest('[data-finish-customer-website]')) { closeCustomerWebsiteModal(); return; }
+    const button = event.target.closest('[data-connect-customer-domain]');
+    if (!button || !state.currentCustomer?.id) return;
+    button.disabled = true;
+    button.textContent = 'Connecting…';
+    try {
+        const response = await api.post(`/api/hosting-accounts/${button.dataset.hostingAccount}/import-website`, {
+            domain: button.dataset.connectCustomerDomain,
+            customer_id: Number(state.currentCustomer.id),
+            wordpress_enabled: true,
+        });
+        const token = response?.data?.agent_token;
+        await loadCustomerDetail(state.currentCustomer.id);
+        if (token) {
+            setFormStatus(dom.customerWebsiteConnectStatus, 'Website connected. Copy this optional WordPress monitoring token now.');
+            dom.customerWebsiteConnectList.innerHTML = `<div class="connected-token-result"><input data-customer-agent-token type="text" readonly value="${escapeHtml(token)}" aria-label="WordPress monitoring token"><div class="form-actions"><button class="btn btn-primary" type="button" data-copy-customer-agent-token>Copy token</button><button class="btn btn-outline" type="button" data-finish-customer-website>Finish</button></div></div>`;
+            dom.customerWebsiteConnectList.querySelector('[data-customer-agent-token]')?.select();
+            showToast('Website connected.');
+        } else {
+            showToast('Website connected to this customer.');
+            closeCustomerWebsiteModal();
+        }
+    } catch (error) {
+        setFormStatus(dom.customerWebsiteConnectStatus, getErrorMessage(error, 'Unable to connect this website.'), true);
+        button.disabled = false;
+        button.textContent = 'Connect';
+    }
+});
 
 if (dom.customerWebsitesList) {
     dom.customerWebsitesList.addEventListener('click', handleCustomerWebsiteAction);
@@ -7902,7 +8178,57 @@ if (dom.hostingServerForm) dom.hostingServerForm.addEventListener('submit', asyn
     try { if(id)await api.put(`/api/hosting-servers/${id}`,payload);else await api.post('/api/hosting-servers',payload); dom.hostingServerForm.elements.token.value=''; await loadHostingOptions(); setFormStatus(dom.hostingServerStatus,'WHM connection saved securely.'); } catch(error){setFormStatus(dom.hostingServerStatus,getErrorMessage(error,'Unable to save WHM connection.'),true);}
 });
 if (dom.hostingTest) dom.hostingTest.addEventListener('click', async()=>{const id=dom.hostingServerForm?.elements.id.value;if(!id)return showToast('Save the WHM connection first.',true);try{const r=await api.post(`/api/hosting-servers/${id}/test`);showToast(r?.data?.data?.message||'Connection successful.');}catch(e){showToast(getErrorMessage(e,'WHM connection failed.'),true);}});
-if (dom.hostingSync) dom.hostingSync.addEventListener('click', async()=>{const id=dom.hostingServerForm?.elements.id.value;if(!id)return showToast('Save the WHM connection first.',true);dom.hostingSync.disabled=true;try{const r=await api.post(`/api/hosting-servers/${id}/sync`);await loadHostingOptions();showToast(`Synced ${r?.data?.data?.accounts??0} accounts and ${r?.data?.data?.packages??0} packages.`);}catch(e){showToast(getErrorMessage(e,'Hosting sync failed.'),true);}finally{dom.hostingSync.disabled=false;}});
+if (dom.hostingSync) dom.hostingSync.addEventListener('click', scanKrystalWebsites);
+if (dom.krystalImportOpen) dom.krystalImportOpen.addEventListener('click', async () => {
+    if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = false;
+    if (dom.manualWebsitePanel) dom.manualWebsitePanel.hidden = true;
+    dom.krystalImportPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!state.krystalDomains.length) await scanKrystalWebsites();
+});
+if (dom.krystalImportClose) dom.krystalImportClose.addEventListener('click', () => { if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = true; });
+if (dom.manualWebsiteToggle) dom.manualWebsiteToggle.addEventListener('click', () => {
+    if (dom.manualWebsitePanel) dom.manualWebsitePanel.hidden = !dom.manualWebsitePanel.hidden;
+    if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = true;
+    if (!dom.manualWebsitePanel?.hidden) dom.manualWebsitePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});
+if (dom.manualWebsiteClose) dom.manualWebsiteClose.addEventListener('click', () => { if (dom.manualWebsitePanel) dom.manualWebsitePanel.hidden = true; });
+if (dom.krystalImportList) dom.krystalImportList.addEventListener('click', async (event) => {
+    const cpanelButton = event.target.closest('[data-open-cpanel]');
+    if (cpanelButton) {
+        try { const response = await api.post(`/api/hosting-accounts/${cpanelButton.dataset.openCpanel}/session`); window.open(response?.data?.data?.url, '_blank', 'noopener'); }
+        catch (error) { showToast(getErrorMessage(error, 'Temporary cPanel login is unavailable.'), true); }
+        return;
+    }
+    const websiteButton = event.target.closest('[data-open-website]');
+    if (websiteButton) { openWebsiteDetail(websiteButton.dataset.openWebsite, 'websites'); return; }
+    const importButton = event.target.closest('[data-import-krystal-domain]');
+    if (!importButton) return;
+    const key = `${importButton.dataset.importHostingAccount}:${importButton.dataset.importKrystalDomain}`;
+    const customerSelect = [...dom.krystalImportList.querySelectorAll('[data-import-customer]')]
+        .find((element) => element.dataset.importCustomer === key);
+    if (!customerSelect?.value) { showToast('Choose the customer for this website first.', true); customerSelect?.focus(); return; }
+    importButton.disabled = true;
+    importButton.textContent = 'Connecting…';
+    try {
+        const response = await api.post(`/api/hosting-accounts/${importButton.dataset.importHostingAccount}/import-website`, {
+            domain: importButton.dataset.importKrystalDomain,
+            customer_id: Number(customerSelect.value),
+            wordpress_enabled: true,
+        });
+        const token = response?.data?.agent_token;
+        if (token && dom.websiteAgentTokenPanel) {
+            dom.websiteAgentTokenPanel.hidden = false;
+            dom.websiteAgentTokenValue.value = token;
+            dom.websiteAgentTokenSite.textContent = `${importButton.dataset.importKrystalDomain} — optional monitoring token. Copy it into WordPress → Settings → WebStamp Agent.`;
+        }
+        showToast('Website connected to Krystal hosting.');
+        await scanKrystalWebsites();
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to connect this website.'), true);
+        importButton.disabled = false;
+        importButton.textContent = 'Connect website';
+    }
+});
 if (dom.hostingAccountsList) dom.hostingAccountsList.addEventListener('click',async(event)=>{const map=event.target.closest('[data-map-hosting]');if(map){const id=map.dataset.mapHosting;const customerId=dom.hostingAccountsList.querySelector(`[data-hosting-customer="${id}"]`)?.value;const websiteId=dom.hostingAccountsList.querySelector(`[data-hosting-website="${id}"]`)?.value;try{await api.put(`/api/hosting-accounts/${id}`,{customer_id:customerId?Number(customerId):null,website_id:websiteId?Number(websiteId):null});await loadHostingOptions();showToast('Hosting account mapping saved.');}catch(e){showToast(getErrorMessage(e,'Unable to save mapping.'),true);}return;}const open=event.target.closest('[data-open-cpanel]');if(open){try{const r=await api.post(`/api/hosting-accounts/${open.dataset.openCpanel}/session`);window.open(r?.data?.data?.url,'_blank','noopener');}catch(e){showToast(getErrorMessage(e,'Temporary cPanel login is unavailable.'),true);}}});
 if (dom.portalWebsitesRefresh) dom.portalWebsitesRefresh.addEventListener('click', loadPortalWebsites);
 if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click', (event) => {
@@ -7913,6 +8239,12 @@ if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click',
 });
 if (dom.portalWebsiteDetailBack) dom.portalWebsiteDetailBack.addEventListener('click', () => setActiveView('portal-websites'));
 if (dom.websitesList) dom.websitesList.addEventListener('click', async (event) => {
+    const cpanelButton = event.target.closest('[data-open-website-cpanel]');
+    if (cpanelButton) {
+        try { const response = await api.post(`/api/hosting-accounts/${cpanelButton.dataset.openWebsiteCpanel}/session`); window.open(response?.data?.data?.url, '_blank', 'noopener'); }
+        catch (error) { showToast(getErrorMessage(error, 'Temporary cPanel login is unavailable.'), true); }
+        return;
+    }
     const tokenButton = event.target.closest('[data-get-agent-token]');
     if (tokenButton) {
         if (!window.confirm('Generate a new connection token? Any previous token for this website will stop working.')) return;

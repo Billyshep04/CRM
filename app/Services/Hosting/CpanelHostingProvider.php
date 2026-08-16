@@ -31,6 +31,10 @@ class CpanelHostingProvider implements HostingProviderInterface
         return ['hosting_status' => 'active', 'provider_payload' => $response->json('data')];
     }
     public function accounts(HostingServer $server): array { return []; }
+    public function domains(HostingServer $server, HostingAccount $account): array
+    {
+        return $account->primary_domain ? [['domain' => $account->primary_domain, 'type' => 'primary']] : [];
+    }
     public function packages(HostingServer $server): array { return []; }
     public function createAccount(HostingServer $server, array $data): array { throw new RuntimeException('Account creation requires a WHM provider.'); }
     public function cpanelSession(HostingServer $server, HostingAccount $account): ?string { return null; }

@@ -122,6 +122,50 @@ class KrystalWhmProvider implements HostingProviderInterface
         ])->all();
     }
 
+    public function domains(HostingServer $server, HostingAccount $account): array
+    {
+        $response = $this->call($server, 'cpanel', [
+            'cpanel_jsonapi_user' => strtolower($account->username),
+            'cpanel_jsonapi_apiversion' => 3,
+            'cpanel_jsonapi_module' => 'DomainInfo',
+            'cpanel_jsonapi_func' => 'list_domains',
+            'hide_temporary_domains' => 1,
+        ]);
+
+        $data = data_get($response, 'data.result.data')
+            ?? data_get($response, 'data.uapi.result.data')
+            ?? data_get($response, 'data.data')
+            ?? [];
+
+        if (! is_array($data)) {
+            return $account->primary_domain
+                ? [['domain' => $account->primary_domain, 'type' => 'primary']]
+                : [];
+        }
+
+        $domains = [];
+        if (! empty($data['main_domain'])) {
+            $domains[] = ['domain' => $data['main_domain'], 'type' => 'primary'];
+        }
+        foreach (($data['addon_domains'] ?? []) as $domain) {
+            $domains[] = ['domain' => $domain, 'type' => 'addon'];
+        }
+
+        if ($domains === [] && $account->primary_domain) {
+            $domains[] = ['domain' => $account->primary_domain, 'type' => 'primary'];
+        }
+
+        return collect($domains)
+            ->filter(fn ($item) => is_string($item['domain'] ?? null) && trim($item['domain']) !== '')
+            ->map(fn ($item) => [
+                'domain' => strtolower(rtrim(trim($item['domain']), '.')),
+                'type' => $item['type'],
+            ])
+            ->unique('domain')
+            ->values()
+            ->all();
+    }
+
     public function createAccount(HostingServer $server, array $data): array
     {
         $response = $this->call($server, 'createacct', [
