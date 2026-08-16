@@ -6,6 +6,7 @@ use App\Models\HostingServer;
 use App\Services\Hosting\HostingProviderManager;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use RuntimeException;
 
 class HostingServerController extends Controller
 {
@@ -13,7 +14,16 @@ class HostingServerController extends Controller
     public function store(Request $request) { $server = HostingServer::create($this->validated($request)); return response()->json(['data' => $server], 201); }
     public function update(Request $request, HostingServer $hostingServer) { $data=$this->validated($request, true); if(isset($data['credentials'])&&empty($data['credentials']['token']))$data['credentials']['token']=$hostingServer->credentials['token']??null; $hostingServer->update($data); return response()->json(['data' => $hostingServer->fresh()]); }
     public function destroy(HostingServer $hostingServer) { $hostingServer->delete(); return response()->json(['message' => 'Hosting server deleted.']); }
-    public function test(HostingServer $hostingServer, HostingProviderManager $providers) { return response()->json(['data' => $providers->for($hostingServer)->testConnection($hostingServer)]); }
+    public function test(HostingServer $hostingServer, HostingProviderManager $providers)
+    {
+        try {
+            return response()->json([
+                'data' => $providers->for($hostingServer)->testConnection($hostingServer),
+            ]);
+        } catch (RuntimeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+    }
     private function validated(Request $request, bool $sometimes = false): array
     {
         $required = $sometimes ? 'sometimes' : 'required';
