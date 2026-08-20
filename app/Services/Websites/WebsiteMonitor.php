@@ -5,12 +5,13 @@ namespace App\Services\Websites;
 use App\Models\Website;
 use App\Models\WebsiteHealthCheck;
 use App\Services\Hosting\HostingProviderManager;
+use App\Models\HostingMetricSnapshot;
 use App\Services\WebsiteAnalysis\HttpWebsiteClient;
 use Throwable;
 
 class WebsiteMonitor
 {
-    public function __construct(private HttpWebsiteClient $client, private WebsiteIncidentManager $incidents, private HostingProviderManager $hosting) {}
+    public function __construct(private HttpWebsiteClient $client, private WebsiteIncidentManager $incidents, private HostingProviderManager $hosting, private WebsiteHealthEvaluator $health) {}
 
     public function check(Website $website, string $type = 'http'): WebsiteHealthCheck
     {
@@ -38,12 +39,13 @@ class WebsiteMonitor
             catch (Throwable) { $errors[] = 'WordPress agent status is unavailable.'; }
         }
         if ($type !== 'http' && $website->hosting_enabled && $website->hostingServer) {
-            try { $metrics = [...$metrics, ...array_intersect_key($this->hosting->for($website->hostingServer)->accountMetrics($website->hostingServer, $website), array_flip(['disk_used_bytes', 'disk_limit_bytes', 'bandwidth_used_bytes']))]; }
+            try { $hostingMetrics=$this->hosting->for($website->hostingServer)->accountMetrics($website->hostingServer, $website); $metrics = [...$metrics, ...array_intersect_key($hostingMetrics, array_flip(['disk_used_bytes','disk_limit_bytes','bandwidth_used_bytes','bandwidth_limit_bytes']))]; if($website->hostingAccount){$website->hostingAccount->update([...array_intersect_key($hostingMetrics,array_flip(['disk_used_bytes','disk_limit_bytes','bandwidth_used_bytes','bandwidth_limit_bytes','inode_used','inode_limit','database_count','database_usage_bytes','mailbox_count','mailbox_usage_bytes','php_version','ssl_status','ssl_issuer','ssl_expires_at','resource_limits','dns'])),'last_metrics_synced_at'=>now()]);HostingMetricSnapshot::create(['hosting_account_id'=>$website->hostingAccount->id,'website_id'=>$website->id,'status'=>$hostingMetrics['hosting_status']??$website->hostingAccount->status,'disk_used_bytes'=>$hostingMetrics['disk_used_bytes']??null,'disk_limit_bytes'=>$hostingMetrics['disk_limit_bytes']??null,'bandwidth_used_bytes'=>$hostingMetrics['bandwidth_used_bytes']??null,'bandwidth_limit_bytes'=>$hostingMetrics['bandwidth_limit_bytes']??null,'inode_used'=>$hostingMetrics['inode_used']??null,'inode_limit'=>$hostingMetrics['inode_limit']??null,'metrics'=>collect($hostingMetrics)->except(['disk_used_bytes','disk_limit_bytes','bandwidth_used_bytes','bandwidth_limit_bytes','inode_used','inode_limit'])->all(),'captured_at'=>now()]);} }
             catch (Throwable) { $errors[] = 'Hosting usage is unavailable.'; }
         }
-        $status = $critical ? 'critical' : ((!$online || count($errors) || (($metrics['plugin_updates'] ?? 0) + ($metrics['theme_updates'] ?? 0)) > 0) ? 'attention' : 'healthy');
-        $check = WebsiteHealthCheck::create([...$metrics, 'website_id' => $website->id, 'checked_at' => now(), 'check_type' => $type, 'http_status' => $httpStatus, 'response_time_ms' => $responseTime, 'uptime_status' => $online ? 'online' : 'offline', 'overall_status' => $status, 'errors' => $errors]);
-        $website->update(['last_checked_at' => now(), 'consecutive_failures' => $failures, 'status' => $status, ...($agentReached ? ['agent_last_seen_at' => now()] : [])]);
+        $evaluation=$this->health->evaluate(['online'=>$online,'ssl_valid'=>($metrics['ssl_status']??'valid')!=='invalid','disk_used_bytes'=>$metrics['disk_used_bytes']??null,'disk_limit_bytes'=>$metrics['disk_limit_bytes']??null,'updates_available'=>($metrics['plugin_updates']??0)+($metrics['theme_updates']??0)]);
+        $status = $critical ? 'critical' : (count($errors) && $evaluation['status']==='healthy'?'attention':$evaluation['status']);
+        $check = WebsiteHealthCheck::create([...$metrics, 'website_id' => $website->id, 'checked_at' => now(), 'check_type' => $type, 'http_status' => $httpStatus, 'response_time_ms' => $responseTime, 'uptime_status' => $online ? 'online' : 'offline', 'overall_status' => $status, 'warnings'=>$evaluation['issues'], 'errors' => $errors]);
+        $website->update(['last_checked_at' => now(), 'consecutive_failures' => $failures, 'status' => $status, ...($agentReached ? ['agent_last_seen_at' => now(),'monitoring_enabled'=>true] : [])]);
         $this->incidents->sync($website, 'website_offline', $critical, 'critical', 'Website offline', 'Repeated monitoring checks could not reach the website.');
         $updates = (($metrics['plugin_updates'] ?? 0) + ($metrics['theme_updates'] ?? 0)) > 0;
         $this->incidents->sync($website, 'updates_available', $updates, 'warning', 'Updates available', 'WordPress plugins or themes need maintenance.');

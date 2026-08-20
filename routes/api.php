@@ -38,6 +38,7 @@ use App\Http\Controllers\HostingServerController;
 use App\Http\Controllers\HostingAccountController;
 use App\Http\Controllers\WebsiteProvisioningController;
 use App\Http\Controllers\KrystalWebsiteImportController;
+use App\Http\Controllers\WebsiteManagementController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -110,7 +111,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('websites/summary', [WebsiteController::class, 'summary']);
         Route::post('websites/{website}/check', [WebsiteController::class, 'check']);
         Route::post('websites/{website}/activities', [WebsiteController::class, 'activity']);
-        Route::apiResource('websites', WebsiteController::class);
+        Route::apiResource('websites', WebsiteController::class)->except(['destroy']);
         Route::get('stats/revenue', [StatsController::class, 'revenue']);
         Route::get('stats/profit-weekly', [StatsController::class, 'weeklyProfit']);
     });
@@ -161,6 +162,9 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('admin/organisation-settings', [OrganisationSettingController::class, 'show']);
         Route::put('admin/organisation-settings', [OrganisationSettingController::class, 'update']);
         Route::post('websites/{website}/regenerate-agent-token', [WebsiteController::class, 'regenerateToken']);
+        Route::get('websites/{website}/deletion-preview', [WebsiteManagementController::class, 'deletionPreview'])->middleware('permission:hosting_terminate');
+        Route::post('websites/{website}/delete', [WebsiteManagementController::class, 'delete'])->middleware(['permission:hosting_terminate','throttle:10,1']);
+        Route::post('websites/{website}/reveal-credential', [WebsiteManagementController::class, 'revealCredential'])->middleware('permission:hosting_credentials');
         Route::post('hosting-servers/{hostingServer}/test', [HostingServerController::class, 'test'])->middleware('permission:hosting_manage');
         Route::get('hosting-servers', [HostingServerController::class, 'index'])->middleware('permission:hosting_view');
         Route::post('hosting-servers', [HostingServerController::class, 'store'])->middleware('permission:hosting_credentials');

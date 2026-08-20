@@ -3,6 +3,7 @@
 namespace App\Services\Hosting;
 
 use App\Contracts\HostingProviderInterface;
+use App\Exceptions\ManualProvisioningActionRequired;
 use App\Models\HostingAccount;
 use App\Models\HostingServer;
 use App\Models\Website;
@@ -185,16 +186,67 @@ class KrystalWhmProvider implements HostingProviderInterface
         ];
     }
 
+    public function verifyAccount(HostingServer $server, HostingAccount $account): array
+    {
+        $match = collect($this->accounts($server))->first(fn ($item) => strtolower($item['username']) === strtolower($account->username));
+        if (! $match) throw new RuntimeException('The new cPanel account is not visible in WHM yet. Retry this step shortly.');
+        return ['ready' => true, 'status' => $match['status'] ?? 'active'];
+    }
+
+    public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array
+    {
+        throw new ManualProvisioningActionRequired('WordPress installation needs a confirmed Softaculous integration for this Krystal server. The cPanel account is ready; install WordPress manually, then retry.');
+    }
+
+    public function configureWordpress(HostingServer $server, HostingAccount $account, array $data): array
+    {
+        throw new ManualProvisioningActionRequired('WordPress configuration needs the confirmed Krystal installer integration.');
+    }
+
+    public function installAgent(HostingServer $server, HostingAccount $account, array $data): array
+    {
+        throw new ManualProvisioningActionRequired('Automatic Site Agent installation needs the confirmed Krystal installer integration.');
+    }
+
+    public function terminateAccount(HostingServer $server, HostingAccount $account): array
+    {
+        if (config('hosting.termination_mode') !== 'live' || ! config('hosting.allow_live_termination') || ! app()->environment('production')) {
+            throw new RuntimeException('Live hosting termination is disabled.');
+        }
+        $response = $this->call($server, 'removeacct', ['username' => $account->username, 'keepdns' => 0]);
+        return ['terminated' => true, 'external_id' => $account->external_id, 'message' => $response['metadata']['reason'] ?? 'Terminated'];
+    }
+
     public function accountMetrics(HostingServer $server, Website $website): array
     {
         $account = $website->hostingAccount;
-
-        return $account ? [
-            'disk_used_bytes' => $account->disk_used_bytes,
-            'disk_limit_bytes' => $account->disk_limit_bytes,
-            'bandwidth_used_bytes' => $account->bandwidth_used_bytes,
-        ] : [];
+        if (! $account) return [];
+        $result=['disk_used_bytes'=>$account->disk_used_bytes,'disk_limit_bytes'=>$account->disk_limit_bytes,'bandwidth_used_bytes'=>$account->bandwidth_used_bytes,'bandwidth_limit_bytes'=>$account->bandwidth_limit_bytes];
+        try {
+            $stats=collect($this->uapi($server,$account,'StatsBar','get_stats'));
+            $byId=$stats->filter(fn($row)=>is_array($row)&&isset($row['id']))->keyBy('id');
+            $result=[...$result,
+                'disk_used_bytes'=>$this->statBytes($byId->get('diskusage'),$account->disk_used_bytes),'disk_limit_bytes'=>$this->statLimitBytes($byId->get('diskusage'),$account->disk_limit_bytes),
+                'bandwidth_used_bytes'=>$this->statBytes($byId->get('bandwidth'),$account->bandwidth_used_bytes),'bandwidth_limit_bytes'=>$this->statLimitBytes($byId->get('bandwidth'),$account->bandwidth_limit_bytes),
+                'inode_used'=>$this->statValue($byId->get('inodeusage')),'inode_limit'=>$this->statMax($byId->get('inodeusage')),
+                'database_count'=>$this->statValue($byId->get('sqldatabases')),'mailbox_count'=>$this->statValue($byId->get('emailaccounts')),
+            ];
+        } catch (RuntimeException) { /* Keep the last safe cached values when a reseller ACL omits StatsBar. */ }
+        return array_filter($result,fn($value)=>$value!==null);
     }
+
+    private function uapi(HostingServer $server,HostingAccount $account,string $module,string $function,array $parameters=[]):array
+    {
+        $response=$this->call($server,'cpanel',['cpanel_jsonapi_user'=>strtolower($account->username),'cpanel_jsonapi_apiversion'=>3,'cpanel_jsonapi_module'=>$module,'cpanel_jsonapi_func'=>$function,...$parameters]);
+        $data=data_get($response,'data.result.data')??data_get($response,'data.uapi.result.data')??[];
+        if(!is_array($data))throw new RuntimeException("WHM returned no {$module} metrics for this cPanel account.");
+        return $data;
+    }
+
+    private function statValue(mixed $row):?int { $value=is_array($row)?($row['usage']??$row['value']??null):null; return is_numeric($value)?(int)$value:null; }
+    private function statMax(mixed $row):?int { $value=is_array($row)?($row['maximum']??$row['max']??null):null; return is_numeric($value)?(int)$value:null; }
+    private function statBytes(mixed $row,?int $fallback):?int { $value=$this->statValue($row); return $value===null?$fallback:$value*1024*1024; }
+    private function statLimitBytes(mixed $row,?int $fallback):?int { $value=$this->statMax($row); return $value===null?$fallback:$value*1024*1024; }
 
     public function cpanelSession(HostingServer $server, HostingAccount $account): ?string
     {

@@ -37,5 +37,10 @@ class CpanelHostingProvider implements HostingProviderInterface
     }
     public function packages(HostingServer $server): array { return []; }
     public function createAccount(HostingServer $server, array $data): array { throw new RuntimeException('Account creation requires a WHM provider.'); }
+    public function verifyAccount(HostingServer $server, HostingAccount $account): array { return ['ready'=>true]; }
+    public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array { throw new RuntimeException('WordPress installation requires an approved server-side installer.'); }
+    public function configureWordpress(HostingServer $server, HostingAccount $account, array $data): array { throw new RuntimeException('WordPress configuration requires an approved server-side installer.'); }
+    public function installAgent(HostingServer $server, HostingAccount $account, array $data): array { throw new RuntimeException('Site Agent installation requires an approved server-side installer.'); }
+    public function terminateAccount(HostingServer $server, HostingAccount $account): array { throw new RuntimeException('Account termination requires a WHM provider.'); }
     public function cpanelSession(HostingServer $server, HostingAccount $account): ?string { return null; }
 }

@@ -31,9 +31,12 @@ class Website extends Model
         'google_analytics_dashboard_url',
         'wordpress_enabled',
         'management_enabled',
+        'monitoring_enabled',
         'hosting_enabled',
         'status',
         'provisioning_status',
+        'lifecycle_state',
+        'deletion_status',
         'agent_token_hash',
         'agent_token_encrypted',
         'agent_last_seen_at',
@@ -46,7 +49,7 @@ class Website extends Model
     ];
 
     protected $casts = [
-        'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
+        'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
         'agent_last_seen_at' => 'datetime', 'last_checked_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
         'agent_token_encrypted' => 'encrypted',
     ];
@@ -70,6 +73,7 @@ class Website extends Model
     public function activities(): HasMany { return $this->hasMany(WebsiteActivity::class)->latest('performed_at'); }
     public function latestHealthCheck(): HasOne { return $this->hasOne(WebsiteHealthCheck::class)->latestOfMany('checked_at'); }
     public function provisioningRuns(): HasMany { return $this->hasMany(WebsiteProvisioningRun::class)->latest(); }
+    public function credentials(): HasMany { return $this->hasMany(WebsiteCredential::class); }
 
     public static function defaultPortalVisibility(): array
     {

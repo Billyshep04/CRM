@@ -120,7 +120,7 @@ class WebsiteController extends Controller
         return $request->validate([
             'customer_id' => [$required, 'integer', 'exists:customers,id'], 'hosting_server_id' => ['nullable', 'integer', 'exists:hosting_servers,id'], 'hosting_account_id' => ['nullable', 'integer', 'exists:hosting_accounts,id'], 'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
             'name' => [$required, 'string', 'max:255'], 'domain' => ['nullable', 'string', 'max:255'], 'login_url' => [$required, 'url:http,https', 'max:2048'], 'environment' => ['sometimes', Rule::in(['production', 'staging', 'development'])],
-            'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'],
+            'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'monitoring_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'],
             'google_analytics_property_id' => ['nullable', 'string', 'max:255'], 'google_analytics_dashboard_url' => ['nullable', 'url:http,https', 'max:2048'],
             'status' => ['sometimes', Rule::in(['unknown', 'healthy', 'attention', 'critical', 'paused'])], 'notes' => ['nullable', 'string'], 'portal_visibility' => ['sometimes', 'array'], 'portal_visibility.*' => ['boolean'], 'metadata' => ['sometimes', 'nullable', 'array'],
         ]);

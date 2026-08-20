@@ -6,6 +6,7 @@ use App\Models\HostingAccount;
 use App\Models\HostingPackage;
 use App\Models\HostingServer;
 use App\Models\Website;
+use App\Models\HostingMetricSnapshot;
 use RuntimeException;
 
 class HostingAccountSyncService
@@ -35,6 +36,8 @@ class HostingAccountSyncService
             }
 
             $this->matchExistingWebsites($account);
+
+            HostingMetricSnapshot::create(['hosting_account_id'=>$account->id,'website_id'=>$account->websites()->value('id'),'status'=>$account->status,'disk_used_bytes'=>$account->disk_used_bytes,'disk_limit_bytes'=>$account->disk_limit_bytes,'bandwidth_used_bytes'=>$account->bandwidth_used_bytes,'bandwidth_limit_bytes'=>$account->bandwidth_limit_bytes,'inode_used'=>$account->inode_used,'inode_limit'=>$account->inode_limit,'metrics'=>['source'=>'hosting_sync'],'captured_at'=>now()]);
 
             return $account->fresh();
         });

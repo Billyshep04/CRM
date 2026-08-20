@@ -2037,6 +2037,11 @@ body[data-role="staff"] .staff-member-only {
         display: block;
     }
 }
+.website-detail-tabs { display:flex; flex-wrap:wrap; gap:.65rem; }
+.danger-zone { border:1px solid rgba(220,38,38,.45) !important; }
+.danger-warning { padding:14px; border-radius:12px; background:rgba(220,38,38,.08); border:1px solid rgba(220,38,38,.25); }
+.btn-danger { background:#b42318; color:#fff; border:1px solid #b42318; }
+.btn-danger:disabled { opacity:.45; cursor:not-allowed; }
 .today-action-feed { display:grid; gap:1rem; }
 .today-group { border-top:1px solid var(--border, #d9dee8); padding-top:.75rem; }
 .today-group:first-child { border-top:0; padding-top:0; }

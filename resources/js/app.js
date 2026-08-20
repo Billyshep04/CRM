@@ -253,6 +253,18 @@ const dom = {
     websiteDetailCheck: document.getElementById('website-detail-check'),
     websiteDetailBack: document.getElementById('website-detail-back'),
     websiteDetailProvisioning: document.getElementById('website-detail-provisioning'),
+    websiteDetailHosting: document.getElementById('website-detail-hosting'),
+    websiteDetailWordpress: document.getElementById('website-detail-wordpress'),
+    websiteDeleteOpen: document.getElementById('website-delete-open'),
+    websiteDeleteModal: document.getElementById('website-delete-modal'),
+    websiteDeleteClose: document.getElementById('website-delete-close'),
+    websiteDeleteCancel: document.getElementById('website-delete-cancel'),
+    websiteDeleteForm: document.getElementById('website-delete-form'),
+    websiteDeletePreview: document.getElementById('website-delete-preview'),
+    websiteDeleteConfirmation: document.getElementById('website-delete-confirmation'),
+    websiteDeleteHostingChoice: document.getElementById('website-delete-hosting-choice'),
+    websiteDeleteSubmit: document.getElementById('website-delete-submit'),
+    websiteDeleteStatus: document.getElementById('website-delete-status'),
     websiteAnalyticsForm: document.getElementById('website-analytics-form'),
     websiteAnalyticsStatus: document.getElementById('website-analytics-status'),
     websiteAnalyticsOpen: document.getElementById('website-analytics-open'),
@@ -926,6 +938,13 @@ function formatDate(value) {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function formatBytes(value) {
+    if (value == null || Number.isNaN(Number(value))) return '—';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']; let size = Number(value); let unit = 0;
+    while (size >= 1024 && unit < units.length - 1) { size /= 1024; unit += 1; }
+    return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
 function formatDateWithYear(value) {
@@ -2356,6 +2375,7 @@ async function scanKrystalWebsites() {
 function openWebsiteDetail(websiteId, returnView = 'websites') {
     state.currentWebsite = { id: Number(websiteId) };
     state.websiteDetailReturnView = returnView;
+    document.querySelector('[data-website-tab="overview"]')?.click();
     setActiveView('website-detail');
 }
 
@@ -2369,6 +2389,15 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
         ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled && site.hosting_account_id ? (site.hosting_server?.name || 'Krystal') : 'External'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
     ].map(([label, value]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
+    const hosting = site.hosting_account || {};
+    if (dom.websiteDetailHosting) dom.websiteDetailHosting.innerHTML = [
+        ['Provider', site.hosting_enabled && site.hosting_account_id ? (site.hosting_server?.name || 'Krystal') : 'External hosting'], ['cPanel username', hosting.username || '—'], ['Package', hosting.package_name || '—'], ['Account status', hosting.status || '—'],
+        ['Disk usage', hosting.disk_used_bytes == null ? 'Not synced' : `${formatBytes(hosting.disk_used_bytes)} of ${formatBytes(hosting.disk_limit_bytes)}`], ['Bandwidth', hosting.bandwidth_used_bytes == null ? 'Not synced' : `${formatBytes(hosting.bandwidth_used_bytes)} of ${formatBytes(hosting.bandwidth_limit_bytes)}`],
+        ['Inodes', hosting.inode_used == null ? 'Not synced' : `${hosting.inode_used} of ${hosting.inode_limit ?? '—'}`], ['Databases', hosting.database_count ?? 'Not synced'], ['Mailboxes', hosting.mailbox_count ?? 'Not synced'], ['PHP', hosting.php_version || latest.php_version || 'Unknown'], ['SSL', hosting.ssl_status || latest.ssl_status || 'Unknown'], ['Last hosting sync', formatDate(hosting.last_metrics_synced_at)],
+    ].map(([label,value])=>`<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
+    if (dom.websiteDetailWordpress) dom.websiteDetailWordpress.innerHTML = [
+        ['WordPress version', latest.wordpress_version || 'Unknown'], ['PHP version', latest.php_version || hosting.php_version || 'Unknown'], ['Plugins', latest.plugin_count ?? 'Unknown'], ['Plugin updates', latest.plugin_updates ?? 'Unknown'], ['Theme updates', latest.theme_updates ?? 'Unknown'], ['Site health', latest.site_health_status || 'Unknown'], ['Monitoring', site.agent_connected ? 'Site Agent connected' : (site.monitoring_enabled ? 'Agent connection needed' : 'Not enabled')], ['Last agent check-in', formatDate(site.agent_last_seen_at)],
+    ].map(([label,value])=>`<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
     const checks = site.health_checks || [];
     if (dom.websiteDetailHealth) dom.websiteDetailHealth.innerHTML = checks.length ? checks.map((check) => `<div class="site-card"><div><div class="site-name">${escapeHtml(check.check_type || 'Health check')} · ${escapeHtml(check.overall_status || 'unknown')}</div><div class="site-url">${formatDate(check.checked_at)} · HTTP ${check.http_status ?? '—'} · ${check.response_time_ms ?? '—'} ms · Updates ${(check.plugin_updates ?? 0) + (check.theme_updates ?? 0)}</div></div></div>`).join('') : '<div class="table-empty">No monitoring history yet.</div>';
     const incidents = site.incidents || [];
@@ -2376,7 +2405,7 @@ function renderWebsiteDetail(site) {
     const activities = site.activities || [];
     if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
     const runs = site.provisioning_runs || [];
-    if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => `<div class="site-card"><div><div class="site-name">${escapeHtml(run.state)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div></div>`).join('') : '<div class="table-empty">No provisioning history.</div>';
+    if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => `<div class="site-card"><div><div class="site-name">${escapeHtml(run.state)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':step.status==='failed'?'!':step.status==='manual_action'?'↗':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div><div class="site-actions">${['failed','action_required'].includes(run.state)?`<button class="btn btn-outline" data-retry-provisioning="${run.id}">Retry from this step</button>`:''}${run.state==='complete'&&run.website_type==='wordpress'?'<button class="btn btn-outline" data-reveal-website-credential>Reveal WordPress login once</button>':''}</div></div>`).join('') : '<div class="table-empty">No provisioning history.</div>';
     if (dom.websiteAnalyticsForm) {
         dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
         dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
@@ -8271,6 +8300,9 @@ if (dom.krystalImportClose) dom.krystalImportClose.addEventListener('click', () 
 if (dom.manualWebsiteToggle) dom.manualWebsiteToggle.addEventListener('click', () => {
     if (dom.manualWebsitePanel) dom.manualWebsitePanel.hidden = !dom.manualWebsitePanel.hidden;
     if (dom.krystalImportPanel) dom.krystalImportPanel.hidden = true;
+    if (dom.managedWebsiteForm?.elements.create_cpanel_account) dom.managedWebsiteForm.elements.create_cpanel_account.checked = true;
+    if (dom.managedWebsiteForm?.elements.hosting_enabled) dom.managedWebsiteForm.elements.hosting_enabled.checked = true;
+    if (dom.managedWebsiteForm?.elements.wordpress_enabled) dom.managedWebsiteForm.elements.wordpress_enabled.checked = true;
     if (!dom.manualWebsitePanel?.hidden) dom.manualWebsitePanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 if (dom.manualWebsiteClose) dom.manualWebsiteClose.addEventListener('click', () => { if (dom.manualWebsitePanel) dom.manualWebsitePanel.hidden = true; });
@@ -8383,6 +8415,35 @@ if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', asy
     try { await api.post(`/api/websites/${state.currentWebsite.id}/check`); await loadWebsiteDetail(state.currentWebsite.id); showToast('Website check completed.'); }
     catch (error) { showToast('Website check failed.', true); }
     finally { dom.websiteDetailCheck.disabled = false; }
+});
+document.querySelectorAll('[data-website-tab]').forEach((button) => button.addEventListener('click', () => {
+    const tab = button.dataset.websiteTab;
+    document.querySelectorAll('[data-website-tab]').forEach((item) => { item.classList.toggle('btn-primary', item === button); item.classList.toggle('btn-outline', item !== button); });
+    document.querySelectorAll('[data-website-tab-panel]').forEach((panel) => { panel.hidden = panel.dataset.websiteTabPanel !== tab; });
+}));
+if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.addEventListener('click', async (event) => {
+    const reveal=event.target.closest('[data-reveal-website-credential]');
+    if(reveal){reveal.disabled=true;try{const response=await api.post(`/api/websites/${state.currentWebsite.id}/reveal-credential`);const data=response?.data?.data;window.prompt('Copy this WordPress login now. The password cannot be shown again.',`Username: ${data.username}\nPassword: ${data.password}`);await loadWebsiteDetail(state.currentWebsite.id);}catch(error){showToast(getErrorMessage(error,'Generated login is unavailable.'),true);}finally{reveal.disabled=false;}return;}
+    const button=event.target.closest('[data-retry-provisioning]'); if(!button)return; button.disabled=true;
+    try { await api.post(`/api/website-provisioning/${button.dataset.retryProvisioning}/retry`); await loadWebsiteDetail(state.currentWebsite.id); showToast('Provisioning resumed from the incomplete step.'); }
+    catch(error){showToast(getErrorMessage(error,'Unable to retry provisioning.'),true);} finally{button.disabled=false;}
+});
+const closeWebsiteDelete=()=>{if(dom.websiteDeleteModal)dom.websiteDeleteModal.hidden=true;};
+if(dom.websiteDeleteOpen)dom.websiteDeleteOpen.addEventListener('click',async()=>{
+    if(!state.currentWebsite?.id)return; dom.websiteDeleteModal.hidden=false; dom.websiteDeleteConfirmation.value=''; if(dom.websiteDeleteForm?.elements.backup_confirmed)dom.websiteDeleteForm.elements.backup_confirmed.checked=false; dom.websiteDeleteSubmit.disabled=true; setFormStatus(dom.websiteDeleteStatus,'');
+    try { const response=await api.get(`/api/websites/${state.currentWebsite.id}/deletion-preview`); const preview=response?.data?.data||{}; dom.websiteDeleteModal.dataset.domain=preview.domain||''; dom.websiteDeleteHostingChoice.disabled=!preview.hosting_termination_allowed; const backup=preview.latest_known_backup_at?`${escapeHtml(formatDate(preview.latest_known_backup_at))} (${escapeHtml(preview.backup_status||'status unknown')})`:'Backup status cannot be verified'; dom.websiteDeletePreview.innerHTML=`<strong>Website:</strong> ${escapeHtml(preview.domain||'—')}<br><strong>Customer:</strong> ${escapeHtml(preview.customer||'—')}<br><strong>cPanel account:</strong> ${escapeHtml(preview.cpanel_username||'—')}<br><strong>Hosting:</strong> ${escapeHtml(preview.hosting_server||'—')}<br><br><strong>Latest known backup:</strong> ${backup}<br>${escapeHtml(preview.backup_warning||'')}${preview.hosting_termination_allowed?'<br><br>Full hosting deletion passed the ownership and shared-account checks.':`<br><br><strong>Hosting deletion is blocked:</strong> ${escapeHtml((preview.blocking_reasons||[]).join(' '))}`}`; }
+    catch(error){setFormStatus(dom.websiteDeleteStatus,getErrorMessage(error,'Unable to run deletion checks.'),true);}
+});
+const updateWebsiteDeleteButton=()=>{const values=new FormData(dom.websiteDeleteForm);const full=values.get('deletion_type')==='hosting_and_crm';const domainMatches=dom.websiteDeleteConfirmation.value.trim().toLowerCase()===(dom.websiteDeleteModal.dataset.domain||'').trim().toLowerCase();dom.websiteDeleteSubmit.textContent=full?'Permanently Delete Website & Hosting':'Remove Website from CRM';dom.websiteDeleteSubmit.disabled=!domainMatches||(full&&!dom.websiteDeleteForm.elements.backup_confirmed.checked);};
+if(dom.websiteDeleteConfirmation)dom.websiteDeleteConfirmation.addEventListener('input',updateWebsiteDeleteButton);
+if(dom.websiteDeleteForm)dom.websiteDeleteForm.addEventListener('change',updateWebsiteDeleteButton);
+if(dom.websiteDeleteClose)dom.websiteDeleteClose.addEventListener('click',closeWebsiteDelete);
+if(dom.websiteDeleteCancel)dom.websiteDeleteCancel.addEventListener('click',closeWebsiteDelete);
+if(dom.websiteDeleteForm)dom.websiteDeleteForm.addEventListener('submit',async(event)=>{
+    event.preventDefault(); if(!state.currentWebsite?.id||dom.websiteDeleteSubmit.disabled)return;
+    const values=new FormData(dom.websiteDeleteForm); const deletionType=values.get('deletion_type'); dom.websiteDeleteSubmit.disabled=true; setFormStatus(dom.websiteDeleteStatus,deletionType==='hosting_and_crm'?'Terminating the verified hosting account, then removing the CRM record…':'Removing the CRM record while leaving hosting online…');
+    try { await api.post(`/api/websites/${state.currentWebsite.id}/delete`,{deletion_type:deletionType,confirmation:values.get('confirmation'),backup_confirmed:values.get('backup_confirmed')==='on',idempotency_key:crypto.randomUUID()}); closeWebsiteDelete(); showToast('Website deletion completed.'); setActiveView('websites'); await loadManagedWebsites(); }
+    catch(error){setFormStatus(dom.websiteDeleteStatus,getErrorMessage(error,'Website deletion failed. Nothing else was removed.'),true); dom.websiteDeleteSubmit.disabled=false;}
 });
 if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit', async (event) => {
     event.preventDefault();

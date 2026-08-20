@@ -14,5 +14,10 @@ interface HostingProviderInterface
     public function domains(HostingServer $server, HostingAccount $account): array;
     public function packages(HostingServer $server): array;
     public function createAccount(HostingServer $server, array $data): array;
+    public function verifyAccount(HostingServer $server, HostingAccount $account): array;
+    public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array;
+    public function configureWordpress(HostingServer $server, HostingAccount $account, array $data): array;
+    public function installAgent(HostingServer $server, HostingAccount $account, array $data): array;
+    public function terminateAccount(HostingServer $server, HostingAccount $account): array;
     public function cpanelSession(HostingServer $server, HostingAccount $account): ?string;
 }
