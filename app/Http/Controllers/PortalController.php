@@ -135,7 +135,7 @@ class PortalController extends Controller
         $customerIds = $this->resolveCustomerIds($request);
 
         $query = Website::query()
-            ->whereIn('customer_id', $customerIds)->with(['latestHealthCheck', 'healthChecks' => fn ($q) => $q->where('checked_at', '>=', now()->subDays(30)), 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)])
+            ->whereIn('customer_id', $customerIds)->with(['hostingAccount', 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)])
             ->latest();
 
         $perPage = $request->integer('per_page', 25);
@@ -148,7 +148,7 @@ class PortalController extends Controller
     public function website(Request $request, Website $website)
     {
         if (!in_array((int) $website->customer_id, $this->resolveCustomerIds($request), true)) abort(404);
-        return new PortalWebsiteResource($website->load(['latestHealthCheck', 'healthChecks' => fn ($q) => $q->where('checked_at', '>=', now()->subDays(30)), 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)]));
+        return new PortalWebsiteResource($website->load(['hostingAccount', 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)]));
     }
 
     public function forms(Request $request)

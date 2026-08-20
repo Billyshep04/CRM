@@ -9,6 +9,15 @@ class WebsiteResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $snapshot = $this->resource->relationLoaded('healthChecks')
+            ? app(\App\Services\Websites\WebsiteStatusSnapshot::class)->for($this->resource)
+            : null;
+        $lastEnqueued = cache('website-monitoring:last-enqueued-at');
+        $monitoringSystem = [
+            'status' => $lastEnqueued && \Carbon\Carbon::parse($lastEnqueued)->gte(now()->subMinutes(20)) ? 'healthy' : 'delayed',
+            'checked_at' => $lastEnqueued,
+            'stale' => ! $lastEnqueued || \Carbon\Carbon::parse($lastEnqueued)->lt(now()->subMinutes(20)),
+        ];
         return [
             'id' => $this->id, 'customer_id' => $this->customer_id, 'hosting_server_id' => $this->hosting_server_id, 'hosting_account_id' => $this->hosting_account_id, 'subscription_id' => $this->subscription_id,
             'name' => $this->name, 'domain' => $this->domain, 'login_url' => $this->login_url, 'environment' => $this->environment,
@@ -27,6 +36,8 @@ class WebsiteResource extends JsonResource
             'latest_health_check' => $this->whenLoaded('latestHealthCheck'),
             'health_checks' => $this->whenLoaded('healthChecks'), 'incidents' => $this->whenLoaded('incidents'), 'activities' => $this->whenLoaded('activities'),
             'provisioning_runs' => $this->whenLoaded('provisioningRuns'),
+            'customer_snapshot' => $this->when($snapshot !== null, $snapshot),
+            'data_source_diagnostics' => $this->when($snapshot !== null, [...($snapshot['diagnostics'] ?? []), 'monitoring_system' => $monitoringSystem]),
         ];
     }
 }

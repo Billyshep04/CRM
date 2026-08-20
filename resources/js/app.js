@@ -247,6 +247,7 @@ const dom = {
     websiteDetailDomain: document.getElementById('website-detail-domain'),
     websiteDetailSummary: document.getElementById('website-detail-summary'),
     websiteDetailOverview: document.getElementById('website-detail-overview'),
+    websiteDetailDataSources: document.getElementById('website-detail-data-sources'),
     websiteDetailHealth: document.getElementById('website-detail-health'),
     websiteDetailIncidents: document.getElementById('website-detail-incidents'),
     websiteDetailActivities: document.getElementById('website-detail-activities'),
@@ -2124,15 +2125,15 @@ async function loadPortalWebsites() {
             card.innerHTML = `
                 <div>
                     <div class="site-name">${escapeHtml(website.name)}</div>
-                    <div class="site-url">${escapeHtml(website.login_url)}</div>
+                    <div class="site-url">${escapeHtml(website.public_url || website.domain || '')}</div>
                 </div>
-                <a class="btn btn-primary btn-small" href="${escapeHtml(website.login_url)}" target="_blank" rel="noopener">Quick login</a>
+                <a class="btn btn-primary btn-small" href="${escapeHtml(website.public_url)}" target="_blank" rel="noopener">Visit website</a>
             `;
             dom.portalWebsites.appendChild(card);
             if (dom.portalWebsitesDetail) {
                 const detail = document.createElement('div');
                 detail.className = 'site-card';
-                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)}</div><div class="site-url">${escapeHtml(website.domain || website.login_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Not checked')} · Uptime ${website.uptime_percent ?? '—'}% · SSL ${escapeHtml(website.ssl?.status || 'unknown')} · ${escapeHtml(website.maintenance?.status || 'Maintenance status unavailable')}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-portal-website="${website.id}">View details</button><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url || website.login_url)}" target="_blank" rel="noopener">Visit website</a></div>`;
+                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)}</div><div class="site-url">${escapeHtml(website.domain || website.public_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Status temporarily unavailable')} · Uptime ${escapeHtml(website.uptime?.label || 'Monitoring pending')} · SSL ${escapeHtml(website.ssl?.label || 'Status temporarily unavailable')} · ${escapeHtml(website.maintenance?.label || 'Maintenance status unavailable')}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-portal-website="${website.id}">View details</button><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url)}" target="_blank" rel="noopener">Visit website</a></div>`;
                 dom.portalWebsitesDetail.appendChild(detail);
             }
         });
@@ -2156,13 +2157,13 @@ function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.textContent = site.domain || site.public_url || '';
     if (dom.portalWebsiteVisit) dom.portalWebsiteVisit.href = site.public_url || site.login_url || '#';
     if (dom.portalWebsiteDetailSummary) dom.portalWebsiteDetailSummary.innerHTML = [
-        ['Status', site.status || 'Not available'], ['Project', site.project_status || 'Active'], ['Availability', site.availability || 'Not checked'], ['30-day uptime', site.uptime_percent === undefined ? 'Not available' : `${site.uptime_percent}%`], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Not checked'],
+        ['Status', site.status ? site.status.replaceAll('_', ' ') : 'Not available'], ['Project', site.project_status || 'Active'], ['Availability', site.availability || 'Status temporarily unavailable'], ['30-day uptime', site.uptime?.label || 'Monitoring pending'], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Monitoring pending'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     const care = [];
-    if (site.ssl) care.push(['SSL certificate', site.ssl.status || 'unknown', site.ssl.expires_at ? `Expires ${formatDate(site.ssl.expires_at)}` : 'Expiry unavailable']);
-    if (site.backups) care.push(['Backups', site.backups.status || 'unknown', site.backups.last_successful_at ? `Last successful ${formatDate(site.backups.last_successful_at)}` : 'No backup date available']);
-    if (site.performance) care.push(['Performance', site.performance.score === null || site.performance.score === undefined ? 'Not scored' : `${site.performance.score}/100`, site.performance.response_time_ms ? `${site.performance.response_time_ms} ms response` : 'Response time unavailable']);
-    if (site.maintenance) care.push(['Maintenance', site.maintenance.status || 'unknown', `${site.maintenance.plugin_count ?? 'Unknown'} plugins installed · ${site.maintenance.plugin_updates ?? 0} out of date · ${site.maintenance.theme_updates ?? 0} theme updates`]);
+    if (site.ssl) care.push(['SSL certificate', site.ssl.label, site.ssl.days_remaining !== null && site.ssl.days_remaining !== undefined ? `Expires in ${site.ssl.days_remaining} days` : (site.ssl.status === 'expired' ? 'Certificate expired' : 'Certificate information unavailable')]);
+    if (site.backups) care.push(['Backups', site.backups.label, site.backups.last_successful_at ? `Last backup ${formatDate(site.backups.last_successful_at)}` : 'Backup information is not currently supplied by an integration']);
+    if (site.performance) care.push(['Performance', site.performance.label, site.performance.scoring_enabled ? `${site.performance.score}/100 · ${site.performance.response_time_ms ?? '—'} ms response` : (site.performance.response_time_ms ? `${site.performance.response_time_ms} ms response · Detailed scoring not enabled` : 'Detailed performance scoring not enabled')]);
+    if (site.maintenance) care.push(['Maintenance', site.maintenance.label, site.maintenance.plugin_count === null || site.maintenance.plugin_count === undefined ? 'Waiting for current Site Agent data' : `${site.maintenance.plugin_count} plugins installed · ${site.maintenance.plugin_updates ?? 0} plugin updates · ${site.maintenance.theme_updates ?? 0} theme updates`]);
     if (site.hosting_usage) care.push(['Hosting usage', site.hosting_usage.disk_used_bytes ? `${site.hosting_usage.disk_used_bytes} bytes used` : 'Usage unavailable', '']);
     if (site.technical_details) care.push(['Technical details', `WordPress ${site.technical_details.wordpress_version || 'unknown'}`, `PHP ${site.technical_details.php_version || 'unknown'}`]);
     if (dom.portalWebsiteDetailCare) dom.portalWebsiteDetailCare.innerHTML = care.length ? care.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(note)}</div></div>`).join('') : '<div class="table-empty">No additional website-care information is currently available.</div>';
@@ -2381,14 +2382,23 @@ function openWebsiteDetail(websiteId, returnView = 'websites') {
 
 function renderWebsiteDetail(site) {
     const latest = site.latest_health_check || {};
+    const customerSnapshot = site.customer_snapshot || {};
+    const maintenanceSnapshot = customerSnapshot.maintenance || {};
     if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
     if (dom.websiteDetailDomain) dom.websiteDetailDomain.textContent = site.domain || site.login_url || '';
     if (dom.websiteDetailSummary) dom.websiteDetailSummary.innerHTML = [
-        ['Overall status', site.status || 'unknown'], ['Availability', latest.uptime_status || 'not checked'], ['WordPress', latest.wordpress_version || 'unknown'], ['Plugins', latest.plugin_count ?? 'unknown'], ['Out-of-date plugins', latest.plugin_updates ?? 'unknown'], ['Response time', latest.response_time_ms ? `${latest.response_time_ms} ms` : '—'], ['SSL', latest.ssl_status || 'unknown'],
+        ['Overall status', customerSnapshot.overall_status || site.status || 'unknown'], ['Availability', customerSnapshot.availability?.label || 'not checked'], ['WordPress', maintenanceSnapshot.wordpress_version || 'unknown'], ['Plugins', maintenanceSnapshot.plugin_count ?? 'unknown'], ['Out-of-date plugins', maintenanceSnapshot.plugin_updates ?? 'unknown'], ['Response time', customerSnapshot.availability?.response_time_ms ? `${customerSnapshot.availability.response_time_ms} ms` : '—'], ['SSL', customerSnapshot.ssl?.label || 'unknown'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
         ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_enabled && site.hosting_account_id ? (site.hosting_server?.name || 'Krystal') : 'External'], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
     ].map(([label, value]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
+    const diagnostics = site.data_source_diagnostics || {};
+    if (dom.websiteDetailDataSources) dom.websiteDetailDataSources.innerHTML = Object.entries({monitoring_system: 'Monitoring system', external_monitoring: 'External monitoring', ssl: 'SSL', wordpress_agent: 'WordPress Agent', hosting: 'Krystal hosting', performance: 'Performance scoring', backups: 'Backups'}).map(([key, label]) => {
+        const source = diagnostics[key] || {};
+        const status = String(source.status || 'pending').replaceAll('_', ' ');
+        const checked = source.checked_at ? `Last updated ${formatDate(source.checked_at)}` : 'No successful update recorded';
+        return `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(status)}</div><div class="site-url">${escapeHtml(checked)}</div></div>`;
+    }).join('');
     const hosting = site.hosting_account || {};
     if (dom.websiteDetailHosting) dom.websiteDetailHosting.innerHTML = [
         ['Provider', site.hosting_enabled && site.hosting_account_id ? (site.hosting_server?.name || 'Krystal') : 'External hosting'], ['cPanel username', hosting.username || '—'], ['Package', hosting.package_name || '—'], ['Account status', hosting.status || '—'],
@@ -2396,7 +2406,7 @@ function renderWebsiteDetail(site) {
         ['Inodes', hosting.inode_used == null ? 'Not synced' : `${hosting.inode_used} of ${hosting.inode_limit ?? '—'}`], ['Databases', hosting.database_count ?? 'Not synced'], ['Mailboxes', hosting.mailbox_count ?? 'Not synced'], ['PHP', hosting.php_version || latest.php_version || 'Unknown'], ['SSL', hosting.ssl_status || latest.ssl_status || 'Unknown'], ['Last hosting sync', formatDate(hosting.last_metrics_synced_at)],
     ].map(([label,value])=>`<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
     if (dom.websiteDetailWordpress) dom.websiteDetailWordpress.innerHTML = [
-        ['WordPress version', latest.wordpress_version || 'Unknown'], ['PHP version', latest.php_version || hosting.php_version || 'Unknown'], ['Plugins', latest.plugin_count ?? 'Unknown'], ['Plugin updates', latest.plugin_updates ?? 'Unknown'], ['Theme updates', latest.theme_updates ?? 'Unknown'], ['Site health', latest.site_health_status || 'Unknown'], ['Monitoring', site.agent_connected ? 'Site Agent connected' : (site.monitoring_enabled ? 'Agent connection needed' : 'Not enabled')], ['Last agent check-in', formatDate(site.agent_last_seen_at)],
+        ['WordPress version', maintenanceSnapshot.wordpress_version || 'Unknown'], ['PHP version', maintenanceSnapshot.php_version || hosting.php_version || 'Unknown'], ['Plugins', maintenanceSnapshot.plugin_count ?? 'Unknown'], ['Plugin updates', maintenanceSnapshot.plugin_updates ?? 'Unknown'], ['Theme updates', maintenanceSnapshot.theme_updates ?? 'Unknown'], ['Site health', maintenanceSnapshot.site_health_status || 'Unknown'], ['Monitoring', site.agent_connected ? 'Site Agent connected' : (site.monitoring_enabled ? 'Agent connection needed' : 'Not enabled')], ['Last agent check-in', formatDate(site.agent_last_seen_at)],
     ].map(([label,value])=>`<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
     const checks = site.health_checks || [];
     if (dom.websiteDetailHealth) dom.websiteDetailHealth.innerHTML = checks.length ? checks.map((check) => `<div class="site-card"><div><div class="site-name">${escapeHtml(check.check_type || 'Health check')} · ${escapeHtml(check.overall_status || 'unknown')}</div><div class="site-url">${formatDate(check.checked_at)} · HTTP ${check.http_status ?? '—'} · ${check.response_time_ms ?? '—'} ms · Updates ${(check.plugin_updates ?? 0) + (check.theme_updates ?? 0)}</div></div></div>`).join('') : '<div class="table-empty">No monitoring history yet.</div>';
