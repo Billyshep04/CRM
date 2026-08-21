@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Http\Resources\CostResource;
 use App\Models\Cost;
 use App\Models\StoredFile;
+use App\Services\Costs\RecurringCostService;
+use Carbon\Carbon;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
@@ -15,6 +17,35 @@ use Illuminate\Validation\ValidationException;
 
 class CostController extends Controller
 {
+    public function months(RecurringCostService $costs)
+    {
+        $now = now();
+        $start = Carbon::create($now->month < 3 ? $now->year - 1 : $now->year, 3, 1)->startOfMonth();
+        $cursor = $start->copy();
+        $months = [];
+        while ($cursor->lte($now->copy()->startOfMonth())) {
+            $entries = $costs->entriesForMonth($cursor);
+            $months[] = ['month' => $cursor->format('Y-m'), 'label' => $cursor->format('F Y'), 'total' => round(collect($entries)->sum('amount'), 2)];
+            $cursor->addMonthNoOverflow();
+        }
+
+        return response()->json(['selected_month' => $now->format('Y-m'), 'months' => $months]);
+    }
+
+    public function monthly(Request $request, RecurringCostService $costs)
+    {
+        $validated = $request->validate(['month' => ['required', 'date_format:Y-m']]);
+        $month = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
+        $entries = $costs->entriesForMonth($month);
+
+        return response()->json([
+            'month' => $month->format('Y-m'), 'label' => $month->format('F Y'), 'entries' => $entries,
+            'one_off_total' => round(collect($entries)->where('entry_type', 'one_off')->sum('amount'), 2),
+            'recurring_total' => round(collect($entries)->where('entry_type', 'recurring')->sum('amount'), 2),
+            'total' => round(collect($entries)->sum('amount'), 2),
+        ]);
+    }
+
     public function index(Request $request)
     {
         $this->ensureCostsTableExists();
@@ -48,7 +79,7 @@ class CostController extends Controller
         $isRecurring = (bool) ($validated['is_recurring'] ?? false);
         $recurringFrequency = $isRecurring ? ($validated['recurring_frequency'] ?? null) : null;
 
-        if ($isRecurring && !$recurringFrequency) {
+        if ($isRecurring && ! $recurringFrequency) {
             throw ValidationException::withMessages([
                 'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
             ]);
@@ -108,11 +139,11 @@ class CostController extends Controller
 
         if (array_key_exists('is_recurring', $validated)) {
             $isRecurring = (bool) $validated['is_recurring'];
-            if (!$isRecurring) {
+            if (! $isRecurring) {
                 $validated['recurring_frequency'] = null;
             } else {
                 $effectiveFrequency = $validated['recurring_frequency'] ?? $cost->recurring_frequency;
-                if (!$effectiveFrequency) {
+                if (! $effectiveFrequency) {
                     throw ValidationException::withMessages([
                         'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
                     ]);
@@ -121,7 +152,7 @@ class CostController extends Controller
             }
         } elseif (array_key_exists('recurring_frequency', $validated)) {
             if ($cost->is_recurring) {
-                if (!$validated['recurring_frequency']) {
+                if (! $validated['recurring_frequency']) {
                     throw ValidationException::withMessages([
                         'recurring_frequency' => ['Recurring frequency is required when recurring is enabled.'],
                     ]);
@@ -157,7 +188,7 @@ class CostController extends Controller
 
         $cost->loadMissing('receiptFile');
 
-        if (!$cost->receiptFile) {
+        if (! $cost->receiptFile) {
             abort(404, 'Receipt not found.');
         }
 
@@ -169,17 +200,17 @@ class CostController extends Controller
 
     private function storeReceipt(Request $request): ?int
     {
-        if (!$request->hasFile('receipt')) {
+        if (! $request->hasFile('receipt')) {
             return null;
         }
 
         $file = $request->file('receipt');
-        if (!$file) {
+        if (! $file) {
             return null;
         }
 
         $extension = strtolower($file->getClientOriginalExtension() ?: 'png');
-        $name = 'receipt-' . Str::uuid()->toString() . '.' . $extension;
+        $name = 'receipt-'.Str::uuid()->toString().'.'.$extension;
         $path = "receipts/{$name}";
         $disk = 'private';
 
@@ -211,6 +242,7 @@ class CostController extends Controller
     {
         if (Schema::hasTable('costs')) {
             $this->ensureRecurringColumnsExist();
+
             return;
         }
 
@@ -247,14 +279,14 @@ class CostController extends Controller
 
     private function ensureRecurringColumnsExist(): void
     {
-        if (!Schema::hasTable('costs')) {
+        if (! Schema::hasTable('costs')) {
             return;
         }
 
-        $missingIsRecurring = !Schema::hasColumn('costs', 'is_recurring');
-        $missingRecurringFrequency = !Schema::hasColumn('costs', 'recurring_frequency');
+        $missingIsRecurring = ! Schema::hasColumn('costs', 'is_recurring');
+        $missingRecurringFrequency = ! Schema::hasColumn('costs', 'recurring_frequency');
 
-        if (!$missingIsRecurring && !$missingRecurringFrequency) {
+        if (! $missingIsRecurring && ! $missingRecurringFrequency) {
             return;
         }
 

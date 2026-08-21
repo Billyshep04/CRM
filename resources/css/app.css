@@ -749,6 +749,34 @@ body[data-role="staff"] .view.staff-member-only-view.active {
     color: var(--accent);
 }
 
+.costs-all-months-total {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border-radius: 12px;
+    background: var(--bg-muted);
+    color: var(--text);
+}
+
+.costs-all-months-total span {
+    color: var(--text-muted);
+    font-weight: 600;
+}
+
+#costs-months .monthly-finance-month {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+#costs-months .monthly-finance-month strong {
+    flex: 0 0 auto;
+}
+
 .monthly-finance-empty {
     color: var(--text-muted);
     font-style: italic;

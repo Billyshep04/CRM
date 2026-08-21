@@ -1276,16 +1276,31 @@
                 </section>
 
                 <section class="view staff-view" data-view="costs">
-                    <section class="content-grid">
-                        <div class="card wide">
+                    <section class="content-grid monthly-finance-layout">
+                        <div class="card monthly-finance-sidebar">
                             <div class="card-header">
                                 <div>
-                                    <div class="card-title">Costs</div>
-                                    <div class="card-subtitle">Track expenses and attach receipts.</div>
+                                    <div class="card-title">Cost months</div>
+                                    <div class="monthly-finance-selected-month" id="costs-selected-month">--</div>
                                 </div>
                                 <button class="btn btn-outline" id="costs-refresh">Refresh</button>
                             </div>
-                            <div class="table" id="costs-table">
+                            <div class="costs-all-months-total">
+                                <span>Total for all months</span>
+                                <strong id="costs-all-months-total">--</strong>
+                            </div>
+                            <div id="costs-months" class="monthly-finance-months"><div class="monthly-finance-empty">Loading months...</div></div>
+                        </div>
+
+                        <div class="monthly-finance-right">
+                            <div class="monthly-finance-metrics">
+                                <div class="card monthly-finance-card"><div class="card-label">Total costs</div><div class="card-value" id="costs-month-total">--</div><div class="card-meta">For the selected month</div></div>
+                                <div class="card monthly-finance-card"><div class="card-label">Recurring</div><div class="card-value" id="costs-recurring-total">--</div><div class="card-meta">Scheduled payments</div></div>
+                                <div class="card monthly-finance-card"><div class="card-label">One-off</div><div class="card-value" id="costs-one-off-total">--</div><div class="card-meta">Individual expenses</div></div>
+                            </div>
+                            <div class="card wide">
+                                <div class="card-header"><div><div class="card-title">Monthly costs</div><div class="card-subtitle">One-off and recurring payments logged for this month.</div></div></div>
+                                <div class="table" id="costs-table">
                                 <div class="table-row table-header costs">
                                     <span>Date</span>
                                     <span>Description</span>
@@ -1303,16 +1318,14 @@
                                     <span></span>
                                 </div>
                             </div>
-                            <div class="table-actions" style="margin-top: 20px;">
-                                <button class="btn btn-ghost" id="costs-load-more" type="button">Load more</button>
                             </div>
-                        </div>
 
+                            <div class="content-grid costs-entry-grid">
                         <div class="card">
                             <div class="card-header">
                                 <div>
-                                    <div class="card-title" id="cost-form-title">New cost</div>
-                                    <div class="card-subtitle">Add expenses with receipt files.</div>
+                                    <div class="card-title" id="cost-form-title">New one-off cost</div>
+                                    <div class="card-subtitle">Log an individual expense in the selected month.</div>
                                 </div>
                             </div>
                             <form id="cost-form" class="form-stack">
@@ -1330,20 +1343,6 @@
                                     <input type="date" name="incurred_on" required>
                                 </label>
                                 <label class="field">
-                                    <span>Recurring cost</span>
-                                    <select name="is_recurring" id="cost-is-recurring">
-                                        <option value="0">One-off</option>
-                                        <option value="1">Recurring</option>
-                                    </select>
-                                </label>
-                                <label class="field" id="cost-frequency-field">
-                                    <span>Recurring frequency</span>
-                                    <select name="recurring_frequency" id="cost-recurring-frequency">
-                                        <option value="monthly">Monthly</option>
-                                        <option value="annual">Annual</option>
-                                    </select>
-                                </label>
-                                <label class="field">
                                     <span>Notes</span>
                                     <textarea name="notes" rows="3"></textarea>
                                 </label>
@@ -1357,6 +1356,23 @@
                                     <button type="button" class="btn btn-outline" id="cost-form-cancel">Cancel</button>
                                 </div>
                             </form>
+                        </div>
+                        <div class="card">
+                            <div class="card-header"><div><div class="card-title" id="recurring-cost-form-title">New recurring cost</div><div class="card-subtitle">Price changes apply from a chosen month without rewriting previous months.</div></div></div>
+                            <form id="recurring-cost-form" class="form-stack">
+                                <input type="hidden" name="id">
+                                <label class="field"><span>Description</span><input name="description" required></label>
+                                <label class="field"><span>Amount</span><input type="number" name="amount" min="0" step="0.01" required></label>
+                                <label class="field" id="recurring-cost-start-field"><span>First payment date</span><input type="date" name="starts_on" required></label>
+                                <label class="field" id="recurring-cost-effective-field" hidden><span>New price starts from</span><input type="month" name="effective_from"></label>
+                                <label class="field"><span>Frequency</span><select name="frequency"><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
+                                <label class="field"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+                                <div id="recurring-cost-form-status" class="form-hint"></div>
+                                <div class="form-actions"><button class="btn btn-primary" type="submit">Save recurring cost</button><button class="btn btn-outline" id="recurring-cost-form-cancel" type="button">Cancel</button></div>
+                            </form>
+                        </div>
+                            </div>
+                            <div class="card wide"><div class="card-header"><div><div class="card-title">Recurring cost schedules</div><div class="card-subtitle">Edit a payment to set a new price for this or a future month.</div></div></div><div class="stack" id="recurring-costs-list"><div class="form-hint">Loading recurring costs...</div></div></div>
                         </div>
                     </section>
                 </section>

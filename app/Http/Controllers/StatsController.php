@@ -6,6 +6,7 @@ use App\Models\Cost;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\SubscriptionMonth;
+use App\Services\Costs\RecurringCostService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Schema;
 
 class StatsController extends Controller
 {
+    public function __construct(private readonly RecurringCostService $recurringCosts) {}
+
     public function revenue(): JsonResponse
     {
         $startOfMonth = now()->startOfMonth();
@@ -127,12 +130,12 @@ class StatsController extends Controller
 
         foreach ($jobs as $job) {
             $jobDate = $job->completed_at ?? $job->created_at;
-            if (!$jobDate) {
+            if (! $jobDate) {
                 continue;
             }
 
             $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, Carbon::parse($jobDate));
-            if (!$bucketKey) {
+            if (! $bucketKey) {
                 continue;
             }
 
@@ -152,7 +155,7 @@ class StatsController extends Controller
                     $endOfYear,
                     Carbon::parse($paidMonth->month_start)
                 );
-                if (!$bucketKey) {
+                if (! $bucketKey) {
                     continue;
                 }
 
@@ -176,6 +179,13 @@ class StatsController extends Controller
 
             foreach ($costs as $cost) {
                 $this->addCostToWeeklyBuckets($weeks, $startOfYear, $endOfYear, $cost, $hasRecurringColumns);
+            }
+        }
+
+        foreach ($this->recurringCosts->recurringOccurrences($startOfYear, $endOfYear) as $occurrence) {
+            $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, Carbon::parse($occurrence['incurred_on']));
+            if ($bucketKey) {
+                $weeks[$bucketKey]['costs'] += (float) $occurrence['amount'];
             }
         }
 
@@ -245,29 +255,7 @@ class StatsController extends Controller
 
     private function calculateCostsTotalForRange(Carbon $startDate, Carbon $endDate): float
     {
-        if (!Schema::hasTable('costs')) {
-            return 0.0;
-        }
-
-        $hasRecurringColumns = Schema::hasColumn('costs', 'is_recurring')
-            && Schema::hasColumn('costs', 'recurring_frequency');
-
-        if (!$hasRecurringColumns) {
-            return (float) Cost::query()
-                ->whereBetween('incurred_on', [$startDate->toDateString(), $endDate->toDateString()])
-                ->sum('amount');
-        }
-
-        $costs = Cost::query()
-            ->whereDate('incurred_on', '<=', $endDate->toDateString())
-            ->get(['amount', 'incurred_on', 'is_recurring', 'recurring_frequency']);
-
-        $total = 0.0;
-        foreach ($costs as $cost) {
-            $total += $this->calculateCostAmountForRange($cost, $startDate, $endDate, true);
-        }
-
-        return $total;
+        return $this->recurringCosts->totalForRange($startDate, $endDate);
     }
 
     private function calculateCompletedJobsTotalForRange(Carbon $startDate, Carbon $endDate): float
@@ -315,7 +303,7 @@ class StatsController extends Controller
         Cost $cost,
         bool $hasRecurringColumns
     ): void {
-        if (!$cost->incurred_on) {
+        if (! $cost->incurred_on) {
             return;
         }
 
@@ -326,7 +314,7 @@ class StatsController extends Controller
             && (bool) ($cost->is_recurring ?? false)
             && in_array($frequency, ['monthly', 'annual'], true);
 
-        if (!$isRecurring) {
+        if (! $isRecurring) {
             $bucketKey = $this->resolveWeekBucketKey($startOfYear, $endOfYear, $incurredOn);
             if ($bucketKey) {
                 $weeks[$bucketKey]['costs'] += $amount;
@@ -357,7 +345,7 @@ class StatsController extends Controller
         Carbon $endDate,
         bool $hasRecurringColumns
     ): float {
-        if (!$cost->incurred_on) {
+        if (! $cost->incurred_on) {
             return 0.0;
         }
 
@@ -368,7 +356,7 @@ class StatsController extends Controller
             && (bool) ($cost->is_recurring ?? false)
             && in_array($frequency, ['monthly', 'annual'], true);
 
-        if (!$isRecurring) {
+        if (! $isRecurring) {
             return $incurredOn->between($startDate->copy()->startOfDay(), $endDate->copy()->endOfDay())
                 ? $amount
                 : 0.0;

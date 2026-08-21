@@ -347,13 +347,23 @@ const dom = {
     customersRefresh: document.getElementById('customers-refresh'),
     jobsTable: document.getElementById('jobs-table'),
     costsTable: document.getElementById('costs-table'),
+    costsMonths: document.getElementById('costs-months'),
+    costsSelectedMonth: document.getElementById('costs-selected-month'),
+    costsAllMonthsTotal: document.getElementById('costs-all-months-total'),
+    costsMonthTotal: document.getElementById('costs-month-total'),
+    costsRecurringTotal: document.getElementById('costs-recurring-total'),
+    costsOneOffTotal: document.getElementById('costs-one-off-total'),
     costForm: document.getElementById('cost-form'),
     costFormTitle: document.getElementById('cost-form-title'),
     costFormStatus: document.getElementById('cost-form-status'),
     costFormCancel: document.getElementById('cost-form-cancel'),
-    costRecurringSelect: document.getElementById('cost-is-recurring'),
-    costRecurringFrequencyField: document.getElementById('cost-frequency-field'),
-    costRecurringFrequencySelect: document.getElementById('cost-recurring-frequency'),
+    recurringCostForm: document.getElementById('recurring-cost-form'),
+    recurringCostFormTitle: document.getElementById('recurring-cost-form-title'),
+    recurringCostFormStatus: document.getElementById('recurring-cost-form-status'),
+    recurringCostFormCancel: document.getElementById('recurring-cost-form-cancel'),
+    recurringCostStartField: document.getElementById('recurring-cost-start-field'),
+    recurringCostEffectiveField: document.getElementById('recurring-cost-effective-field'),
+    recurringCostsList: document.getElementById('recurring-costs-list'),
     costsRefresh: document.getElementById('costs-refresh'),
     jobForm: document.getElementById('job-form'),
     jobFormTitle: document.getElementById('job-form-title'),
@@ -475,6 +485,9 @@ const state = {
     jobs: [],
     jobPhotos: [],
     costs: [],
+    costsMonths: [],
+    costsSelectedMonth: null,
+    recurringCosts: [],
     subscriptions: [],
     proposals: [],
     tasks: [],
@@ -563,6 +576,7 @@ const state = {
         job: null,
         jobPhotoJobId: null,
         cost: null,
+        recurringCost: null,
         subscription: null,
         proposal: null,
         proposalFormTypeIndex: null,
@@ -835,7 +849,8 @@ function setActiveView(view) {
             .then(loadProposals);
     }
     if (view === 'costs') {
-        loadCosts();
+        loadCostMonths();
+        loadRecurringCosts();
     }
     if (view === 'monthly-finance' && state.role === 'admin') {
         loadMonthlyFinance();
@@ -5490,57 +5505,40 @@ async function handleJobAction(event) {
     }
 }
 
-async function loadCosts(append = false) {
-    if (!dom.costsTable) return;
-    setFormStatus(dom.costFormStatus, '');
-    setLoadMoreLoading('costs', true);
-    if (!append) {
-        resetPagination('costs');
-        resetTable(dom.costsTable);
-        const loadingRow = document.createElement('div');
-        loadingRow.className = 'table-row table-empty costs';
-        loadingRow.innerHTML = '<span>Loading costs...</span><span></span><span></span><span></span><span></span><span></span>';
-        dom.costsTable.appendChild(loadingRow);
-    }
-
+async function loadCostMonths(preferredMonth = state.costsSelectedMonth) {
+    if (!dom.costsMonths) return;
     try {
-        const page = append ? state.pagination.costs.page + 1 : 1;
-        const response = await api.get(`/api/costs${buildQuery({ page, per_page: 15 })}`);
-        const items = response?.data?.data ?? [];
-        state.costs = append ? [...state.costs, ...items] : items;
-        updatePagination('costs', response, append);
+        const response = await api.get('/api/costs/months');
+        state.costsMonths = response?.data?.months ?? [];
+        state.costsSelectedMonth = preferredMonth || response?.data?.selected_month || state.costsMonths.at(-1)?.month;
+        renderCostMonths();
+        await loadCosts();
+    } catch (error) {
+        dom.costsMonths.innerHTML = '<div class="monthly-finance-empty">Unable to load cost months.</div>';
+    }
+}
+
+function renderCostMonths() {
+    if (!dom.costsMonths) return;
+    dom.costsMonths.innerHTML = state.costsMonths.map((month) => `<button type="button" class="monthly-finance-month${month.month === state.costsSelectedMonth ? ' active' : ''}" data-cost-month="${escapeHtml(month.month)}"><span>${escapeHtml(month.label)}</span><strong>${formatCurrency(Number(month.total))}</strong></button>`).join('');
+    if (dom.costsAllMonthsTotal) dom.costsAllMonthsTotal.textContent = formatCurrency(state.costsMonths.reduce((total, month) => total + Number(month.total || 0), 0));
+    const selected = state.costsMonths.find((month) => month.month === state.costsSelectedMonth);
+    if (dom.costsSelectedMonth) dom.costsSelectedMonth.textContent = selected?.label || '--';
+}
+
+async function loadCosts() {
+    if (!dom.costsTable || !state.costsSelectedMonth) return;
+    try {
+        const response = await api.get(`/api/costs/monthly?month=${encodeURIComponent(state.costsSelectedMonth)}`);
+        state.costs = response?.data?.entries ?? [];
+        if (dom.costsMonthTotal) dom.costsMonthTotal.textContent = formatCurrency(Number(response?.data?.total ?? 0));
+        if (dom.costsRecurringTotal) dom.costsRecurringTotal.textContent = formatCurrency(Number(response?.data?.recurring_total ?? 0));
+        if (dom.costsOneOffTotal) dom.costsOneOffTotal.textContent = formatCurrency(Number(response?.data?.one_off_total ?? 0));
         renderCosts();
     } catch (error) {
         resetTable(dom.costsTable);
-        const emptyRow = document.createElement('div');
-        emptyRow.className = 'table-row table-empty costs';
-        emptyRow.innerHTML = '<span>Unable to load costs.</span><span></span><span></span><span></span><span></span><span></span>';
-        dom.costsTable.appendChild(emptyRow);
-    } finally {
-        setLoadMoreLoading('costs', false);
+        dom.costsTable.insertAdjacentHTML('beforeend', '<div class="table-row table-empty costs"><span>Unable to load costs.</span><span></span><span></span><span></span><span></span><span></span></div>');
     }
-}
-
-function toggleCostRecurringFields() {
-    if (!dom.costRecurringSelect || !dom.costRecurringFrequencyField || !dom.costRecurringFrequencySelect) {
-        return;
-    }
-
-    const isRecurring = dom.costRecurringSelect.value === '1';
-    dom.costRecurringFrequencyField.style.display = isRecurring ? '' : 'none';
-
-    if (!isRecurring) {
-        dom.costRecurringFrequencySelect.value = 'monthly';
-    }
-}
-
-function getCostTypeLabel(cost) {
-    const frequency = String(cost.recurring_frequency || '').toLowerCase();
-    if (cost.is_recurring && (frequency === 'monthly' || frequency === 'annual')) {
-        return frequency === 'annual' ? 'Recurring (Annual)' : 'Recurring (Monthly)';
-    }
-
-    return 'One-off';
 }
 
 function renderCosts() {
@@ -5558,10 +5556,10 @@ function renderCosts() {
     state.costs.forEach((cost) => {
         const row = document.createElement('div');
         row.className = 'table-row costs';
-        const receiptButton = cost.receipt_file_id
-            ? `<button class="btn btn-outline btn-small" data-action="receipt" data-id="${cost.id}">Download</button>`
+        const receiptButton = cost.receipt_file_id && cost.cost_id
+            ? `<button class="btn btn-outline btn-small" data-action="receipt" data-id="${cost.cost_id}">Download</button>`
             : '<span class="muted">—</span>';
-        const costType = getCostTypeLabel(cost);
+        const costType = cost.entry_type === 'recurring' ? 'Recurring' : 'One-off';
 
         row.innerHTML = `
             <span>${formatDate(cost.incurred_on)}</span>
@@ -5570,8 +5568,7 @@ function renderCosts() {
             <span>${escapeHtml(costType)}</span>
             <span>${receiptButton}</span>
             <div class="row-actions">
-                <button class="btn btn-outline btn-small" data-action="edit" data-id="${cost.id}">Edit</button>
-                <button class="btn btn-outline btn-small" data-action="delete" data-id="${cost.id}">Delete</button>
+                ${cost.entry_type === 'one_off' ? `<button class="btn btn-outline btn-small" data-action="edit" data-id="${cost.cost_id}">Edit</button><button class="btn btn-outline btn-small" data-action="delete" data-id="${cost.cost_id}">Delete</button>` : `<button class="btn btn-outline btn-small" data-action="edit-recurring" data-id="${cost.recurring_cost_id || ''}">Edit schedule</button>`}
             </div>
         `;
         dom.costsTable.appendChild(row);
@@ -5582,11 +5579,8 @@ function resetCostForm() {
     if (!dom.costForm) return;
     dom.costForm.reset();
     dom.costForm.querySelector('input[name="id"]').value = '';
-    if (dom.costRecurringSelect) dom.costRecurringSelect.value = '0';
-    if (dom.costRecurringFrequencySelect) dom.costRecurringFrequencySelect.value = 'monthly';
-    toggleCostRecurringFields();
     state.editing.cost = null;
-    if (dom.costFormTitle) dom.costFormTitle.textContent = 'New cost';
+    if (dom.costFormTitle) dom.costFormTitle.textContent = 'New one-off cost';
     setFormStatus(dom.costFormStatus, '');
 }
 
@@ -5595,14 +5589,7 @@ async function handleCostSubmit(event) {
     if (!dom.costForm) return;
 
     const formData = new FormData(dom.costForm);
-    const isRecurring = String(formData.get('is_recurring') || '0') === '1';
-
-    if (!isRecurring) {
-        formData.set('recurring_frequency', '');
-    } else if (!String(formData.get('recurring_frequency') || '').trim()) {
-        setFormStatus(dom.costFormStatus, 'Choose monthly or annual for recurring costs.', true);
-        return;
-    }
+    formData.set('is_recurring', '0');
 
     try {
         if (state.editing.cost) {
@@ -5617,7 +5604,7 @@ async function handleCostSubmit(event) {
             });
             setFormStatus(dom.costFormStatus, 'Cost created.');
         }
-        await loadCosts();
+        await loadCostMonths();
         resetCostForm();
     } catch (error) {
         setFormStatus(dom.costFormStatus, 'Unable to save cost.', true);
@@ -5645,7 +5632,7 @@ async function handleCostAction(event) {
     if (!actionButton) return;
     const id = Number(actionButton.dataset.id);
     const action = actionButton.dataset.action;
-    const cost = state.costs.find((item) => item.id === id);
+    const cost = state.costs.find((item) => item.cost_id === id);
 
     if (action === 'edit' && cost) {
         state.editing.cost = id;
@@ -5654,14 +5641,6 @@ async function handleCostAction(event) {
         dom.costForm.querySelector('textarea[name="description"]').value = cost.description || '';
         dom.costForm.querySelector('input[name="amount"]').value = cost.amount || '';
         dom.costForm.querySelector('input[name="incurred_on"]').value = formatDateInput(cost.incurred_on) || '';
-        if (dom.costRecurringSelect) {
-            dom.costRecurringSelect.value = cost.is_recurring ? '1' : '0';
-        }
-        if (dom.costRecurringFrequencySelect) {
-            dom.costRecurringFrequencySelect.value =
-                cost.recurring_frequency === 'annual' ? 'annual' : 'monthly';
-        }
-        toggleCostRecurringFields();
         dom.costForm.querySelector('textarea[name="notes"]').value = cost.notes || '';
         dom.costForm.querySelector('input[name="receipt"]').value = '';
         setFormStatus(dom.costFormStatus, 'Editing cost.');
@@ -5676,11 +5655,55 @@ async function handleCostAction(event) {
         if (!window.confirm('Delete this cost?')) return;
         try {
             await api.delete(`/api/costs/${id}`);
-            await loadCosts();
+            await loadCostMonths();
         } catch (error) {
             setFormStatus(dom.costFormStatus, 'Unable to delete cost.', true);
         }
     }
+
+    if (action === 'edit-recurring' && id) editRecurringCost(id);
+}
+
+async function loadRecurringCosts() {
+    if (!dom.recurringCostsList) return;
+    try {
+        state.recurringCosts = (await api.get('/api/recurring-costs'))?.data?.data ?? [];
+        dom.recurringCostsList.innerHTML = state.recurringCosts.length ? state.recurringCosts.map((cost) => `<div class="site-card"><div><div class="site-name">${escapeHtml(cost.description)}</div><div class="site-meta">${formatCurrency(Number(cost.current_amount))} · ${escapeHtml(cost.frequency)} · from ${formatDate(cost.starts_on)}${cost.active ? '' : ` · stopped ${formatDate(cost.ends_on)}`}</div></div><div class="row-actions"><button class="btn btn-outline btn-small" data-recurring-action="edit" data-id="${cost.id}">Edit / change price</button>${cost.active ? `<button class="btn btn-outline btn-small" data-recurring-action="stop" data-id="${cost.id}">Stop</button>` : ''}</div></div>`).join('') : '<div class="form-hint">No recurring costs yet.</div>';
+    } catch { dom.recurringCostsList.innerHTML = '<div class="form-hint">Unable to load recurring costs.</div>'; }
+}
+
+function resetRecurringCostForm() {
+    if (!dom.recurringCostForm) return;
+    dom.recurringCostForm.reset(); state.editing.recurringCost = null;
+    dom.recurringCostForm.querySelector('input[name="id"]').value = '';
+    dom.recurringCostStartField.hidden = false; dom.recurringCostEffectiveField.hidden = true;
+    dom.recurringCostForm.querySelector('[name="starts_on"]').required = true;
+    dom.recurringCostForm.querySelector('[name="effective_from"]').required = false;
+    dom.recurringCostForm.querySelector('[name="frequency"]').disabled = false;
+    dom.recurringCostFormTitle.textContent = 'New recurring cost'; setFormStatus(dom.recurringCostFormStatus, '');
+}
+
+function editRecurringCost(id) {
+    const cost = state.recurringCosts.find((item) => item.id === Number(id)); if (!cost) return;
+    state.editing.recurringCost = cost.id; const form = dom.recurringCostForm;
+    form.querySelector('[name="id"]').value = cost.id; form.querySelector('[name="description"]').value = cost.description || '';
+    form.querySelector('[name="amount"]').value = cost.current_amount; form.querySelector('[name="starts_on"]').value = cost.starts_on || '';
+    form.querySelector('[name="frequency"]').value = cost.frequency; form.querySelector('[name="notes"]').value = cost.notes || '';
+    const nextMonth = new Date(); nextMonth.setMonth(nextMonth.getMonth() + 1, 1); form.querySelector('[name="effective_from"]').value = nextMonth.toISOString().slice(0, 7);
+    dom.recurringCostStartField.hidden = true; dom.recurringCostEffectiveField.hidden = false;
+    form.querySelector('[name="starts_on"]').required = false; form.querySelector('[name="effective_from"]').required = true;
+    form.querySelector('[name="frequency"]').disabled = true;
+    dom.recurringCostFormTitle.textContent = 'Edit recurring cost'; setFormStatus(dom.recurringCostFormStatus, 'Choose when any new price should start. Earlier months will not change.');
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function handleRecurringCostSubmit(event) {
+    event.preventDefault(); const form = dom.recurringCostForm; const values = Object.fromEntries(new FormData(form).entries());
+    try {
+        if (state.editing.recurringCost) await api.put(`/api/recurring-costs/${state.editing.recurringCost}`, { description: values.description, amount: values.amount, effective_from: `${values.effective_from}-01`, notes: values.notes });
+        else await api.post('/api/recurring-costs', values);
+        resetRecurringCostForm(); await Promise.all([loadRecurringCosts(), loadCostMonths()]);
+    } catch (error) { setFormStatus(dom.recurringCostFormStatus, getErrorMessage(error, 'Unable to save recurring cost.'), true); }
 }
 
 async function loadSubscriptions(append = false) {
@@ -7834,12 +7857,22 @@ if (dom.jobsLoadMore) {
 
 if (dom.costForm) {
     dom.costForm.addEventListener('submit', handleCostSubmit);
-    toggleCostRecurringFields();
 }
 
-if (dom.costRecurringSelect) {
-    dom.costRecurringSelect.addEventListener('change', toggleCostRecurringFields);
-}
+if (dom.recurringCostForm) dom.recurringCostForm.addEventListener('submit', handleRecurringCostSubmit);
+if (dom.recurringCostFormCancel) dom.recurringCostFormCancel.addEventListener('click', resetRecurringCostForm);
+if (dom.costsMonths) dom.costsMonths.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-cost-month]'); if (!button) return;
+    state.costsSelectedMonth = button.dataset.costMonth; renderCostMonths(); loadCosts();
+});
+if (dom.recurringCostsList) dom.recurringCostsList.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-recurring-action]'); if (!button) return;
+    if (button.dataset.recurringAction === 'edit') editRecurringCost(button.dataset.id);
+    if (button.dataset.recurringAction === 'stop' && window.confirm('Stop this recurring cost after the current month? Previous months will be kept.')) {
+        try { await api.delete(`/api/recurring-costs/${button.dataset.id}`); await Promise.all([loadRecurringCosts(), loadCostMonths()]); }
+        catch (error) { setFormStatus(dom.recurringCostFormStatus, getErrorMessage(error, 'Unable to stop recurring cost.'), true); }
+    }
+});
 
 if (dom.costFormCancel) {
     dom.costFormCancel.addEventListener('click', resetCostForm);
@@ -7850,11 +7883,7 @@ if (dom.costsTable) {
 }
 
 if (dom.costsRefresh) {
-    dom.costsRefresh.addEventListener('click', loadCosts);
-}
-
-if (dom.costsLoadMore) {
-    dom.costsLoadMore.addEventListener('click', () => loadCosts(true));
+    dom.costsRefresh.addEventListener('click', () => Promise.all([loadCostMonths(), loadRecurringCosts()]));
 }
 
 if (dom.jobsFilterStatus) {
