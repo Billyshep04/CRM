@@ -3,6 +3,7 @@
 namespace App\Services\Hosting;
 
 use App\Contracts\SshCommandRunner;
+use App\Contracts\CpanelUapiClient;
 use App\Models\HostingAccount;
 use App\Models\HostingPackage;
 use App\Models\HostingServer;
@@ -14,7 +15,7 @@ use RuntimeException;
 
 class KrystalWordpressProvisioner
 {
-    public function __construct(private readonly SshCommandRunner $ssh) {}
+    public function __construct(private readonly SshCommandRunner $ssh, private readonly CpanelUapiClient $uapi) {}
 
     public function validatePrerequisites(HostingPackage $package, bool $live, ?HostingServer $server = null): array
     {
@@ -45,10 +46,10 @@ class KrystalWordpressProvisioner
             $server,
             $account,
             $password,
-            'for tool in php wp uapi; do command -v "$tool" >/dev/null 2>&1 || exit 1; done; printf tools-ready',
-            'SSH connected, but PHP, WP-CLI, or cPanel UAPI is unavailable for this account.'
+            'for tool in php wp; do command -v "$tool" >/dev/null 2>&1 || exit 1; done; printf tools-ready',
+            'SSH connected, but PHP or WP-CLI is unavailable for this account.'
         );
-        return ['connected' => true, 'tools_verified' => ['php', 'wp', 'uapi'], 'port' => (int) config('hosting.ssh.port', 722)];
+        return ['connected' => true, 'tools_verified' => ['php', 'wp'], 'port' => (int) config('hosting.ssh.port', 722)];
     }
 
     public function downloadWordpress(HostingServer $server, HostingAccount $account, string $password): array
@@ -178,18 +179,20 @@ class KrystalWordpressProvisioner
 
     private function executeUapi(HostingServer $server, HostingAccount $account, string $password, array $arguments, string $safeFailure): array
     {
-        $command = 'uapi --output=json '.collect($arguments)->map(fn ($argument) => $this->shellArgument((string) $argument))->implode(' ');
-        $result = $this->run($server, $account, $password, $command);
-        $output = $result['output'];
-        $payload = json_decode($output, true);
+        [$module, $function] = $arguments;
+        $parameters = collect(array_slice($arguments, 2))->mapWithKeys(function ($argument) {
+            [$key, $value] = array_pad(explode('=', (string) $argument, 2), 2, '');
+            return [$key => $value];
+        })->all();
+        $payload = $this->uapi->call($server, $account, (string) $module, (string) $function, $parameters);
+        $output = json_encode($payload, JSON_UNESCAPED_SLASHES) ?: '';
         $status = data_get($payload, 'result.status');
         if ($status !== 1 && ! str_contains(strtolower($output), 'already exists')) {
             $errors = collect((array) data_get($payload, 'result.errors', []))->filter()->map(fn ($error) => trim(strip_tags((string) $error)))->values()->all();
             Log::warning('cPanel UAPI provisioning step failed.', [
                 'hosting_account_id' => $account->id,
-                'module' => $arguments[0] ?? null,
-                'function' => $arguments[1] ?? null,
-                'exit_code' => $result['exit_code'],
+                'module' => $module,
+                'function' => $function,
                 'errors' => $this->redactUapiErrors($errors, $arguments),
             ]);
             throw new RuntimeException($this->safeUapiFailure($errors, $safeFailure));

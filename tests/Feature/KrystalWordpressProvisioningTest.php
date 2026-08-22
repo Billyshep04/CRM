@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Contracts\DnsResolver;
 use App\Contracts\SshCommandRunner;
+use App\Contracts\CpanelUapiClient;
 use App\Contracts\SslInspector;
 use App\Models\HostingAccount;
 use App\Models\HostingPackage;
@@ -21,7 +22,7 @@ class KrystalWordpressProvisioningTest extends TestCase
     public function test_every_wp_cli_command_uses_the_required_php_wrapper_and_quotes_arguments(): void
     {
         $runner = new RecordingSshRunner;
-        $service = new KrystalWordpressProvisioner($runner);
+        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
         $command = $service->wpCliCommand(['option', 'update', 'blogname', 'A title; touch /tmp/no']);
         $this->assertStringStartsWith('cd ~/public_html && php -d disable_functions= "$(which wp)" ', $command);
         $this->assertStringContainsString("'A title; touch /tmp/no'", $command);
@@ -29,7 +30,7 @@ class KrystalWordpressProvisioningTest extends TestCase
 
     public function test_shell_arguments_remain_safe_without_php_escape_shell_functions(): void
     {
-        $service = new KrystalWordpressProvisioner(new RecordingSshRunner);
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
         $command = $service->wpCliCommand(['option', 'update', 'blogname', "O'Brien; touch /tmp/no"]);
 
         $this->assertStringContainsString("'O'\"'\"'Brien; touch /tmp/no'", $command);
@@ -41,7 +42,7 @@ class KrystalWordpressProvisioningTest extends TestCase
         $runner = new RecordingSshRunner(['test -f public_html/wp-load.php' => ['exit_code' => 1, 'output' => ''], 'find public_html' => ['exit_code' => 0, 'output' => "index.php\nassets\n"]]);
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('public_html contains an existing website');
-        (new KrystalWordpressProvisioner($runner))->downloadWordpress($this->server(), $this->account(), 'not-logged');
+        (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))->downloadWordpress($this->server(), $this->account(), 'not-logged');
     }
 
     public function test_shell_access_is_a_hard_prerequisite_for_live_wordpress_setup(): void
@@ -49,13 +50,13 @@ class KrystalWordpressProvisioningTest extends TestCase
         $package = new HostingPackage(['name' => 'No shell', 'shell_access' => false]);
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('Shell Access is not enabled');
-        (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true);
+        (new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient))->validatePrerequisites($package, true);
     }
 
     public function test_unknown_package_shell_metadata_does_not_block_the_real_ssh_check(): void
     {
         $package = new HostingPackage(['name' => 'Shell metadata omitted', 'shell_access' => null]);
-        $result = (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true, new HostingServer(['metadata' => ['ssh_host_fingerprint' => str_repeat('a', 64)]]));
+        $result = (new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient))->validatePrerequisites($package, true, new HostingServer(['metadata' => ['ssh_host_fingerprint' => str_repeat('a', 64)]]));
 
         $this->assertSame('requested_and_verified_during_setup', $result['shell_access']);
     }
@@ -65,17 +66,17 @@ class KrystalWordpressProvisioningTest extends TestCase
         $package = new HostingPackage(['name' => 'Shell enabled', 'shell_access' => true]);
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('SSH host verification is not configured');
-        (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true, new HostingServer);
+        (new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient))->validatePrerequisites($package, true, new HostingServer);
     }
 
     public function test_database_config_and_install_commands_are_unattended_and_idempotent(): void
     {
         $runner = new RecordingSshRunner([
-            'uapi --output=json' => ['exit_code' => 0, 'output' => '{"result":{"status":1}}'],
             'test -f public_html/wp-config.php' => ['exit_code' => 1, 'output' => ''],
             "'core' 'is-installed'" => ['exit_code' => 1, 'output' => ''],
         ]);
-        $service = new KrystalWordpressProvisioner($runner);
+        $uapi = new RecordingCpanelUapiClient;
+        $service = new KrystalWordpressProvisioner($runner, $uapi);
         $server = $this->server(); $account = $this->account();
         $service->createDatabase($server, $account, 'cpanel-secret', 'customerone_wp');
         $service->createDatabaseUser($server, $account, 'cpanel-secret', 'customerone_wpuser', 'database-secret');
@@ -83,39 +84,36 @@ class KrystalWordpressProvisioningTest extends TestCase
         $service->createConfig($server, $account, 'cpanel-secret', ['name' => 'customerone_wp', 'user' => 'customerone_wpuser', 'password' => 'database-secret']);
         $service->install($server, $account, 'cpanel-secret', ['url' => 'https://example.test', 'title' => 'Example', 'admin_username' => 'webstamp_admin', 'admin_password' => 'wordpress-secret', 'admin_email' => 'admin@example.test']);
         $commands = implode("\n", $runner->commands);
-        $this->assertStringContainsString("'Mysql' 'create_database'", $commands);
-        $this->assertStringContainsString("'Mysql' 'create_user'", $commands);
-        $this->assertStringContainsString("'Mysql' 'set_privileges_on_database'", $commands);
+        $this->assertSame(['create_database', 'create_user', 'set_privileges_on_database'], array_column($uapi->calls, 'function'));
         $this->assertStringContainsString("php -d disable_functions= \"$(which wp)\" 'config' 'create'", $commands);
         $this->assertStringContainsString("php -d disable_functions= \"$(which wp)\" 'core' 'install'", $commands);
     }
 
     public function test_database_names_use_cpanels_reported_prefix_and_unprefixed_create_arguments(): void
     {
-        $runner = new RecordingSshRunner([
-            "'Mysql' 'get_restrictions'" => ['exit_code' => 0, 'output' => '{"result":{"status":1,"data":{"prefix":"customer_","max_database_name_length":64,"max_username_length":32}}}'],
-            'uapi --output=json' => ['exit_code' => 0, 'output' => '{"result":{"status":1}}'],
+        $runner = new RecordingSshRunner;
+        $uapi = new RecordingCpanelUapiClient([
+            'get_restrictions' => ['result' => ['status' => 1, 'data' => ['prefix' => 'customer_', 'max_database_name_length' => 64, 'max_username_length' => 32]]],
         ]);
-        $service = new KrystalWordpressProvisioner($runner);
+        $service = new KrystalWordpressProvisioner($runner, $uapi);
         $names = $service->databaseNames($this->server(), $this->account(), 'cpanel-secret');
 
         $this->assertSame('customer_wp', $names['database']);
         $this->assertSame('customer_wpuser', $names['database_user']);
         $service->createDatabase($this->server(), $this->account(), 'cpanel-secret', $names['database'], $names['database_api_name']);
         $service->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', $names['database_user'], 'database-secret', $names['database_user_api_name']);
-        $commands = implode("\n", $runner->commands);
-        $this->assertStringContainsString("'name=wp'", $commands);
-        $this->assertStringContainsString("'name=wpuser'", $commands);
-        $this->assertStringNotContainsString("'name=customer_wp'", $commands);
+        $this->assertSame('wp', $uapi->calls[1]['parameters']['name']);
+        $this->assertSame('wpuser', $uapi->calls[2]['parameters']['name']);
     }
 
     public function test_uapi_failure_exposes_only_safe_actionable_categories(): void
     {
-        $runner = new RecordingSshRunner([
-            'uapi --output=json' => ['exit_code' => 1, 'output' => '{"result":{"status":0,"errors":["The maximum number of databases (1) has been reached (password database-secret)"]}}'],
+        $runner = new RecordingSshRunner;
+        $uapi = new RecordingCpanelUapiClient([
+            'create_user' => ['result' => ['status' => 0, 'errors' => ['The maximum number of databases (1) has been reached (password database-secret)']]],
         ]);
         try {
-            (new KrystalWordpressProvisioner($runner))->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', 'customer_wpuser', 'database-secret', 'wpuser');
+            (new KrystalWordpressProvisioner($runner, $uapi))->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', 'customer_wpuser', 'database-secret', 'wpuser');
             $this->fail('Expected a UAPI failure.');
         } catch (RuntimeException $exception) {
             $this->assertSame('The cPanel account has reached its MySQL database or user quota.', $exception->getMessage());
@@ -125,18 +123,18 @@ class KrystalWordpressProvisioningTest extends TestCase
 
     public function test_ssh_probe_returns_safe_success_and_safe_failure(): void
     {
-        $service = new KrystalWordpressProvisioner(new RecordingSshRunner);
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
         $this->assertTrue($service->testSsh($this->server(), $this->account(), 'not-returned')['connected']);
-        $failed = new KrystalWordpressProvisioner(new RecordingSshRunner(['printf connected' => ['exit_code' => 1, 'output' => 'secret server output']]));
+        $failed = new KrystalWordpressProvisioner(new RecordingSshRunner(['printf connected' => ['exit_code' => 1, 'output' => 'secret server output']]), new RecordingCpanelUapiClient);
         try { $failed->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected failure.'); }
         catch (RuntimeException $exception) { $this->assertSame('SSH connection failed. Check Shell Access and cPanel credentials.', $exception->getMessage()); }
     }
 
     public function test_ssh_probe_checks_all_tools_needed_by_later_steps(): void
     {
-        $service = new KrystalWordpressProvisioner(new RecordingSshRunner(['for tool in php wp uapi' => ['exit_code' => 1, 'output' => 'not returned']]));
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner(['for tool in php wp' => ['exit_code' => 1, 'output' => 'not returned']]), new RecordingCpanelUapiClient);
         try { $service->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected missing tools failure.'); }
-        catch (RuntimeException $exception) { $this->assertSame('SSH connected, but PHP, WP-CLI, or cPanel UAPI is unavailable for this account.', $exception->getMessage()); }
+        catch (RuntimeException $exception) { $this->assertSame('SSH connected, but PHP or WP-CLI is unavailable for this account.', $exception->getMessage()); }
     }
 
     public function test_dns_reports_correct_wrong_and_missing_records_and_detects_provider(): void
@@ -205,6 +203,17 @@ class RecordingSshRunner implements SshCommandRunner
         $this->commands[] = $command;
         foreach ($this->responses as $fragment => $response) if (str_contains($command, $fragment)) return $response;
         return ['exit_code' => 0, 'output' => ''];
+    }
+}
+
+class RecordingCpanelUapiClient implements CpanelUapiClient
+{
+    public array $calls = [];
+    public function __construct(private array $responses = []) {}
+    public function call(HostingServer $server, HostingAccount $account, string $module, string $function, array $parameters = []): array
+    {
+        $this->calls[] = compact('module', 'function', 'parameters');
+        return $this->responses[$function] ?? ['result' => ['status' => 1, 'data' => null]];
     }
 }
 
