@@ -27,6 +27,15 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->assertStringContainsString("'A title; touch /tmp/no'", $command);
     }
 
+    public function test_shell_arguments_remain_safe_without_php_escape_shell_functions(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner);
+        $command = $service->wpCliCommand(['option', 'update', 'blogname', "O'Brien; touch /tmp/no"]);
+
+        $this->assertStringContainsString("'O'\"'\"'Brien; touch /tmp/no'", $command);
+        $this->assertSame(1, substr_count($command, 'touch /tmp/no'));
+    }
+
     public function test_wordpress_download_refuses_to_overwrite_existing_public_html(): void
     {
         $runner = new RecordingSshRunner(['test -f public_html/wp-load.php' => ['exit_code' => 1, 'output' => ''], 'find public_html' => ['exit_code' => 0, 'output' => "index.php\nassets\n"]]);

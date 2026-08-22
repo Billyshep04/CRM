@@ -172,13 +172,13 @@ class KrystalWordpressProvisioner
 
     public function wpCliCommand(array $arguments): string
     {
-        $safe = collect($arguments)->map(fn ($argument) => escapeshellarg((string) $argument))->implode(' ');
+        $safe = collect($arguments)->map(fn ($argument) => $this->shellArgument((string) $argument))->implode(' ');
         return 'cd ~/public_html && php -d disable_functions= "$(which wp)" '.$safe;
     }
 
     private function executeUapi(HostingServer $server, HostingAccount $account, string $password, array $arguments, string $safeFailure): array
     {
-        $command = 'uapi --output=json '.collect($arguments)->map(fn ($argument) => escapeshellarg((string) $argument))->implode(' ');
+        $command = 'uapi --output=json '.collect($arguments)->map(fn ($argument) => $this->shellArgument((string) $argument))->implode(' ');
         $result = $this->run($server, $account, $password, $command);
         $output = $result['output'];
         $payload = json_decode($output, true);
@@ -213,6 +213,17 @@ class KrystalWordpressProvisioner
     private function validateDatabaseName(string $name): void
     {
         if (! preg_match('/^[a-z0-9_]+$/', $name)) throw new RuntimeException('The generated database name is invalid.');
+    }
+
+    private function shellArgument(string $value): string
+    {
+        if (str_contains($value, "\0")) {
+            throw new RuntimeException('A provisioning command contains an invalid value.');
+        }
+
+        // POSIX single-quote encoding without PHP's escapeshellarg(), which is
+        // disabled by some shared-hosting PHP configurations.
+        return "'".str_replace("'", "'\"'\"'", $value)."'";
     }
 
     private function safeUapiFailure(array $errors, string $fallback): string
