@@ -89,7 +89,10 @@ class WebsiteProvisioner
             $this->guardLive($run);
             if (! $run->hosting_account_id) {
                 $secrets = $this->secrets($run);
-                $username = $this->username($website->domain);
+                $username = $website->cpanel_username ?: $this->username($website->domain);
+                if (! $website->cpanel_username) {
+                    $website->update(['cpanel_username' => $username]);
+                }
                 $result = $provider->createAccount($server, [
                     'username' => $username,
                     'domain' => $website->domain,

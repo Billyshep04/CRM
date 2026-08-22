@@ -15,7 +15,7 @@ use RuntimeException;
 
 class KrystalWhmProvider implements HostingProviderInterface
 {
-    private function client(HostingServer $server): PendingRequest
+    private function client(HostingServer $server, int $timeout = 20): PendingRequest
     {
         $credentials = $server->credentials ?? [];
 
@@ -27,18 +27,23 @@ class KrystalWhmProvider implements HostingProviderInterface
             'Authorization' => 'whm '.$credentials['username'].':'.$credentials['token'],
         ])->acceptJson()
             ->connectTimeout(8)
-            ->timeout(20)
+            ->timeout($timeout)
             ->baseUrl('https://'.preg_replace('/:\d+$/', '', $server->hostname).':2087/json-api');
     }
 
-    private function call(HostingServer $server, string $function, array $query = []): array
+    private function call(HostingServer $server, string $function, array $query = [], int $timeout = 20): array
     {
         try {
-            $response = $this->client($server)->get('/'.$function, [
+            $response = $this->client($server, $timeout)->get('/'.$function, [
                 'api.version' => 1,
                 ...$query,
             ]);
         } catch (ConnectionException) {
+            if ($function === 'createacct') {
+                throw new RuntimeException(
+                    'WHM did not return the account-creation result in time. The CRM will check whether the account was created before retrying.'
+                );
+            }
             throw new RuntimeException(
                 'The CRM could not connect to WHM on port 2087. Check the WHM hostname and that outbound HTTPS connections to port 2087 are allowed.'
             );
@@ -170,6 +175,18 @@ class KrystalWhmProvider implements HostingProviderInterface
 
     public function createAccount(HostingServer $server, array $data): array
     {
+        $domain = strtolower(rtrim((string) $data['domain'], '.'));
+        $existing = collect($this->accounts($server))->first(
+            fn (array $account) => strtolower(rtrim((string) ($account['primary_domain'] ?? ''), '.')) === $domain
+        );
+        if ($existing) {
+            return [
+                ...$existing,
+                'package_name' => $existing['package_name'] ?? $data['package_name'],
+                'metadata' => [...($existing['metadata'] ?? []), 'reconciled_existing_account' => true],
+            ];
+        }
+
         $query = [
             'username' => $data['username'],
             'domain' => $data['domain'],
@@ -179,7 +196,12 @@ class KrystalWhmProvider implements HostingProviderInterface
         if (($data['shell_access'] ?? false) === true) {
             $query['hasshell'] = 1;
         }
-        $response = $this->call($server, 'createacct', $query);
+        $response = $this->call(
+            $server,
+            'createacct',
+            $query,
+            max(30, (int) config('hosting.whm_account_creation_timeout_seconds', 120))
+        );
 
         return [
             'external_id' => $data['username'],
