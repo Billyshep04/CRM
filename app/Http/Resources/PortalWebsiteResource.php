@@ -22,7 +22,7 @@ class PortalWebsiteResource extends JsonResource
             'public_url' => $this->publicUrl(),
             'status' => $visibility['status'] ? $snapshot['overall_status'] : null,
             'last_monitored_at' => $snapshot['last_monitored_at'],
-            'project_status' => $this->provisioning_status ? match ($this->provisioning_status) { 'complete' => 'Ready', 'failed' => 'Needs attention', default => 'In development' } : null,
+            'project_status' => $this->provisioning_status ? match ($this->provisioning_status) { 'complete' => 'Website online', 'waiting_for_dns' => 'DNS connection pending', 'waiting_for_ssl' => 'SSL pending', 'failed' => 'Needs attention', default => 'Setup in progress' } : null,
             'availability' => $visibility['status'] ? $snapshot['availability']['label'] : null,
             'availability_detail' => $visibility['status'] ? $snapshot['availability'] : null,
             'uptime' => $visibility['uptime'] ? $snapshot['uptime'] : null,

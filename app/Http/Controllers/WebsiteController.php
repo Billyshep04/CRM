@@ -60,7 +60,7 @@ class WebsiteController extends Controller
 
     public function show(Website $website)
     {
-        return new WebsiteResource($website->load(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100), 'provisioningRuns.steps']));
+        return new WebsiteResource($website->load(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100), 'provisioningRuns.steps', 'provisioningRuns.account']));
     }
 
     public function update(Request $request, Website $website)

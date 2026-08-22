@@ -3,7 +3,6 @@
 namespace App\Services\Hosting;
 
 use App\Contracts\HostingProviderInterface;
-use App\Exceptions\ManualProvisioningActionRequired;
 use App\Models\HostingAccount;
 use App\Models\HostingServer;
 use App\Models\Website;
@@ -106,6 +105,7 @@ class KrystalWhmProvider implements HostingProviderInterface
             'external_id' => (string) $account['user'],
             'username' => (string) $account['user'],
             'primary_domain' => $account['domain'] ?? null,
+            'assigned_ip' => $account['ip'] ?? null,
             'package_name' => $account['plan'] ?? null,
             'status' => ($account['suspended'] ?? 0) ? 'suspended' : 'active',
             'disk_used_bytes' => $this->bytes($account['diskused'] ?? null),
@@ -120,6 +120,7 @@ class KrystalWhmProvider implements HostingProviderInterface
             'external_id' => (string) $package['name'],
             'name' => (string) $package['name'],
             'limits' => $package,
+            'shell_access' => $this->shellAccess($package),
         ])->all();
     }
 
@@ -180,6 +181,7 @@ class KrystalWhmProvider implements HostingProviderInterface
             'external_id' => $data['username'],
             'username' => $data['username'],
             'primary_domain' => $data['domain'],
+            'assigned_ip' => data_get($response, 'data.ip') ?? data_get($response, 'data.result.ip'),
             'package_name' => $data['package_name'],
             'status' => 'active',
             'metadata' => ['whm_message' => $response['metadata']['reason'] ?? 'Created'],
@@ -190,22 +192,22 @@ class KrystalWhmProvider implements HostingProviderInterface
     {
         $match = collect($this->accounts($server))->first(fn ($item) => strtolower($item['username']) === strtolower($account->username));
         if (! $match) throw new RuntimeException('The new cPanel account is not visible in WHM yet. Retry this step shortly.');
-        return ['ready' => true, 'status' => $match['status'] ?? 'active'];
+        return ['ready' => true, 'status' => $match['status'] ?? 'active', 'assigned_ip' => $match['assigned_ip'] ?? null];
     }
 
     public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array
     {
-        throw new ManualProvisioningActionRequired('WordPress installation needs a confirmed Softaculous integration for this Krystal server. The cPanel account is ready; install WordPress manually, then retry.');
+        throw new RuntimeException('WordPress installation must use the secure SSH provisioning pipeline.');
     }
 
     public function configureWordpress(HostingServer $server, HostingAccount $account, array $data): array
     {
-        throw new ManualProvisioningActionRequired('WordPress configuration needs the confirmed Krystal installer integration.');
+        throw new RuntimeException('WordPress configuration must use the secure SSH provisioning pipeline.');
     }
 
     public function installAgent(HostingServer $server, HostingAccount $account, array $data): array
     {
-        throw new ManualProvisioningActionRequired('Automatic Site Agent installation needs the confirmed Krystal installer integration.');
+        throw new RuntimeException('Automatic Site Agent installation is not configured for this server.');
     }
 
     public function terminateAccount(HostingServer $server, HostingAccount $account): array
@@ -265,5 +267,15 @@ class KrystalWhmProvider implements HostingProviderInterface
         }
 
         return (int) round((float) $value * 1024 * 1024);
+    }
+
+    private function shellAccess(array $package): ?bool
+    {
+        foreach (['HASSHELL', 'hasshell', 'shell', 'SHELL', 'ssh', 'SSH'] as $key) {
+            if (! array_key_exists($key, $package)) continue;
+            return in_array(strtolower((string) $package[$key]), ['1', 'true', 'on', 'enabled', 'yes', 'jailshell'], true);
+        }
+
+        return null;
     }
 }
