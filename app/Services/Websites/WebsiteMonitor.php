@@ -39,7 +39,9 @@ class WebsiteMonitor
         $ssl = $checkSsl ? $this->ssl->inspect($this->publicUrl($website)) : null;
 
         $agentReached = false;
+        $agentAttempted = false;
         if (in_array($type, ['full', 'manual'], true) && $website->wordpress_enabled && $website->agent_token_encrypted) {
+            $agentAttempted = true;
             try {
                 $agent = $this->client->fetchJson($this->publicUrl($website).'/wp-json/webstamp/v1/status', $website->agent_token_encrypted);
                 $allowed = ['wordpress_version', 'php_version', 'plugin_count', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status'];
@@ -69,7 +71,10 @@ class WebsiteMonitor
             'performance_checked_at' => null,
             'hosting_synced_at' => $hostingSynced ? $now : null, 'overall_status' => 'unknown', 'warnings' => [], 'errors' => $errors, 'metrics' => $detailMetrics,
         ]);
-        $website->update(['last_checked_at' => $now, 'consecutive_failures' => $failures, ...($agentReached ? ['agent_last_seen_at' => $now, 'monitoring_enabled' => true] : [])]);
+        $agentState = $agentReached
+            ? ['agent_last_seen_at' => $now, 'agent_last_failed_at' => null, 'monitoring_enabled' => true]
+            : ($agentAttempted ? ['agent_last_failed_at' => $now] : []);
+        $website->update(['last_checked_at' => $now, 'consecutive_failures' => $failures, ...$agentState]);
         $website->refresh(); $snapshot = $this->snapshots->for($website);
         $check->update(['overall_status' => $snapshot['overall_status']]); $website->update(['status' => $snapshot['overall_status']]);
 

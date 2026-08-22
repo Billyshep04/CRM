@@ -1586,6 +1586,7 @@ body[data-role="admin"] .admin-only[hidden] {
 .website-add-choices { display: grid; gap: 12px; }
 .website-add-choice { display: grid; gap: 5px; width: 100%; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-muted); color: var(--text); text-align: left; cursor: pointer; transition: border-color .18s ease, transform .18s ease, background .18s ease; }
 .website-add-choice:hover { transform: translateY(-1px); border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, var(--bg-muted)); }
+.website-add-choice:disabled { opacity: .52; cursor: not-allowed; transform: none; border-color: var(--border); }
 .website-add-choice strong { font-size: 16px; }
 .website-add-choice span { color: var(--text-muted); line-height: 1.45; }
 .website-add-choice small { width: fit-content; margin-top: 4px; padding: 4px 8px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent); color: var(--primary); font-weight: 600; }

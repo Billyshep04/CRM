@@ -88,12 +88,31 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->assertSame('missing', $result['www']['status']);
     }
 
+    public function test_subdomain_dns_only_requires_the_exact_subdomain_record(): void
+    {
+        $resolver = new FakeDnsResolver(['dev4.web-stamp.co.uk' => ['1.2.3.4']], [], []);
+        $result = (new ProvisioningDnsService($resolver))->inspect('dev4.web-stamp.co.uk', '1.2.3.4');
+
+        $this->assertTrue($result['ready']);
+        $this->assertFalse($result['www_required']);
+        $this->assertSame('not_required', $result['www']['status']);
+    }
+
     public function test_ssl_requires_valid_certificates_for_root_and_www(): void
     {
         $active = new FakeSslInspector(['valid' => true, 'hostname_match' => true, 'issuer' => 'Let’s Encrypt', 'expires_at' => now()->addDays(60)->toIso8601String(), 'error' => null]);
         $this->assertTrue((new ProvisioningSslService($active))->inspect('example.test')['ready']);
         $pending = new FakeSslInspector(['valid' => false, 'hostname_match' => false, 'issuer' => null, 'expires_at' => null, 'error' => 'pending']);
         $this->assertFalse((new ProvisioningSslService($pending))->inspect('example.test')['ready']);
+    }
+
+    public function test_subdomain_ssl_only_requires_the_exact_subdomain_certificate(): void
+    {
+        $active = new FakeSslInspector(['valid' => true, 'hostname_match' => true, 'issuer' => 'Let’s Encrypt', 'expires_at' => now()->addDays(60)->toIso8601String(), 'error' => null]);
+        $result = (new ProvisioningSslService($active))->inspect('dev4.web-stamp.co.uk');
+
+        $this->assertTrue($result['ready']);
+        $this->assertFalse($result['www_required']);
     }
 
     public function test_final_http_check_verifies_http_https_and_wordpress_admin_without_storing_bodies(): void

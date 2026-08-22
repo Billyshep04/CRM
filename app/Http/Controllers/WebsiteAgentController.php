@@ -30,7 +30,7 @@ class WebsiteAgentController extends Controller
             'performance_checked_at' => null,
             'check_type' => 'agent', 'uptime_status' => 'unknown', 'overall_status' => 'unknown', 'warnings'=>$evaluation['issues'],
         ]);
-        $website->update(['agent_last_seen_at' => now(), 'monitoring_enabled'=>true]);
+        $website->update(['agent_last_seen_at' => now(), 'agent_last_failed_at' => null, 'monitoring_enabled'=>true]);
         $snapshot = $snapshots->for($website->fresh());
         $check->update(['overall_status' => $snapshot['overall_status']]);
         $website->update(['status' => $snapshot['overall_status']]);

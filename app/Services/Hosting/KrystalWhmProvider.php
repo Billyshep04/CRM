@@ -192,7 +192,19 @@ class KrystalWhmProvider implements HostingProviderInterface
     {
         $match = collect($this->accounts($server))->first(fn ($item) => strtolower($item['username']) === strtolower($account->username));
         if (! $match) throw new RuntimeException('The new cPanel account is not visible in WHM yet. Retry this step shortly.');
-        return ['ready' => true, 'status' => $match['status'] ?? 'active', 'assigned_ip' => $match['assigned_ip'] ?? null];
+        $expectedDomain = strtolower(rtrim((string) $account->primary_domain, '.'));
+        $actualDomain = strtolower(rtrim((string) ($match['primary_domain'] ?? ''), '.'));
+        if ($actualDomain === '' || $actualDomain !== $expectedDomain) {
+            throw new RuntimeException('WHM returned an account with an unexpected primary domain. The CRM will not mark hosting as connected.');
+        }
+        if (($match['status'] ?? 'active') !== 'active') {
+            throw new RuntimeException('The cPanel account exists in WHM but is not active.');
+        }
+        if (empty($match['assigned_ip'])) {
+            throw new RuntimeException('The cPanel account exists in WHM but does not yet have an assigned IP address.');
+        }
+
+        return ['ready' => true, 'status' => 'active', 'assigned_ip' => $match['assigned_ip'], 'primary_domain' => $actualDomain];
     }
 
     public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array

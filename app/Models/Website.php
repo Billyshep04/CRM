@@ -40,6 +40,7 @@ class Website extends Model
         'agent_token_hash',
         'agent_token_encrypted',
         'agent_last_seen_at',
+        'agent_last_failed_at',
         'last_checked_at',
         'consecutive_failures',
         'portal_visibility',
@@ -50,7 +51,7 @@ class Website extends Model
 
     protected $casts = [
         'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
-        'agent_last_seen_at' => 'datetime', 'last_checked_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
+        'agent_last_seen_at' => 'datetime', 'agent_last_failed_at' => 'datetime', 'last_checked_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
         'agent_token_encrypted' => 'encrypted',
     ];
 
@@ -74,6 +75,31 @@ class Website extends Model
     public function latestHealthCheck(): HasOne { return $this->hasOne(WebsiteHealthCheck::class)->latestOfMany('checked_at'); }
     public function provisioningRuns(): HasMany { return $this->hasMany(WebsiteProvisioningRun::class)->latest(); }
     public function credentials(): HasMany { return $this->hasMany(WebsiteCredential::class); }
+
+    public function hasVerifiedHostingConnection(): bool
+    {
+        $account = $this->relationLoaded('hostingAccount') ? $this->hostingAccount : $this->hostingAccount()->first();
+        $server = $this->relationLoaded('hostingServer') ? $this->hostingServer : $this->hostingServer()->first();
+        if (! $this->hosting_enabled || ! $account || ! $server || $server->api_type !== 'whm' || ! $account->last_synced_at) return false;
+        if (data_get($account->metadata, 'mock', false)) return false;
+
+        $domain = $this->normaliseDomain($this->domain ?: $this->login_url);
+        $accountDomains = collect($account->domains ?? [])
+            ->map(fn ($item) => is_array($item) ? ($item['domain'] ?? null) : $item)
+            ->push($account->primary_domain)
+            ->filter()
+            ->map(fn ($item) => $this->normaliseDomain((string) $item));
+
+        return $domain !== '' && $accountDomains->contains($domain);
+    }
+
+    private function normaliseDomain(string $value): string
+    {
+        $value = strtolower(trim($value));
+        $host = parse_url(str_contains($value, '://') ? $value : "https://{$value}", PHP_URL_HOST) ?: $value;
+
+        return preg_replace('/^www\./', '', rtrim($host, '.'));
+    }
 
     public static function defaultPortalVisibility(): array
     {

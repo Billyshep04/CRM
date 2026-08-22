@@ -2137,6 +2137,12 @@
                     <button class="crm-modal-close" id="customer-website-modal-close" type="button" aria-label="Close">×</button>
                 </div>
 
+                <div id="customer-website-customer-step" class="form-stack" hidden>
+                    <label class="field"><span>Which customer is this website for?</span><select id="customer-website-customer-select" required><option value="">Select customer</option></select></label>
+                    <div id="customer-website-customer-status" class="form-hint">Choose the customer first, then the CRM will guide you through the correct setup.</div>
+                    <div class="form-actions"><button class="btn btn-primary" id="customer-website-customer-continue" type="button">Continue</button></div>
+                </div>
+
                 <div id="customer-website-choice" class="website-add-choices">
                     <button class="website-add-choice" type="button" data-customer-website-mode="create">
                         <strong>Create with Krystal</strong><span>Create a new cPanel account and add it to the CRM automatically.</span><small>Recommended for a new hosted website</small>

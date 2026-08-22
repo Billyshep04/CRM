@@ -151,6 +151,28 @@ class WebsiteHostingManagementTest extends TestCase
         Http::assertSent(fn ($request) => $request->url() === 'https://example.com/wp-json/webstamp/v1/status');
     }
 
+    public function test_failed_manual_agent_check_immediately_reports_monitoring_offline(): void
+    {
+        config(['website-audits.enforce_public_networks' => false]);
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), [
+            'login_url' => 'https://example.com/wp-admin/',
+            'wordpress_enabled' => true,
+            'agent_token_hash' => hash('sha256', 'token'),
+            'agent_token_encrypted' => 'token',
+            'agent_last_seen_at' => now()->subMinute(),
+        ]);
+        Http::fake([
+            'https://example.com/wp-json/webstamp/v1/status' => Http::response(['message' => 'Unauthorized'], 401),
+            'https://example.com*' => Http::response('OK', 200),
+        ]);
+
+        $this->actingAs($admin)->postJson("/api/websites/{$website->id}/check")->assertOk();
+
+        $this->assertNotNull($website->fresh()->agent_last_failed_at);
+        $this->actingAs($admin)->getJson('/api/websites')->assertJsonPath('data.0.agent_connected', false);
+    }
+
     public function test_incidents_are_deduplicated_and_resolved(): void
     {
         $website = $this->website($this->customer()); $manager = app(WebsiteIncidentManager::class);

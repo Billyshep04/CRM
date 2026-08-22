@@ -28,6 +28,12 @@ class WebsiteProvisioner
     {
         return Cache::lock("website-provisioning:{$run->id}", 900)->block(3, function () use ($run) {
             $run = $run->fresh(['website', 'steps', 'hostingServer', 'hostingPackage', 'wordpressProfile', 'account']);
+            if ($run->mode === 'mock' && ! app()->environment(['local', 'testing'])) {
+                $safe = 'A preview provisioning run cannot create real hosting. Enable live provisioning and start again.';
+                $run->update(['state' => 'failed', 'failed_step' => 'validate_prerequisites', 'safe_error' => $safe, 'completed_at' => now()]);
+                $run->website->update(['provisioning_status' => 'failed', 'lifecycle_state' => 'draft']);
+                return $run->fresh(['website', 'account', 'steps']);
+            }
             if ($run->state === 'complete') return $run;
             $run->update(['started_at' => $run->started_at ?? now(), 'attempts' => $run->attempts + 1, 'completed_at' => null, 'next_check_at' => null]);
 
@@ -52,7 +58,10 @@ class WebsiteProvisioner
             }
 
             $run->update(['state' => 'complete', 'completed_at' => now(), 'failed_step' => null, 'safe_error' => null, 'next_check_at' => null, 'secrets_encrypted' => null]);
-            $run->website->update(['provisioning_status' => 'complete', 'lifecycle_state' => 'active']);
+            $run->website->update([
+                'provisioning_status' => $run->mode === 'live' ? 'complete' : 'preview_complete',
+                'lifecycle_state' => $run->mode === 'live' ? 'active' : 'draft',
+            ]);
             return $run->fresh(['website', 'account', 'steps']);
         });
     }
@@ -75,14 +84,16 @@ class WebsiteProvisioner
                 $secrets = $this->secrets($run);
                 $username = $this->username($website->domain);
                 $result = $provider->createAccount($server, ['username' => $username, 'domain' => $website->domain, 'password' => $secrets['cpanel_password'], 'package_name' => $run->hostingPackage?->external_id]);
-                $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => now()]);
+                $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null]);
                 $run->update(['hosting_account_id' => $account->id, 'expected_ip' => $account->assigned_ip]);
                 $website->update(['hosting_account_id' => $account->id, 'cpanel_username' => $account->username, 'hosting_enabled' => true]);
             }
         } elseif ($step->step === 'wait_for_cpanel') {
             $result = $provider->verifyAccount($server, $this->account($run));
-            if ($ip = ($result['assigned_ip'] ?? null)) {
-                $this->account($run)->update(['assigned_ip' => $ip]);
+            if (! ($result['ready'] ?? false)) throw new RuntimeException('WHM has not confirmed the cPanel account yet.');
+            if ($live) {
+                $ip = $result['assigned_ip'] ?? null;
+                $this->account($run)->update(['assigned_ip' => $ip, 'status' => $result['status'] ?? 'active', 'last_synced_at' => now()]);
                 $run->update(['expected_ip' => $ip]);
             }
         } elseif ($step->step === 'connect_ssh') {
@@ -98,12 +109,14 @@ class WebsiteProvisioner
             elseif (! $live) $result = $provider->installAgent($server, $this->account($run), ['domain' => $website->domain, 'agent_token' => $website->agent_token_encrypted]);
             else throw new ManualProvisioningActionRequired('Install the WebStamp Site Agent in WordPress and enter the website monitoring token.');
         } elseif ($step->step === 'enable_monitoring') {
-            $website->update(['monitoring_enabled' => true, 'agent_last_seen_at' => $run->mode === 'mock' ? now() : $website->agent_last_seen_at]);
+            $website->update(['monitoring_enabled' => true]);
         } elseif ($step->step === 'run_initial_health_check') {
             $result = $run->mode === 'mock' ? ['ready' => true, 'mock' => true, 'checks' => ['https_home' => ['status' => 200, 'response_time_ms' => 1]]] : $this->http->inspect($run->domain);
-            $home = data_get($result, 'checks.https_home', []);
-            WebsiteHealthCheck::create(['website_id' => $website->id, 'check_type' => $run->mode === 'mock' ? 'provisioning_mock' : 'provisioning', 'uptime_status' => 'online', 'http_status' => $home['status'] ?? 200, 'response_time_ms' => $home['response_time_ms'] ?? null, 'overall_status' => 'healthy', 'checked_at' => now(), 'warnings' => [], 'errors' => [], 'metrics' => $this->safeMetadata($result)]);
-            $website->update(['status' => 'healthy', 'last_checked_at' => now()]);
+            if ($live) {
+                $home = data_get($result, 'checks.https_home', []);
+                WebsiteHealthCheck::create(['website_id' => $website->id, 'check_type' => 'provisioning', 'uptime_status' => 'online', 'http_status' => $home['status'], 'response_time_ms' => $home['response_time_ms'] ?? null, 'overall_status' => 'healthy', 'checked_at' => now(), 'warnings' => [], 'errors' => [], 'metrics' => $this->safeMetadata($result)]);
+                $website->update(['status' => 'healthy', 'last_checked_at' => now()]);
+            }
         }
 
         $step->update(['status' => 'complete', 'completed_at' => now(), 'safe_message' => Str::headline($step->step).' complete.', 'metadata' => $this->safeMetadata($result)]);
@@ -155,7 +168,12 @@ class WebsiteProvisioner
         if (! $run->expected_ip && $live) throw new RuntimeException('The cPanel account does not yet have an assigned IP address.');
         $result = $live ? $this->dns->inspect($run->domain, $run->expected_ip) : ['ready' => true, 'provider' => 'mock', 'expected_ip' => $run->expected_ip ?? '127.0.0.1', 'root' => ['status' => 'correct'], 'www' => ['status' => 'correct']];
         $run->update(['dns_provider' => data_get($result, 'provider.key', $result['provider'] ?? null), 'dns_status' => $result]);
-        if (! ($result['ready'] ?? false)) throw new ProvisioningWait('waiting_for_dns', 'DNS connection pending. Point the root A record to the assigned IP and set www as a CNAME to the root domain.', config('hosting.dns_retry_minutes', 10));
+        if (! ($result['ready'] ?? false)) {
+            $message = ($result['www_required'] ?? true)
+                ? 'DNS connection pending. Point the root A record to the assigned IP and set www as a CNAME to the root domain.'
+                : 'DNS connection pending. Point this subdomain A record to the assigned IP address.';
+            throw new ProvisioningWait('waiting_for_dns', $message, config('hosting.dns_retry_minutes', 10));
+        }
         return $result;
     }
 

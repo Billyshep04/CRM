@@ -43,7 +43,10 @@ class WebsiteController extends Controller
             'updates_available' => (clone $base)->whereHas('latestHealthCheck', fn ($q) => $q->where(fn ($i) => $i->where('plugin_updates', '>', 0)->orWhere('theme_updates', '>', 0)))->count(),
             'linked' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
             'unlinked' => (clone $base)->whereNull('agent_last_seen_at')->count(),
-            'hosting_connected' => (clone $base)->where('hosting_enabled', true)->whereNotNull('hosting_account_id')->count(),
+            'hosting_connected' => (clone $base)->where('hosting_enabled', true)
+                ->whereHas('hostingServer', fn ($q) => $q->where('api_type', 'whm'))
+                ->whereHas('hostingAccount', fn ($q) => $q->whereNotNull('last_synced_at'))
+                ->count(),
             'monitoring_connected' => (clone $base)->whereNotNull('agent_last_seen_at')->count(),
             'setup_required' => $setup->count(),
         ]]);
@@ -132,7 +135,11 @@ class WebsiteController extends Controller
     {
         $query->where(function ($outer): void {
             $outer->where(function ($hosting): void {
-                $hosting->where('hosting_enabled', true)->whereNull('hosting_account_id');
+                $hosting->where('hosting_enabled', true)->where(function ($connection): void {
+                    $connection->whereNull('hosting_account_id')
+                        ->orWhereDoesntHave('hostingServer', fn ($q) => $q->where('api_type', 'whm'))
+                        ->orWhereDoesntHave('hostingAccount', fn ($q) => $q->whereNotNull('last_synced_at'));
+                });
             })->orWhere(function ($monitoring): void {
                 $monitoring->where('wordpress_enabled', true)->whereNull('agent_last_seen_at');
             });

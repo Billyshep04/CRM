@@ -18,9 +18,18 @@ class WebsiteProvisioningController extends Controller
 {
     public function options()
     {
+        $mode = config('hosting.provisioning_mode', 'mock');
+        $available = $mode === 'live'
+            ? config('hosting.allow_live_provisioning', false)
+            : app()->environment(['local', 'testing']);
+
         return response()->json(['data' => [
-            'mode' => config('hosting.provisioning_mode', 'mock'),
+            'mode' => $mode,
             'live_enabled' => config('hosting.allow_live_provisioning', false),
+            'provisioning_available' => $available,
+            'blocking_reason' => $available ? null : ($mode === 'mock'
+                ? 'Preview provisioning is disabled on production. Enable live provisioning before creating a website.'
+                : 'Live hosting provisioning is disabled.'),
             'servers' => HostingServer::with(['packages' => fn ($query) => $query->where('active', true)])->where('status', 'active')->get()->map(fn ($server) => [
                 'id' => $server->id, 'name' => $server->name, 'provider' => $server->provider, 'api_type' => $server->api_type,
                 'credential_username' => $server->credentials['username'] ?? null, 'has_token' => ! empty($server->credentials['token']),
@@ -43,13 +52,17 @@ class WebsiteProvisioningController extends Controller
             'options.admin_email' => ['nullable', 'email:rfc', 'max:255'], 'options.discourage_search_engines' => ['nullable', 'boolean'],
             'options.install_agent' => ['nullable', 'boolean'], 'idempotency_key' => ['required', 'string', 'max:100'],
         ]);
-        if (config('hosting.provisioning_mode') === 'live' && ! config('hosting.allow_live_provisioning')) throw ValidationException::withMessages(['provisioning' => ['Live hosting provisioning is disabled.']]);
+        $mode = config('hosting.provisioning_mode', 'mock');
+        if ($mode === 'mock' && ! app()->environment(['local', 'testing'])) {
+            throw ValidationException::withMessages(['provisioning' => ['Preview provisioning cannot create hosting accounts on production. Set HOSTING_PROVISIONING_MODE=live and explicitly enable live provisioning.']]);
+        }
+        if ($mode === 'live' && ! config('hosting.allow_live_provisioning')) throw ValidationException::withMessages(['provisioning' => ['Live hosting provisioning is disabled.']]);
         $data['domain'] = strtolower(rtrim(trim($data['domain']), '.'));
 
         $package = HostingPackage::whereKey($data['hosting_package_id'])->where('hosting_server_id', $data['hosting_server_id'])->first();
         if (! $package) throw ValidationException::withMessages(['hosting_package_id' => ['The selected package does not belong to the selected hosting server.']]);
         $server = HostingServer::whereKey($data['hosting_server_id'])->where('status', 'active')->firstOrFail();
-        if (config('hosting.provisioning_mode') === 'live' && $server->api_type !== 'whm') throw ValidationException::withMessages(['hosting_server_id' => ['Live Krystal provisioning requires a WHM hosting connection.']]);
+        if ($mode === 'live' && $server->api_type !== 'whm') throw ValidationException::withMessages(['hosting_server_id' => ['Live Krystal provisioning requires a WHM hosting connection.']]);
         if ($data['website_type'] === 'wordpress') {
             $data['options']['site_title'] ??= $data['name'];
             $data['options']['admin_username'] ??= config('hosting.wordpress_admin_username', 'webstamp_admin');
@@ -81,8 +94,17 @@ class WebsiteProvisioningController extends Controller
     public function retry(WebsiteProvisioningRun $websiteProvisioningRun)
     {
         if (! in_array($websiteProvisioningRun->state, ['failed', 'action_required', 'waiting_for_dns', 'waiting_for_ssl'], true)) throw ValidationException::withMessages(['state' => ['Only incomplete provisioning runs can be checked or retried.']]);
-        $websiteProvisioningRun->steps()->whereIn('status', ['failed', 'manual_action', 'waiting'])->update(['status' => 'pending', 'safe_message' => null, 'completed_at' => null]);
-        $websiteProvisioningRun->update(['next_check_at' => null]);
+        if ($websiteProvisioningRun->mode === 'mock' && ! app()->environment(['local', 'testing'])) {
+            if (config('hosting.provisioning_mode') !== 'live' || ! config('hosting.allow_live_provisioning')) {
+                throw ValidationException::withMessages(['mode' => ['This preview cannot be retried until production is configured for live provisioning.']]);
+            }
+            $websiteProvisioningRun->steps()->update(['status' => 'pending', 'attempts' => 0, 'safe_message' => null, 'metadata' => null, 'started_at' => null, 'completed_at' => null]);
+            $websiteProvisioningRun->website?->update(['provisioning_status' => 'pending', 'lifecycle_state' => 'draft']);
+            $websiteProvisioningRun->update(['mode' => 'live', 'state' => 'pending', 'failed_step' => null, 'safe_error' => null, 'expected_ip' => null, 'dns_status' => null, 'ssl_status' => null, 'completed_at' => null, 'next_check_at' => null]);
+        } else {
+            $websiteProvisioningRun->steps()->whereIn('status', ['failed', 'manual_action', 'waiting'])->update(['status' => 'pending', 'safe_message' => null, 'completed_at' => null]);
+            $websiteProvisioningRun->update(['next_check_at' => null]);
+        }
         ProcessWebsiteProvisioning::dispatch($websiteProvisioningRun->id);
         return response()->json(['data' => $this->present($websiteProvisioningRun->fresh())], 202);
     }
