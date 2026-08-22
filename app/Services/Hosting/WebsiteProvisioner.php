@@ -81,13 +81,22 @@ class WebsiteProvisioner
         $result = [];
 
         if ($step->step === 'validate_prerequisites') {
+            if ($live) {
+                $this->refreshPackageFromProvider($run, $provider);
+            }
             $result = $run->website_type === 'wordpress' ? $this->wordpress->validatePrerequisites($run->hostingPackage, $live) : ['wordpress' => false];
         } elseif ($step->step === 'create_cpanel_account') {
             $this->guardLive($run);
             if (! $run->hosting_account_id) {
                 $secrets = $this->secrets($run);
                 $username = $this->username($website->domain);
-                $result = $provider->createAccount($server, ['username' => $username, 'domain' => $website->domain, 'password' => $secrets['cpanel_password'], 'package_name' => $run->hostingPackage?->external_id]);
+                $result = $provider->createAccount($server, [
+                    'username' => $username,
+                    'domain' => $website->domain,
+                    'password' => $secrets['cpanel_password'],
+                    'package_name' => $run->hostingPackage?->external_id,
+                    'shell_access' => $run->website_type === 'wordpress',
+                ]);
                 $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null]);
                 $run->update(['hosting_account_id' => $account->id, 'expected_ip' => $account->assigned_ip]);
                 $website->update(['hosting_account_id' => $account->id, 'cpanel_username' => $account->username, 'hosting_enabled' => true]);
@@ -203,6 +212,24 @@ class WebsiteProvisioner
     }
 
     private function mockFail(WebsiteProvisioningRun $run, string $step): void { if (in_array($step, $run->hostingServer->metadata['mock_fail_steps'] ?? [], true)) throw new RuntimeException("Mock {$step} failure."); }
+    private function refreshPackageFromProvider(WebsiteProvisioningRun $run, $provider): void
+    {
+        $package = $run->hostingPackage;
+        if (! $package) throw new RuntimeException('The selected hosting package is no longer available.');
+
+        $remote = collect($provider->packages($run->hostingServer))
+            ->first(fn (array $item) => (string) ($item['external_id'] ?? '') === (string) $package->external_id);
+        if (! $remote) throw new RuntimeException('The selected hosting package is no longer available in WHM. Sync hosting accounts and choose an available package.');
+
+        $package->update([
+            'name' => $remote['name'] ?? $package->name,
+            'limits' => $remote['limits'] ?? $package->limits,
+            'shell_access' => $remote['shell_access'] ?? null,
+            'active' => true,
+            'last_synced_at' => now(),
+        ]);
+        $run->setRelation('hostingPackage', $package->fresh());
+    }
     private function account(WebsiteProvisioningRun $run): HostingAccount { return $run->account()->first() ?? throw new RuntimeException('The hosting account has not been created yet.'); }
     private function guardLive(WebsiteProvisioningRun $run): void { if ($run->mode === 'live' && ! config('hosting.allow_live_provisioning')) throw new RuntimeException('Live hosting provisioning is disabled.'); }
     private function username(string $domain): string { $base = preg_replace('/[^a-z0-9]/', '', strtolower(strtok($domain, '.'))); return substr($base ?: 'webstamp', 0, 9).Str::lower(Str::random(3)); }

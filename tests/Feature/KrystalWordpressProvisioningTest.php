@@ -43,6 +43,14 @@ class KrystalWordpressProvisioningTest extends TestCase
         (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true);
     }
 
+    public function test_unknown_package_shell_metadata_does_not_block_the_real_ssh_check(): void
+    {
+        $package = new HostingPackage(['name' => 'Shell metadata omitted', 'shell_access' => null]);
+        $result = (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true);
+
+        $this->assertSame('requested_and_verified_during_setup', $result['shell_access']);
+    }
+
     public function test_database_config_and_install_commands_are_unattended_and_idempotent(): void
     {
         $runner = new RecordingSshRunner([

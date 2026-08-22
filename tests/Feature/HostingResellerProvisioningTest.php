@@ -16,6 +16,41 @@ class HostingResellerProvisioningTest extends TestCase {
  public function test_mock_preview_never_reports_verified_hosting_or_monitoring():void{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$response=$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'preview.test'))->assertCreated();$websiteId=$response->json('data.website.id');$this->assertDatabaseHas('websites',['id'=>$websiteId,'provisioning_status'=>'preview_complete','agent_last_seen_at'=>null]);$this->assertNull(HostingAccount::firstOrFail()->last_synced_at);$this->actingAs($admin)->getJson("/api/websites/{$websiteId}")->assertOk()->assertJsonPath('data.hosting_connected',false)->assertJsonPath('data.agent_connected',false);}
  public function test_production_rejects_mock_provisioning_instead_of_claiming_success():void{$original=$this->app['env'];$this->app['env']='production';config(['hosting.provisioning_mode'=>'mock']);try{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'never-fake.test'))->assertUnprocessable()->assertJsonValidationErrors('provisioning');$this->assertDatabaseCount('websites',0);}finally{$this->app['env']=$original;}}
  public function test_whm_verification_requires_the_exact_subdomain_and_assigned_ip():void{Http::fake(['https://whm.example.test:2087/json-api/listaccts*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'dev4site','domain'=>'other.web-stamp.co.uk','ip'=>'1.2.3.4','suspended'=>0]]]])]);$server=HostingServer::create(['name'=>'Krystal','api_type'=>'whm','hostname'=>'whm.example.test','credentials'=>['username'=>'reseller','token'=>'secret']]);$account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'dev4site','username'=>'dev4site','primary_domain'=>'dev4.web-stamp.co.uk','status'=>'pending']);$this->expectException(\RuntimeException::class);$this->expectExceptionMessage('unexpected primary domain');app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAccount($server,$account);}
+
+ public function test_whm_package_shell_access_is_refreshed_and_requested_during_account_creation():void
+ {
+  Http::fake([
+   'https://whm.example.test:2087/json-api/listpkgs*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>'1']]]]),
+   'https://whm.example.test:2087/json-api/createacct*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'Account created'],'data'=>['ip'=>'1.2.3.4']]),
+  ]);
+  $server=HostingServer::create(['name'=>'Krystal','api_type'=>'whm','hostname'=>'whm.example.test','credentials'=>['username'=>'reseller','token'=>'secret']]);
+  $provider=app(\App\Services\Hosting\KrystalWhmProvider::class);
+  $this->assertTrue($provider->packages($server)[0]['shell_access']);
+  $provider->createAccount($server,['username'=>'newsite','domain'=>'newsite.test','password'=>'not-logged','package_name'=>'Standard','shell_access'=>true]);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['hasshell']===1);
+ }
+ public function test_live_retry_refreshes_stale_shell_access_before_creating_the_account():void
+ {
+  config(['hosting.provisioning_mode'=>'live','hosting.allow_live_provisioning'=>true]);
+  Http::fake([
+   'https://whm.example.test:2087/json-api/listpkgs*'=>Http::sequence()
+    ->push(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>0]]]])
+    ->push(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>1]]]]),
+   'https://whm.example.test:2087/json-api/createacct*'=>Http::response(['metadata'=>['result'=>0,'reason'=>'Stopped after prerequisite test']]),
+  ]);
+  $admin=$this->user('admin');$customer=$this->customer();
+  $server=HostingServer::create(['name'=>'Krystal','api_type'=>'whm','hostname'=>'whm.example.test','credentials'=>['username'=>'reseller','token'=>'secret']]);
+  $package=HostingPackage::create(['hosting_server_id'=>$server->id,'external_id'=>'Standard','name'=>'Standard','shell_access'=>false]);
+  $this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'refresh-shell.test'))->assertCreated();
+  $run=\App\Models\WebsiteProvisioningRun::firstOrFail();
+  $this->assertSame('validate_prerequisites',$run->fresh()->failed_step);
+  $this->assertFalse($package->fresh()->shell_access);
+  $this->actingAs($admin)->postJson("/api/website-provisioning/{$run->id}/retry")->assertAccepted();
+  $this->assertTrue($package->fresh()->shell_access);
+  $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'validate_prerequisites','status'=>'complete','attempts'=>2]);
+  $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'failed_step'=>'create_cpanel_account']);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['hasshell']===1);
+ }
  public function test_repair_migration_removes_only_unverified_mock_connections():void{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$response=$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'fake-preview.test'))->assertCreated();$website=\App\Models\Website::findOrFail($response->json('data.website.id'));$website->update(['agent_last_seen_at'=>now(),'monitoring_enabled'=>true]);$accountId=$website->hosting_account_id;$migration=require database_path('migrations/2026_08_22_000200_repair_mock_provisioning_false_positives.php');$migration->up();$website->refresh();$this->assertNull($website->hosting_account_id);$this->assertNull($website->agent_last_seen_at);$this->assertSame('failed',$website->provisioning_status);$this->assertDatabaseMissing('hosting_accounts',['id'=>$accountId]);}
  public function test_repair_migration_preserves_a_later_real_whm_mapping():void{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$response=$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'real-after-preview.test'))->assertCreated();$website=\App\Models\Website::findOrFail($response->json('data.website.id'));$account=$website->hostingAccount;$account->update(['metadata'=>['owner'=>'reseller'],'last_synced_at'=>now()]);$before=$website->provisioning_status;$migration=require database_path('migrations/2026_08_22_000200_repair_mock_provisioning_false_positives.php');$migration->up();$this->assertSame($account->id,$website->fresh()->hosting_account_id);$this->assertSame($before,$website->fresh()->provisioning_status);}
  public function test_generated_wordpress_credentials_are_encrypted_hidden_and_revealed_once():void{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$response=$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'credentials.test'))->assertCreated();$websiteId=$response->json('data.website.id');$this->assertStringNotContainsString('password',strtolower($response->getContent()));$credential=\App\Models\WebsiteCredential::firstOrFail();$this->assertNotSame($credential->secret_encrypted,$credential->getRawOriginal('secret_encrypted'));$this->actingAs($admin)->postJson("/api/websites/{$websiteId}/reveal-credential")->assertOk()->assertJsonPath('data.username','webstamp_admin');$this->actingAs($admin)->postJson("/api/websites/{$websiteId}/reveal-credential")->assertStatus(410);}

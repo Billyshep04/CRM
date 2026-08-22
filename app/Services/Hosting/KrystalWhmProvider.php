@@ -170,12 +170,16 @@ class KrystalWhmProvider implements HostingProviderInterface
 
     public function createAccount(HostingServer $server, array $data): array
     {
-        $response = $this->call($server, 'createacct', [
+        $query = [
             'username' => $data['username'],
             'domain' => $data['domain'],
             'password' => $data['password'],
             'plan' => $data['package_name'],
-        ]);
+        ];
+        if (($data['shell_access'] ?? false) === true) {
+            $query['hasshell'] = 1;
+        }
+        $response = $this->call($server, 'createacct', $query);
 
         return [
             'external_id' => $data['username'],
@@ -285,7 +289,11 @@ class KrystalWhmProvider implements HostingProviderInterface
     {
         foreach (['HASSHELL', 'hasshell', 'shell', 'SHELL', 'ssh', 'SSH'] as $key) {
             if (! array_key_exists($key, $package)) continue;
-            return in_array(strtolower((string) $package[$key]), ['1', 'true', 'on', 'enabled', 'yes', 'jailshell'], true);
+            $value = strtolower(trim((string) $package[$key]));
+            if (in_array($value, ['1', 'true', 'on', 'enabled', 'yes', 'y', 'jailshell'], true)) return true;
+            if (in_array($value, ['0', 'false', 'off', 'disabled', 'no', 'n', 'noshell'], true)) return false;
+
+            return null;
         }
 
         return null;

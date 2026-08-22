@@ -15,10 +15,13 @@ class KrystalWordpressProvisioner
 
     public function validatePrerequisites(HostingPackage $package, bool $live): array
     {
-        if ($live && $package->shell_access !== true) {
+        if ($live && $package->shell_access === false) {
             throw new RuntimeException('WordPress provisioning cannot continue because Shell Access is not enabled for the selected hosting package.');
         }
-        return ['shell_access' => $package->shell_access !== false, 'ssh_port' => (int) config('hosting.ssh.port', 722)];
+        return [
+            'shell_access' => $package->shell_access === true ? 'enabled' : 'requested_and_verified_during_setup',
+            'ssh_port' => (int) config('hosting.ssh.port', 722),
+        ];
     }
 
     public function testSsh(HostingServer $server, HostingAccount $account, string $password): array
