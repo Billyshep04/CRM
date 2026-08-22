@@ -71,7 +71,13 @@ class WebsiteProvisioningController extends Controller
 
         $run = DB::transaction(function () use ($data, $request) {
             if ($existing = WebsiteProvisioningRun::where('idempotency_key', $data['idempotency_key'])->lockForUpdate()->first()) return $existing;
-            if (Website::where('domain', $data['domain'])->exists() || WebsiteProvisioningRun::where('domain', $data['domain'])->exists()) throw ValidationException::withMessages(['domain' => ['This domain already exists or is already being provisioned.']]);
+            $activeProvisioningExists = WebsiteProvisioningRun::where('domain', $data['domain'])
+                ->whereNotIn('state', ['complete', 'failed'])
+                ->where(function ($query) {
+                    $query->whereNull('website_id')->orWhereHas('website');
+                })
+                ->exists();
+            if (Website::where('domain', $data['domain'])->exists() || $activeProvisioningExists) throw ValidationException::withMessages(['domain' => ['This domain already exists or is already being provisioned.']]);
 
             $token = Str::random(64);
             $website = Website::create(['customer_id' => $data['customer_id'], 'hosting_server_id' => $data['hosting_server_id'], 'name' => $data['name'], 'domain' => $data['domain'], 'login_url' => 'https://'.$data['domain'].'/wp-admin/', 'environment' => $data['environment'], 'wordpress_enabled' => $data['website_type'] === 'wordpress', 'management_enabled' => true, 'hosting_enabled' => true, 'provisioning_status' => 'pending', 'status' => 'unknown', 'portal_visibility' => Website::defaultPortalVisibility(), 'agent_token_hash' => hash('sha256', $token), 'agent_token_encrypted' => $token]);

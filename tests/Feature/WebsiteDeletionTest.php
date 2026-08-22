@@ -7,6 +7,7 @@ use App\Models\HostingServer;
 use App\Models\Role;
 use App\Models\User;
 use App\Models\Website;
+use App\Models\WebsiteProvisioningRun;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Str;
@@ -28,6 +29,19 @@ class WebsiteDeletionTest extends TestCase
         [$website,$account]=$this->records(); $admin=$this->user('admin');
         $this->actingAs($admin)->postJson("/api/websites/{$website->id}/delete",['deletion_type'=>'crm_only','confirmation'=>'example.test','idempotency_key'=>(string)Str::uuid()])->assertOk();
         $this->assertSoftDeleted('websites',['id'=>$website->id]); $this->assertDatabaseHas('hosting_accounts',['id'=>$account->id]); $this->assertDatabaseHas('website_deletion_audits',['website_id'=>$website->id,'deletion_type'=>'crm_only','state'=>'complete']);
+    }
+
+    public function test_deletion_stops_an_unfinished_provisioning_run():void
+    {
+        [$website]=$this->records(); $admin=$this->user('admin');
+        $run=WebsiteProvisioningRun::create(['public_id'=>(string)Str::uuid(),'website_id'=>$website->id,'hosting_server_id'=>$website->hosting_server_id,'initiated_by_user_id'=>$admin->id,'idempotency_key'=>(string)Str::uuid(),'domain'=>$website->domain,'state'=>'waiting_for_dns','mode'=>'live']);
+
+        $this->actingAs($admin)->postJson("/api/websites/{$website->id}/delete",['deletion_type'=>'crm_only','confirmation'=>'example.test','idempotency_key'=>(string)Str::uuid()])->assertOk();
+
+        $run->refresh();
+        $this->assertSame('failed',$run->state);
+        $this->assertSame('website_deleted',$run->failed_step);
+        $this->assertNotNull($run->completed_at);
     }
 
     public function test_mock_full_deletion_terminates_exclusive_account_and_is_audited():void

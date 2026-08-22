@@ -28,6 +28,10 @@ class WebsiteProvisioner
     {
         return Cache::lock("website-provisioning:{$run->id}", 900)->block(3, function () use ($run) {
             $run = $run->fresh(['website', 'steps', 'hostingServer', 'hostingPackage', 'wordpressProfile', 'account']);
+            if (! $run->website) {
+                $run->update(['state' => 'failed', 'failed_step' => 'website_deleted', 'safe_error' => 'Provisioning stopped because the CRM website was deleted.', 'next_check_at' => null, 'completed_at' => now(), 'secrets_encrypted' => null]);
+                return $run->fresh(['account', 'steps']);
+            }
             if ($run->mode === 'mock' && ! app()->environment(['local', 'testing'])) {
                 $safe = 'A preview provisioning run cannot create real hosting. Enable live provisioning and start again.';
                 $run->update(['state' => 'failed', 'failed_step' => 'validate_prerequisites', 'safe_error' => $safe, 'completed_at' => now()]);

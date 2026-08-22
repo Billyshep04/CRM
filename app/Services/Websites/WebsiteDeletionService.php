@@ -43,6 +43,7 @@ class WebsiteDeletionService
                 if ($type==='hosting_and_crm') { $audit->update(['state'=>'terminating_hosting']); $website->update(['deletion_status'=>'terminating_hosting']); $providerResult=$this->providers->forMode($server,config('hosting.termination_mode','mock'))->terminateAccount($server,$account); }
                 $audit->update(['state'=>'removing_crm']); $website->update(['deletion_status'=>'removing_crm']);
                 $website->credentials()->update(['revoked_at'=>now()]);
+                $website->provisioningRuns()->whereNotIn('state',['complete','failed'])->update(['state'=>'failed','failed_step'=>'website_deleted','safe_error'=>'Provisioning stopped because the CRM website was deleted.','next_check_at'=>null,'completed_at'=>now()]);
                 $website->update(['agent_token_hash'=>null,'agent_token_encrypted'=>null,'monitoring_enabled'=>false,'deletion_status'=>'complete']);
                 $website->delete();
                 if ($type==='hosting_and_crm') $account->delete();
