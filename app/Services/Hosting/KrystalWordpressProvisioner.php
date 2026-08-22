@@ -9,6 +9,7 @@ use App\Models\HostingServer;
 use App\Models\WordpressProfile;
 use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SSH2;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class KrystalWordpressProvisioner
@@ -63,17 +64,44 @@ class KrystalWordpressProvisioner
         return ['downloaded' => true, 'path' => 'public_html'];
     }
 
-    public function createDatabase(HostingServer $server, HostingAccount $account, string $password, string $database): array
+    public function databaseNames(HostingServer $server, HostingAccount $account, string $password): array
     {
-        $this->validateDatabaseName($database, $account->username);
-        $this->executeUapi($server, $account, $password, ['Mysql', 'create_database', "name={$database}"], 'MySQL database creation failed.');
+        $payload = $this->executeUapi($server, $account, $password, ['Mysql', 'get_restrictions'], 'The cPanel MySQL naming rules could not be read.');
+        $restrictions = data_get($payload, 'result.data');
+        if (! is_array($restrictions)) {
+            throw new RuntimeException('The cPanel MySQL naming rules could not be read.');
+        }
+
+        $prefix = (string) ($restrictions['prefix'] ?? '');
+        $databaseSuffix = 'wp';
+        $userSuffix = 'wpuser';
+        $database = $prefix.$databaseSuffix;
+        $username = $prefix.$userSuffix;
+        $databaseLimit = (int) ($restrictions['max_database_name_length'] ?? 64);
+        $usernameLimit = (int) ($restrictions['max_username_length'] ?? 32);
+        if ($database === '' || strlen($database) > $databaseLimit || strlen($username) > $usernameLimit) {
+            throw new RuntimeException('The cPanel MySQL prefix leaves insufficient room for the WordPress database names.');
+        }
+
+        return [
+            'database' => $database,
+            'database_user' => $username,
+            'database_api_name' => $databaseSuffix,
+            'database_user_api_name' => $userSuffix,
+        ];
+    }
+
+    public function createDatabase(HostingServer $server, HostingAccount $account, string $password, string $database, ?string $apiName = null): array
+    {
+        $this->validateDatabaseName($database);
+        $this->executeUapi($server, $account, $password, ['Mysql', 'create_database', 'name='.($apiName ?? $database)], 'MySQL database creation failed.');
         return ['database' => $database];
     }
 
-    public function createDatabaseUser(HostingServer $server, HostingAccount $account, string $password, string $username, string $databasePassword): array
+    public function createDatabaseUser(HostingServer $server, HostingAccount $account, string $password, string $username, string $databasePassword, ?string $apiName = null): array
     {
-        $this->validateDatabaseName($username, $account->username);
-        $this->executeUapi($server, $account, $password, ['Mysql', 'create_user', "name={$username}", 'password='.$databasePassword], 'MySQL user creation failed.');
+        $this->validateDatabaseName($username);
+        $this->executeUapi($server, $account, $password, ['Mysql', 'create_user', 'name='.($apiName ?? $username), 'password='.$databasePassword], 'MySQL user creation failed.');
         return ['database_user' => $username];
     }
 
@@ -148,13 +176,26 @@ class KrystalWordpressProvisioner
         return 'cd ~/public_html && php -d disable_functions= "$(which wp)" '.$safe;
     }
 
-    private function executeUapi(HostingServer $server, HostingAccount $account, string $password, array $arguments, string $safeFailure): void
+    private function executeUapi(HostingServer $server, HostingAccount $account, string $password, array $arguments, string $safeFailure): array
     {
         $command = 'uapi --output=json '.collect($arguments)->map(fn ($argument) => escapeshellarg((string) $argument))->implode(' ');
-        $output = $this->execute($server, $account, $password, $command, $safeFailure);
+        $result = $this->run($server, $account, $password, $command);
+        $output = $result['output'];
         $payload = json_decode($output, true);
         $status = data_get($payload, 'result.status');
-        if ($status !== 1 && ! str_contains(strtolower($output), 'already exists')) throw new RuntimeException($safeFailure);
+        if ($status !== 1 && ! str_contains(strtolower($output), 'already exists')) {
+            $errors = collect((array) data_get($payload, 'result.errors', []))->filter()->map(fn ($error) => trim(strip_tags((string) $error)))->values()->all();
+            Log::warning('cPanel UAPI provisioning step failed.', [
+                'hosting_account_id' => $account->id,
+                'module' => $arguments[0] ?? null,
+                'function' => $arguments[1] ?? null,
+                'exit_code' => $result['exit_code'],
+                'errors' => $this->redactUapiErrors($errors, $arguments),
+            ]);
+            throw new RuntimeException($this->safeUapiFailure($errors, $safeFailure));
+        }
+
+        return is_array($payload) ? $payload : [];
     }
 
     private function execute(HostingServer $server, HostingAccount $account, string $password, string $command, string $safeFailure, int $timeout = 60): string
@@ -169,8 +210,33 @@ class KrystalWordpressProvisioner
         return $this->ssh->run($server, $account, $password, $command, $timeout);
     }
 
-    private function validateDatabaseName(string $name, string $cpanelUsername): void
+    private function validateDatabaseName(string $name): void
     {
-        if (! preg_match('/^[a-z0-9_]+$/', $name) || ! str_starts_with($name, $cpanelUsername.'_')) throw new RuntimeException('The generated database name is invalid.');
+        if (! preg_match('/^[a-z0-9_]+$/', $name)) throw new RuntimeException('The generated database name is invalid.');
+    }
+
+    private function safeUapiFailure(array $errors, string $fallback): string
+    {
+        $message = strtolower(implode(' ', $errors));
+        return match (true) {
+            str_contains($message, 'quota'), str_contains($message, 'maximum number') => 'The cPanel account has reached its MySQL database or user quota.',
+            str_contains($message, 'disabled'), str_contains($message, 'role') => 'MySQL database management is not enabled for this cPanel account.',
+            str_contains($message, 'length'), str_contains($message, 'invalid') => 'cPanel rejected the generated MySQL name because it does not meet the server naming rules.',
+            str_contains($message, 'permission'), str_contains($message, 'privilege') => 'The cPanel account does not have permission to manage MySQL databases.',
+            default => $fallback,
+        };
+    }
+
+    private function redactUapiErrors(array $errors, array $arguments): array
+    {
+        $secrets = collect($arguments)
+            ->filter(fn ($argument) => str_starts_with((string) $argument, 'password='))
+            ->map(fn ($argument) => substr((string) $argument, strlen('password=')))
+            ->filter();
+
+        return collect($errors)->map(function (string $error) use ($secrets) {
+            foreach ($secrets as $secret) $error = str_replace($secret, '[REDACTED]', $error);
+            return mb_substr($error, 0, 500);
+        })->all();
     }
 }

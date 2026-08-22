@@ -165,12 +165,15 @@ class WebsiteProvisioner
         }
 
         $password = $secrets['cpanel_password'];
-        $database = $account->username.'_wp';
-        $databaseUser = $account->username.'_wpuser';
+        if ($step === 'download_wordpress') {
+            return $this->wordpress->downloadWordpress($run->hostingServer, $account, $password);
+        }
+        $databaseNames = $this->databaseNames($run, $account, $password);
+        $database = $databaseNames['database'];
+        $databaseUser = $databaseNames['database_user'];
         return match ($step) {
-            'download_wordpress' => $this->wordpress->downloadWordpress($run->hostingServer, $account, $password),
-            'create_database' => $this->wordpress->createDatabase($run->hostingServer, $account, $password, $database),
-            'create_database_user' => $this->wordpress->createDatabaseUser($run->hostingServer, $account, $password, $databaseUser, $secrets['database_password']),
+            'create_database' => $this->wordpress->createDatabase($run->hostingServer, $account, $password, $database, $databaseNames['database_api_name']),
+            'create_database_user' => $this->wordpress->createDatabaseUser($run->hostingServer, $account, $password, $databaseUser, $secrets['database_password'], $databaseNames['database_user_api_name']),
             'grant_database_privileges' => $this->wordpress->grantPrivileges($run->hostingServer, $account, $password, $database, $databaseUser),
             'create_wp_config' => $this->wordpress->createConfig($run->hostingServer, $account, $password, ['name' => $database, 'user' => $databaseUser, 'password' => $secrets['database_password']]),
             'install_wordpress' => tap($this->wordpress->install($run->hostingServer, $account, $password, ['url' => 'https://'.$run->domain, 'title' => $siteTitle, 'admin_username' => $adminUsername, 'admin_password' => $secrets['wordpress_password'], 'admin_email' => $adminEmail]), fn () => $this->storeWordpressCredential($run, $adminUsername, $secrets['wordpress_password'])),
@@ -207,6 +210,29 @@ class WebsiteProvisioner
         foreach (['cpanel_password', 'database_password', 'wordpress_password'] as $key) $secrets[$key] ??= Str::password(40, true, true, true, false);
         $run->update(['secrets_encrypted' => $secrets]);
         return $secrets;
+    }
+
+    private function databaseNames(WebsiteProvisioningRun $run, HostingAccount $account, string $password): array
+    {
+        $secrets = $run->secrets_encrypted ?? [];
+        if (isset($secrets['database_name'], $secrets['database_user'], $secrets['database_api_name'], $secrets['database_user_api_name'])) {
+            return [
+                'database' => $secrets['database_name'],
+                'database_user' => $secrets['database_user'],
+                'database_api_name' => $secrets['database_api_name'],
+                'database_user_api_name' => $secrets['database_user_api_name'],
+            ];
+        }
+
+        $names = $this->wordpress->databaseNames($run->hostingServer, $account, $password);
+        $run->update(['secrets_encrypted' => [...$secrets,
+            'database_name' => $names['database'],
+            'database_user' => $names['database_user'],
+            'database_api_name' => $names['database_api_name'],
+            'database_user_api_name' => $names['database_user_api_name'],
+        ]]);
+
+        return $names;
     }
 
     private function storeWordpressCredential(WebsiteProvisioningRun $run, string $username, string $password): void

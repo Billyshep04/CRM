@@ -81,6 +81,39 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->assertStringContainsString("php -d disable_functions= \"$(which wp)\" 'core' 'install'", $commands);
     }
 
+    public function test_database_names_use_cpanels_reported_prefix_and_unprefixed_create_arguments(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'Mysql' 'get_restrictions'" => ['exit_code' => 0, 'output' => '{"result":{"status":1,"data":{"prefix":"customer_","max_database_name_length":64,"max_username_length":32}}}'],
+            'uapi --output=json' => ['exit_code' => 0, 'output' => '{"result":{"status":1}}'],
+        ]);
+        $service = new KrystalWordpressProvisioner($runner);
+        $names = $service->databaseNames($this->server(), $this->account(), 'cpanel-secret');
+
+        $this->assertSame('customer_wp', $names['database']);
+        $this->assertSame('customer_wpuser', $names['database_user']);
+        $service->createDatabase($this->server(), $this->account(), 'cpanel-secret', $names['database'], $names['database_api_name']);
+        $service->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', $names['database_user'], 'database-secret', $names['database_user_api_name']);
+        $commands = implode("\n", $runner->commands);
+        $this->assertStringContainsString("'name=wp'", $commands);
+        $this->assertStringContainsString("'name=wpuser'", $commands);
+        $this->assertStringNotContainsString("'name=customer_wp'", $commands);
+    }
+
+    public function test_uapi_failure_exposes_only_safe_actionable_categories(): void
+    {
+        $runner = new RecordingSshRunner([
+            'uapi --output=json' => ['exit_code' => 1, 'output' => '{"result":{"status":0,"errors":["The maximum number of databases (1) has been reached (password database-secret)"]}}'],
+        ]);
+        try {
+            (new KrystalWordpressProvisioner($runner))->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', 'customer_wpuser', 'database-secret', 'wpuser');
+            $this->fail('Expected a UAPI failure.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The cPanel account has reached its MySQL database or user quota.', $exception->getMessage());
+            $this->assertStringNotContainsString('database-secret', $exception->getMessage());
+        }
+    }
+
     public function test_ssh_probe_returns_safe_success_and_safe_failure(): void
     {
         $service = new KrystalWordpressProvisioner(new RecordingSshRunner);
