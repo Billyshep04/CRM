@@ -33,6 +33,7 @@ class WebsiteProvisioningController extends Controller
             'servers' => HostingServer::with(['packages' => fn ($query) => $query->where('active', true)])->where('status', 'active')->get()->map(fn ($server) => [
                 'id' => $server->id, 'name' => $server->name, 'provider' => $server->provider, 'api_type' => $server->api_type,
                 'credential_username' => $server->credentials['username'] ?? null, 'has_token' => ! empty($server->credentials['token']),
+                'ssh_host_fingerprint' => $server->metadata['ssh_host_fingerprint'] ?? null,
                 'packages' => $server->packages->map(fn ($package) => ['id' => $package->id, 'name' => $package->name, 'shell_access' => $package->shell_access, 'limits' => $package->limits]),
             ]),
             'profiles' => WordpressProfile::where('active', true)->get(),

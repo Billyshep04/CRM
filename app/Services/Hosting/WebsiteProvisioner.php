@@ -84,7 +84,7 @@ class WebsiteProvisioner
             if ($live) {
                 $this->refreshPackageFromProvider($run, $provider);
             }
-            $result = $run->website_type === 'wordpress' ? $this->wordpress->validatePrerequisites($run->hostingPackage, $live) : ['wordpress' => false];
+            $result = $run->website_type === 'wordpress' ? $this->wordpress->validatePrerequisites($run->hostingPackage, $live, $server) : ['wordpress' => false];
         } elseif ($step->step === 'create_cpanel_account') {
             $this->guardLive($run);
             if (! $run->hosting_account_id) {

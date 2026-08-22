@@ -7,19 +7,32 @@ use App\Models\HostingAccount;
 use App\Models\HostingPackage;
 use App\Models\HostingServer;
 use App\Models\WordpressProfile;
+use phpseclib3\Crypt\PublicKeyLoader;
+use phpseclib3\Net\SSH2;
 use RuntimeException;
 
 class KrystalWordpressProvisioner
 {
     public function __construct(private readonly SshCommandRunner $ssh) {}
 
-    public function validatePrerequisites(HostingPackage $package, bool $live): array
+    public function validatePrerequisites(HostingPackage $package, bool $live, ?HostingServer $server = null): array
     {
         if ($live && $package->shell_access === false) {
             throw new RuntimeException('WordPress provisioning cannot continue because Shell Access is not enabled for the selected hosting package.');
         }
+        $fingerprint = trim((string) ($server?->metadata['ssh_host_fingerprint'] ?? config('hosting.ssh.host_fingerprint')));
+        if ($live && (! class_exists(SSH2::class) || ! class_exists(PublicKeyLoader::class))) {
+            throw new RuntimeException('The secure SSH library is not installed on the CRM server. Run Composer install before provisioning.');
+        }
+        if ($live && $fingerprint === '') {
+            throw new RuntimeException('SSH host verification is not configured. Add the Krystal SSH host fingerprint in Websites → Krystal connection settings before provisioning.');
+        }
+        if ($live && ! preg_match('/^(?:sha256:)?[a-z0-9+\/:]{32,}={0,2}$/i', $fingerprint)) {
+            throw new RuntimeException('The saved Krystal SSH host fingerprint is invalid. Save a verified SHA256 fingerprint before provisioning.');
+        }
         return [
             'shell_access' => $package->shell_access === true ? 'enabled' : 'requested_and_verified_during_setup',
+            'ssh_host_verification' => $live ? 'configured' : 'preview',
             'ssh_port' => (int) config('hosting.ssh.port', 722),
         ];
     }
@@ -27,7 +40,14 @@ class KrystalWordpressProvisioner
     public function testSsh(HostingServer $server, HostingAccount $account, string $password): array
     {
         $this->execute($server, $account, $password, 'printf connected', 'SSH connection failed. Check Shell Access and cPanel credentials.');
-        return ['connected' => true, 'port' => (int) config('hosting.ssh.port', 722)];
+        $this->execute(
+            $server,
+            $account,
+            $password,
+            'for tool in php wp uapi; do command -v "$tool" >/dev/null 2>&1 || exit 1; done; printf tools-ready',
+            'SSH connected, but PHP, WP-CLI, or cPanel UAPI is unavailable for this account.'
+        );
+        return ['connected' => true, 'tools_verified' => ['php', 'wp', 'uapi'], 'port' => (int) config('hosting.ssh.port', 722)];
     }
 
     public function downloadWordpress(HostingServer $server, HostingAccount $account, string $password): array

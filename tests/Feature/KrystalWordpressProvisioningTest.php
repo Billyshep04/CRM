@@ -46,9 +46,17 @@ class KrystalWordpressProvisioningTest extends TestCase
     public function test_unknown_package_shell_metadata_does_not_block_the_real_ssh_check(): void
     {
         $package = new HostingPackage(['name' => 'Shell metadata omitted', 'shell_access' => null]);
-        $result = (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true);
+        $result = (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true, new HostingServer(['metadata' => ['ssh_host_fingerprint' => str_repeat('a', 64)]]));
 
         $this->assertSame('requested_and_verified_during_setup', $result['shell_access']);
+    }
+
+    public function test_live_prerequisites_require_ssh_trust_before_hosting_is_created(): void
+    {
+        $package = new HostingPackage(['name' => 'Shell enabled', 'shell_access' => true]);
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('SSH host verification is not configured');
+        (new KrystalWordpressProvisioner(new RecordingSshRunner))->validatePrerequisites($package, true, new HostingServer);
     }
 
     public function test_database_config_and_install_commands_are_unattended_and_idempotent(): void
@@ -80,6 +88,13 @@ class KrystalWordpressProvisioningTest extends TestCase
         $failed = new KrystalWordpressProvisioner(new RecordingSshRunner(['printf connected' => ['exit_code' => 1, 'output' => 'secret server output']]));
         try { $failed->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected failure.'); }
         catch (RuntimeException $exception) { $this->assertSame('SSH connection failed. Check Shell Access and cPanel credentials.', $exception->getMessage()); }
+    }
+
+    public function test_ssh_probe_checks_all_tools_needed_by_later_steps(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner(['for tool in php wp uapi' => ['exit_code' => 1, 'output' => 'not returned']]));
+        try { $service->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected missing tools failure.'); }
+        catch (RuntimeException $exception) { $this->assertSame('SSH connected, but PHP, WP-CLI, or cPanel UAPI is unavailable for this account.', $exception->getMessage()); }
     }
 
     public function test_dns_reports_correct_wrong_and_missing_records_and_detects_provider(): void
