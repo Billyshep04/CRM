@@ -89,21 +89,65 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->assertStringContainsString("php -d disable_functions= \"$(which wp)\" 'core' 'install'", $commands);
     }
 
-    public function test_database_names_use_cpanels_reported_prefix_and_unprefixed_create_arguments(): void
+    public function test_entire_database_chain_uses_cpanels_authoritative_prefix(): void
     {
-        $runner = new RecordingSshRunner;
+        $runner = new RecordingSshRunner(['test -f public_html/wp-config.php' => ['exit_code' => 1, 'output' => '']]);
         $uapi = new RecordingCpanelUapiClient([
-            'get_restrictions' => ['result' => ['status' => 1, 'data' => ['prefix' => 'customer_', 'max_database_name_length' => 64, 'max_username_length' => 32]]],
+            'get_restrictions' => ['result' => ['status' => 1, 'data' => ['prefix' => 'unusualprefix_', 'max_database_name_length' => 64, 'max_username_length' => 32]]],
         ]);
         $service = new KrystalWordpressProvisioner($runner, $uapi);
         $names = $service->databaseNames($this->server(), $this->account(), 'cpanel-secret');
 
-        $this->assertSame('customer_wp', $names['database']);
-        $this->assertSame('customer_wpuser', $names['database_user']);
+        $this->assertSame('customerone', $this->account()->username);
+        $this->assertSame('unusualprefix_wp', $names['database']);
+        $this->assertSame('unusualprefix_wpuser', $names['database_user']);
+        $this->assertSame('wp', $names['database_api_name']);
+        $this->assertSame('wpuser', $names['database_user_api_name']);
         $service->createDatabase($this->server(), $this->account(), 'cpanel-secret', $names['database'], $names['database_api_name']);
         $service->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', $names['database_user'], 'database-secret', $names['database_user_api_name']);
-        $this->assertSame('wp', $uapi->calls[1]['parameters']['name']);
-        $this->assertSame('wpuser', $uapi->calls[2]['parameters']['name']);
+        $service->grantPrivileges($this->server(), $this->account(), 'cpanel-secret', $names['database'], $names['database_user']);
+        $service->createConfig($this->server(), $this->account(), 'cpanel-secret', ['name' => $names['database'], 'user' => $names['database_user'], 'password' => 'database-secret']);
+
+        $this->assertSame('unusualprefix_wp', $uapi->calls[1]['parameters']['name']);
+        $this->assertSame('unusualprefix_wpuser', $uapi->calls[2]['parameters']['name']);
+        $this->assertSame('unusualprefix_wpuser', $uapi->calls[3]['parameters']['user']);
+        $this->assertSame('unusualprefix_wp', $uapi->calls[3]['parameters']['database']);
+        $this->assertSame('ALL', $uapi->calls[3]['parameters']['privileges']);
+        $commands = implode("\n", $runner->commands);
+        $this->assertStringContainsString("'--dbname=unusualprefix_wp'", $commands);
+        $this->assertStringContainsString("'--dbuser=unusualprefix_wpuser'", $commands);
+    }
+
+    public function test_database_naming_fails_safely_when_cpanel_omits_prefix_information(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient([
+            'get_restrictions' => ['result' => ['status' => 1, 'data' => ['max_database_name_length' => 64, 'max_username_length' => 32]]],
+        ]));
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('did not include the required database prefix');
+        $service->databaseNames($this->server(), $this->account(), 'cpanel-secret');
+    }
+
+    public function test_database_and_user_creation_are_retry_safe_with_the_same_full_names(): void
+    {
+        $uapi = new RecordingCpanelUapiClient([
+            'get_restrictions' => ['result' => ['status' => 1, 'data' => ['prefix' => 'retryprefix_', 'max_database_name_length' => 64, 'max_username_length' => 32]]],
+            'create_database' => ['result' => ['status' => 0, 'errors' => ['The database already exists.']]],
+            'create_user' => ['result' => ['status' => 0, 'errors' => ['The database user already exists.']]],
+        ]);
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, $uapi);
+        $names = $service->databaseNames($this->server(), $this->account(), 'cpanel-secret');
+
+        $service->createDatabase($this->server(), $this->account(), 'cpanel-secret', $names['database']);
+        $service->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', $names['database_user'], 'database-secret');
+        $service->createDatabase($this->server(), $this->account(), 'cpanel-secret', $names['database']);
+        $service->createDatabaseUser($this->server(), $this->account(), 'cpanel-secret', $names['database_user'], 'database-secret');
+
+        $databaseCalls = collect($uapi->calls)->where('function', 'create_database')->pluck('parameters.name')->all();
+        $userCalls = collect($uapi->calls)->where('function', 'create_user')->pluck('parameters.name')->all();
+        $this->assertSame(['retryprefix_wp', 'retryprefix_wp'], $databaseCalls);
+        $this->assertSame(['retryprefix_wpuser', 'retryprefix_wpuser'], $userCalls);
     }
 
     public function test_uapi_failure_exposes_only_safe_actionable_categories(): void

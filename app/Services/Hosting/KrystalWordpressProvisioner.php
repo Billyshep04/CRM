@@ -73,7 +73,11 @@ class KrystalWordpressProvisioner
             throw new RuntimeException('The cPanel MySQL naming rules could not be read.');
         }
 
-        $prefix = (string) ($restrictions['prefix'] ?? '');
+        if (! array_key_exists('prefix', $restrictions)) {
+            throw new RuntimeException('The cPanel MySQL naming rules did not include the required database prefix.');
+        }
+
+        $prefix = (string) $restrictions['prefix'];
         $databaseSuffix = 'wp';
         $userSuffix = 'wpuser';
         $database = $prefix.$databaseSuffix;
@@ -95,14 +99,14 @@ class KrystalWordpressProvisioner
     public function createDatabase(HostingServer $server, HostingAccount $account, string $password, string $database, ?string $apiName = null): array
     {
         $this->validateDatabaseName($database);
-        $this->executeUapi($server, $account, $password, ['Mysql', 'create_database', 'name='.($apiName ?? $database)], 'MySQL database creation failed.');
+        $this->executeUapi($server, $account, $password, ['Mysql', 'create_database', 'name='.$database], 'MySQL database creation failed.');
         return ['database' => $database];
     }
 
     public function createDatabaseUser(HostingServer $server, HostingAccount $account, string $password, string $username, string $databasePassword, ?string $apiName = null): array
     {
         $this->validateDatabaseName($username);
-        $this->executeUapi($server, $account, $password, ['Mysql', 'create_user', 'name='.($apiName ?? $username), 'password='.$databasePassword], 'MySQL user creation failed.');
+        $this->executeUapi($server, $account, $password, ['Mysql', 'create_user', 'name='.$username, 'password='.$databasePassword], 'MySQL user creation failed.');
         return ['database_user' => $username];
     }
 

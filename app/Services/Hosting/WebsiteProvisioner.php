@@ -175,8 +175,8 @@ class WebsiteProvisioner
         $database = $databaseNames['database'];
         $databaseUser = $databaseNames['database_user'];
         return match ($step) {
-            'create_database' => $this->wordpress->createDatabase($run->hostingServer, $account, $password, $database, $databaseNames['database_api_name']),
-            'create_database_user' => $this->wordpress->createDatabaseUser($run->hostingServer, $account, $password, $databaseUser, $secrets['database_password'], $databaseNames['database_user_api_name']),
+            'create_database' => $this->wordpress->createDatabase($run->hostingServer, $account, $password, $database),
+            'create_database_user' => $this->wordpress->createDatabaseUser($run->hostingServer, $account, $password, $databaseUser, $secrets['database_password']),
             'grant_database_privileges' => $this->wordpress->grantPrivileges($run->hostingServer, $account, $password, $database, $databaseUser),
             'create_wp_config' => $this->wordpress->createConfig($run->hostingServer, $account, $password, ['name' => $database, 'user' => $databaseUser, 'password' => $secrets['database_password']]),
             'install_wordpress' => tap($this->wordpress->install($run->hostingServer, $account, $password, ['url' => 'https://'.$run->domain, 'title' => $siteTitle, 'admin_username' => $adminUsername, 'admin_password' => $secrets['wordpress_password'], 'admin_email' => $adminEmail]), fn () => $this->storeWordpressCredential($run, $adminUsername, $secrets['wordpress_password'])),
