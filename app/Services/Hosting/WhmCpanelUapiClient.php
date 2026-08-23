@@ -46,7 +46,7 @@ class WhmCpanelUapiClient implements CpanelUapiClient
             throw new RuntimeException('WHM refused to run the cPanel database operation for this account.');
         }
 
-        $result = data_get($payload, 'data.uapi.result');
+        $result = data_get($payload, 'data.uapi');
         if (! is_array($result)) {
             $data = data_get($payload, 'data');
             $uapi = data_get($payload, 'data.uapi');
@@ -60,7 +60,7 @@ class WhmCpanelUapiClient implements CpanelUapiClient
             throw new RuntimeException('WHM returned no cPanel database result for this account.');
         }
 
-        if (data_get($result, 'status') !== 1) {
+        if ((int) ($result['status'] ?? 0) !== 1) {
             $messages = $this->safeFailureMessages($result, $parameters);
             throw new RuntimeException($messages === []
                 ? 'The cPanel UAPI database operation failed.'
