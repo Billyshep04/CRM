@@ -10,6 +10,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -87,9 +88,14 @@ class KrystalWhmProvider implements HostingProviderInterface
     private function safeWhmReason(array $payload): ?string
     {
         $reason = data_get($payload, 'metadata.reason')
+            ?? data_get($payload, 'metadata.error')
+            ?? data_get($payload, 'metadata.errors')
             ?? data_get($payload, 'data.reason')
             ?? data_get($payload, 'message');
 
+        if (is_array($reason)) {
+            $reason = collect($reason)->flatten()->filter(fn ($value) => is_scalar($value))->implode(' ');
+        }
         if (! is_string($reason) || trim($reason) === '') {
             return null;
         }
@@ -176,15 +182,31 @@ class KrystalWhmProvider implements HostingProviderInterface
     public function createAccount(HostingServer $server, array $data): array
     {
         $domain = strtolower(rtrim((string) $data['domain'], '.'));
-        $existing = collect($this->accounts($server))->first(
-            fn (array $account) => strtolower(rtrim((string) ($account['primary_domain'] ?? ''), '.')) === $domain
-        );
-        if ($existing) {
-            return [
-                ...$existing,
-                'package_name' => $existing['package_name'] ?? $data['package_name'],
-                'metadata' => [...($existing['metadata'] ?? []), 'reconciled_existing_account' => true],
-            ];
+        $proposedUsername = strtolower((string) $data['username']);
+        $existing = $this->exactDomainAccounts($server, $domain);
+        if ($existing !== []) {
+            $match = $this->singleDomainAccount($existing, $domain);
+            if (($data['retrying'] ?? false) === true && strtolower($match['username']) === $proposedUsername) {
+                Log::info('WHM provisioning retry reconciled an existing account.', [
+                    'domain' => $domain,
+                    'authoritative_username' => $match['username'],
+                ]);
+
+                return [
+                    ...$match,
+                    'package_name' => $match['package_name'] ?? $data['package_name'],
+                    'metadata' => [...($match['metadata'] ?? []), 'reconciled_provisioning_retry' => true],
+                ];
+            }
+
+            Log::warning('WHM domain reconciliation mismatch.', [
+                'domain' => $domain,
+                'proposed_username' => $proposedUsername,
+                'authoritative_username' => $match['username'],
+            ]);
+            throw new RuntimeException(
+                "This domain already exists on Krystal under cPanel account \"{$match['username']}\". Link the existing hosting account explicitly or use another domain."
+            );
         }
 
         $query = [
@@ -196,33 +218,73 @@ class KrystalWhmProvider implements HostingProviderInterface
         if (($data['shell_access'] ?? false) === true) {
             $query['hasshell'] = 1;
         }
-        $response = $this->call(
-            $server,
-            'createacct',
-            $query,
-            max(30, (int) config('hosting.whm_account_creation_timeout_seconds', 120))
-        );
+        try {
+            $response = $this->call(
+                $server,
+                'createacct',
+                $query,
+                max(30, (int) config('hosting.whm_account_creation_timeout_seconds', 120))
+            );
+        } catch (RuntimeException $exception) {
+            $safe = $this->redactCreateAccountSecrets($exception->getMessage(), $server, $data);
+            Log::warning('WHM createacct failed.', [
+                'domain' => $domain,
+                'proposed_username' => $proposedUsername,
+                'reason' => $safe,
+            ]);
+            throw new RuntimeException($safe, 0, $exception);
+        }
+
+        if (data_get($response, 'metadata.result') !== 1) {
+            $safe = $this->redactCreateAccountSecrets(
+                $this->safeWhmReason($response) ?: 'WHM returned an invalid account-creation response.',
+                $server,
+                $data
+            );
+            Log::warning('WHM createacct failed.', [
+                'domain' => $domain,
+                'proposed_username' => $proposedUsername,
+                'reason' => $safe,
+                'metadata_result_type' => get_debug_type(data_get($response, 'metadata.result')),
+            ]);
+            throw new RuntimeException($safe);
+        }
+
+        Log::info('WHM createacct succeeded.', [
+            'domain' => $domain,
+            'proposed_username' => $proposedUsername,
+            'metadata_result' => 1,
+        ]);
+
+        $authoritative = $this->singleDomainAccount($this->exactDomainAccounts($server, $domain), $domain);
+        Log::info('WHM authoritative account discovered.', [
+            'domain' => $domain,
+            'proposed_username' => $proposedUsername,
+            'authoritative_username' => $authoritative['username'],
+        ]);
 
         return [
-            'external_id' => $data['username'],
-            'username' => $data['username'],
-            'primary_domain' => $data['domain'],
-            'assigned_ip' => data_get($response, 'data.ip') ?? data_get($response, 'data.result.ip'),
-            'package_name' => $data['package_name'],
-            'status' => 'active',
-            'metadata' => ['whm_message' => $response['metadata']['reason'] ?? 'Created'],
+            ...$authoritative,
+            'package_name' => $authoritative['package_name'] ?? $data['package_name'],
+            'metadata' => [
+                ...($authoritative['metadata'] ?? []),
+                'whm_message' => $this->redactCreateAccountSecrets(
+                    (string) ($response['metadata']['reason'] ?? 'Created'),
+                    $server,
+                    $data
+                ),
+                'provisioned_by_crm' => true,
+            ],
         ];
     }
 
     public function verifyAccount(HostingServer $server, HostingAccount $account): array
     {
-        $match = collect($this->accounts($server))->first(fn ($item) => strtolower($item['username']) === strtolower($account->username));
-        if (! $match) throw new RuntimeException('The new cPanel account is not visible in WHM yet. Retry this step shortly.');
         $expectedDomain = strtolower(rtrim((string) $account->primary_domain, '.'));
-        $actualDomain = strtolower(rtrim((string) ($match['primary_domain'] ?? ''), '.'));
-        if ($actualDomain === '' || $actualDomain !== $expectedDomain) {
-            throw new RuntimeException('WHM returned an account with an unexpected primary domain. The CRM will not mark hosting as connected.');
-        }
+        $matches = $this->exactDomainAccounts($server, $expectedDomain);
+        if ($matches === []) throw new RuntimeException('The new cPanel account is not visible in WHM yet. Retry this step shortly.');
+        $match = $this->singleDomainAccount($matches, $expectedDomain);
+        $actualDomain = strtolower(rtrim((string) $match['primary_domain'], '.'));
         if (($match['status'] ?? 'active') !== 'active') {
             throw new RuntimeException('The cPanel account exists in WHM but is not active.');
         }
@@ -230,7 +292,82 @@ class KrystalWhmProvider implements HostingProviderInterface
             throw new RuntimeException('The cPanel account exists in WHM but does not yet have an assigned IP address.');
         }
 
-        return ['ready' => true, 'status' => 'active', 'assigned_ip' => $match['assigned_ip'], 'primary_domain' => $actualDomain];
+        return [
+            'ready' => true,
+            'external_id' => $match['external_id'],
+            'username' => $match['username'],
+            'status' => 'active',
+            'assigned_ip' => $match['assigned_ip'],
+            'primary_domain' => $actualDomain,
+            'username_matches_stored' => strtolower($match['username']) === strtolower($account->username),
+        ];
+    }
+
+    private function exactDomainAccounts(HostingServer $server, string $domain): array
+    {
+        $payload = $this->call($server, 'listaccts');
+        $accounts = data_get($payload, 'data.acct');
+        if (data_get($payload, 'metadata.result') !== 1 || ! is_array($accounts)) {
+            Log::warning('WHM returned a malformed listaccts response during provisioning reconciliation.', [
+                'top_level_keys' => array_keys($payload),
+                'metadata_result' => data_get($payload, 'metadata.result'),
+                'has_data' => array_key_exists('data', $payload),
+                'has_accounts' => data_get($payload, 'data.acct') !== null,
+            ]);
+            throw new RuntimeException('WHM returned an invalid account list while confirming the cPanel account.');
+        }
+
+        $normalizedDomain = strtolower(rtrim($domain, '.'));
+        return collect($accounts)
+            ->filter(fn ($item) => is_array($item)
+                && is_string($item['user'] ?? null)
+                && trim($item['user']) !== ''
+                && strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $normalizedDomain)
+            ->map(fn ($account) => $this->mapAccount($account))
+            ->values()
+            ->all();
+    }
+
+    private function singleDomainAccount(array $matches, string $domain): array
+    {
+        if (count($matches) === 1) return $matches[0];
+
+        Log::warning('WHM domain reconciliation did not return exactly one account.', [
+            'domain' => $domain,
+            'match_count' => count($matches),
+            'usernames' => collect($matches)->pluck('username')->filter()->values()->all(),
+        ]);
+        throw new RuntimeException(
+            count($matches) === 0
+                ? 'WHM reported account creation success, but the new cPanel account is not visible yet. Retry this provisioning run shortly.'
+                : 'WHM returned multiple cPanel accounts for this primary domain. Provisioning stopped for safety.'
+        );
+    }
+
+    private function mapAccount(array $account): array
+    {
+        return [
+            'external_id' => (string) $account['user'],
+            'username' => (string) $account['user'],
+            'primary_domain' => $account['domain'] ?? null,
+            'assigned_ip' => $account['ip'] ?? null,
+            'package_name' => $account['plan'] ?? null,
+            'status' => ($account['suspended'] ?? 0) ? 'suspended' : 'active',
+            'disk_used_bytes' => $this->bytes($account['diskused'] ?? null),
+            'disk_limit_bytes' => $this->bytes($account['disklimit'] ?? null),
+            'metadata' => ['owner' => $account['owner'] ?? null, 'email' => $account['email'] ?? null],
+        ];
+    }
+
+    private function redactCreateAccountSecrets(string $message, HostingServer $server, array $data): string
+    {
+        $credentials = $server->credentials ?? [];
+        $secrets = array_filter([
+            $data['password'] ?? null,
+            $credentials['token'] ?? null,
+        ], fn ($value) => is_string($value) && $value !== '');
+
+        return Str::limit(str_replace($secrets, '[REDACTED]', strip_tags($message)), 240);
     }
 
     public function installWordpress(HostingServer $server, HostingAccount $account, array $data): array

@@ -89,9 +89,11 @@ class WebsiteProvisioner
             $this->guardLive($run);
             if (! $run->hosting_account_id) {
                 $secrets = $this->secrets($run);
-                $username = $website->cpanel_username ?: $this->username($website->domain);
-                if (! $website->cpanel_username) {
-                    $website->update(['cpanel_username' => $username]);
+                $username = $secrets['cpanel_username_proposal']
+                    ?? ($website->cpanel_username ?: $this->username($website->domain));
+                if (! isset($secrets['cpanel_username_proposal'])) {
+                    $secrets['cpanel_username_proposal'] = $username;
+                    $run->update(['secrets_encrypted' => $secrets]);
                 }
                 $result = $provider->createAccount($server, [
                     'username' => $username,
@@ -99,6 +101,7 @@ class WebsiteProvisioner
                     'password' => $secrets['cpanel_password'],
                     'package_name' => $run->hostingPackage?->external_id,
                     'shell_access' => $run->website_type === 'wordpress',
+                    'retrying' => (int) $step->attempts > 1,
                 ]);
                 $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null]);
                 $run->update(['hosting_account_id' => $account->id, 'expected_ip' => $account->assigned_ip]);
