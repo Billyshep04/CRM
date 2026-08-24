@@ -169,13 +169,12 @@ class KrystalWordpressProvisioningTest extends TestCase
     public function test_verify_diagnostic_separates_stdout_from_sanitized_stderr_and_preserves_mismatch_failure(): void
     {
         $secret = 'never-log-this-cpanel-password';
-        $encoded = fn (string $value) => base64_encode($value);
         $diagnosticOutput = implode("\n", [
-            '__WS_SSH_USER__'.$encoded("  coppering4tn\n"),
-            '__WS_WORKING_DIRECTORY__'.$encoded(" /home/coppering4tn/public_html \n"),
-            '__WS_SITEURL__'.$encoded("\nhttp://copperingots.uk/ \n"),
-            '__WS_HOME__'.$encoded(" http://copperingots.uk/\n"),
-            '__WS_STDERR__'.$encoded("PHP warning containing {$secret}\n"),
+            '__WS_SSH_USER_BEGIN__', "  coppering4tn ", '__WS_SSH_USER_END__',
+            '__WS_WORKING_DIRECTORY_BEGIN__', ' /home/coppering4tn/public_html ', '__WS_WORKING_DIRECTORY_END__',
+            '__WS_SITEURL_BEGIN__', ' http://copperingots.uk/ ', '__WS_SITEURL_END__',
+            '__WS_HOME_BEGIN__', ' http://copperingots.uk/ ', '__WS_HOME_END__',
+            '__WS_STDERR_BEGIN__', "PHP warning containing {$secret}", '__WS_STDERR_END__',
         ]);
         $runner = new RecordingSshRunner([
             'tmp=$(mktemp)' => ['exit_code' => 0, 'output' => $diagnosticOutput],
@@ -194,6 +193,12 @@ class KrystalWordpressProvisioningTest extends TestCase
         $diagnosticCommand = collect($runner->commands)->first(fn ($command) => str_contains($command, 'tmp=$(mktemp)'));
         $this->assertIsString($diagnosticCommand);
         $this->assertSame(2, substr_count($diagnosticCommand, 'php -d disable_functions= "$(which wp)"'));
+        $this->assertStringContainsString("printf '__WS_SITEURL_BEGIN__\\n%s\\n__WS_SITEURL_END__\\n'", $diagnosticCommand);
+        $this->assertStringContainsString("printf '__WS_HOME_BEGIN__\\n%s\\n__WS_HOME_END__\\n'", $diagnosticCommand);
+        $this->assertStringContainsString('cat "$tmp"', $diagnosticCommand);
+        $this->assertStringNotContainsString('base64', $diagnosticCommand);
+        $this->assertStringNotContainsString('siteurl=$(__SITEURL__)', $diagnosticCommand);
+        $this->assertStringNotContainsString('home=$(__HOME__)', $diagnosticCommand);
 
         Log::shouldHaveReceived('info')->once()->withArgs(function ($message, $context) use ($secret) {
             $this->assertSame('Temporary WordPress verification diagnostic.', $message);

@@ -191,20 +191,19 @@ class KrystalWordpressProvisioner
         $siteUrlCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'siteurl']));
         $homeCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'home']));
         $command = <<<'SH'
-tmp=$(mktemp) || exit 1; trap 'rm -f "$tmp"' EXIT; ssh_user=''; working_directory=''; siteurl=''; home=''; { if cd ~/public_html; then ssh_user=$(whoami); working_directory=$(pwd -P); siteurl=$(__SITEURL__); home=$(__HOME__); fi; } 2>"$tmp"; printf '__WS_SSH_USER__%s\n' "$(printf '%s' "$ssh_user" | base64 | tr -d '\n')"; printf '__WS_WORKING_DIRECTORY__%s\n' "$(printf '%s' "$working_directory" | base64 | tr -d '\n')"; printf '__WS_SITEURL__%s\n' "$(printf '%s' "$siteurl" | base64 | tr -d '\n')"; printf '__WS_HOME__%s\n' "$(printf '%s' "$home" | base64 | tr -d '\n')"; printf '__WS_STDERR__%s\n' "$(base64 < "$tmp" | tr -d '\n')"
+tmp=$(mktemp) || exit 1; trap 'rm -f "$tmp"' EXIT; ssh_user=''; working_directory=''; siteurl=''; home=''; { if cd ~/public_html; then ssh_user=$(whoami); working_directory=$(pwd -P); siteurl=$(__SITEURL__); home=$(__HOME__); fi; } 2>"$tmp"; printf '__WS_SSH_USER_BEGIN__\n%s\n__WS_SSH_USER_END__\n' "$ssh_user"; printf '__WS_WORKING_DIRECTORY_BEGIN__\n%s\n__WS_WORKING_DIRECTORY_END__\n' "$working_directory"; printf '__WS_SITEURL_BEGIN__\n%s\n__WS_SITEURL_END__\n' "$siteurl"; printf '__WS_HOME_BEGIN__\n%s\n__WS_HOME_END__\n' "$home"; printf '__WS_STDERR_BEGIN__\n'; cat "$tmp"; printf '\n__WS_STDERR_END__\n'
 SH;
         $command = str_replace(['__SITEURL__', '__HOME__'], [$siteUrlCommand, $homeCommand], $command);
         $result = $this->run($server, $account, $password, $command);
         $values = collect([
-            'ssh_user' => '__WS_SSH_USER__',
-            'working_directory' => '__WS_WORKING_DIRECTORY__',
-            'siteurl' => '__WS_SITEURL__',
-            'home' => '__WS_HOME__',
-            'stderr_summary' => '__WS_STDERR__',
+            'ssh_user' => 'SSH_USER',
+            'working_directory' => 'WORKING_DIRECTORY',
+            'siteurl' => 'SITEURL',
+            'home' => 'HOME',
+            'stderr_summary' => 'STDERR',
         ])->mapWithKeys(function (string $marker, string $field) use ($result) {
-            preg_match('/^'.preg_quote($marker, '/').'([A-Za-z0-9+\/=]*)$/m', (string) ($result['output'] ?? ''), $matches);
-            $decoded = isset($matches[1]) ? base64_decode($matches[1], true) : false;
-            return [$field => trim($decoded === false ? '' : $decoded)];
+            preg_match('/^__WS_'.preg_quote($marker, '/').'_BEGIN__\R(.*?)\R__WS_'.preg_quote($marker, '/').'_END__$/ms', (string) ($result['output'] ?? ''), $matches);
+            return [$field => trim((string) ($matches[1] ?? ''))];
         })->all();
 
         $secrets = collect([
