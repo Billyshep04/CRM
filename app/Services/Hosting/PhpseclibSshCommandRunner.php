@@ -29,8 +29,14 @@ class PhpseclibSshCommandRunner implements SshCommandRunner
         if (! hash_equals($normalise($expected), $normalise($actual))) throw new RuntimeException('SSH host verification failed. The Krystal server fingerprint does not match.');
         if (! $ssh->login($account->username, $password)) throw new RuntimeException('SSH connection failed. Check Shell Access and the cPanel credentials.');
 
-        $output = (string) $ssh->exec($command);
+        $ssh->enableQuietMode();
+        $stdout = $ssh->exec($command);
+        $stderr = $ssh->getStdError();
         $status = $ssh->getExitStatus();
-        return ['exit_code' => is_int($status) ? $status : 1, 'output' => $output];
+        return [
+            'exit_code' => is_int($status) ? $status : 1,
+            'stdout' => is_string($stdout) ? $stdout : '',
+            'stderr' => is_string($stderr) ? $stderr : '',
+        ];
     }
 }

@@ -116,6 +116,9 @@ class WebsiteProvisioner
                 $run->update(['expected_ip' => $ip]);
             }
         } elseif ($step->step === 'connect_ssh') {
+            if ($live && $provider instanceof KrystalWhmProvider) {
+                $provider->ensureJailedShell($server, $this->account($run));
+            }
             $result = $live ? $this->wordpress->testSsh($server, $this->account($run), $this->secrets($run)['cpanel_password']) : ['connected' => true, 'port' => 722, 'mock' => true];
         } elseif (in_array($step->step, ['download_wordpress', 'create_database', 'create_database_user', 'grant_database_privileges', 'create_wp_config', 'install_wordpress', 'configure_wordpress', 'verify_wordpress'], true)) {
             $result = $this->wordpressStep($run, $step->step, $live, $provider);
@@ -266,5 +269,5 @@ class WebsiteProvisioner
     private function guardLive(WebsiteProvisioningRun $run): void { if ($run->mode === 'live' && ! config('hosting.allow_live_provisioning')) throw new RuntimeException('Live hosting provisioning is disabled.'); }
     private function username(string $domain): string { $base = preg_replace('/[^a-z0-9]/', '', strtolower(strtok($domain, '.'))); return substr($base ?: 'webstamp', 0, 9).Str::lower(Str::random(3)); }
     private function state(string $step): string { return ['validate_prerequisites' => 'validating', 'create_cpanel_account' => 'creating_hosting', 'wait_for_cpanel' => 'waiting_for_hosting', 'connect_ssh' => 'connecting_ssh', 'download_wordpress' => 'installing_wordpress', 'create_database' => 'installing_wordpress', 'create_database_user' => 'installing_wordpress', 'grant_database_privileges' => 'installing_wordpress', 'create_wp_config' => 'installing_wordpress', 'install_wordpress' => 'installing_wordpress', 'configure_wordpress' => 'configuring_wordpress', 'verify_wordpress' => 'verifying_wordpress', 'check_dns' => 'checking_dns', 'check_ssl' => 'checking_ssl', 'install_agent' => 'installing_agent', 'enable_monitoring' => 'enabling_monitoring', 'run_initial_health_check' => 'running_checks'][$step] ?? 'pending'; }
-    private function safeMetadata(array $result): array { return collect($result)->except(['password', 'admin_password', 'database_password', 'token', 'agent_token', 'api_token', 'output'])->all(); }
+    private function safeMetadata(array $result): array { return collect($result)->except(['password', 'admin_password', 'database_password', 'token', 'agent_token', 'api_token', 'output', 'stdout', 'stderr'])->all(); }
 }

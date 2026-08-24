@@ -16,6 +16,8 @@ use RuntimeException;
 
 class KrystalWhmProvider implements HostingProviderInterface
 {
+    private const JAILSHELL = '/usr/local/cpanel/bin/jailshell';
+
     private function client(HostingServer $server, int $timeout = 20): PendingRequest
     {
         $credentials = $server->credentials ?? [];
@@ -301,6 +303,92 @@ class KrystalWhmProvider implements HostingProviderInterface
             'primary_domain' => $actualDomain,
             'username_matches_stored' => strtolower($match['username']) === strtolower($account->username),
         ];
+    }
+
+    public function ensureJailedShell(HostingServer $server, HostingAccount $account): array
+    {
+        try {
+            $shell = $this->accountShell($server, $account);
+        } catch (RuntimeException) {
+            Log::warning('WHM jailed shell state could not be inspected.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+            ]);
+            throw new RuntimeException($this->shellAccessFailure($account));
+        }
+        if ($shell === self::JAILSHELL) {
+            return ['shell' => $shell, 'changed' => false];
+        }
+
+        Log::info('WHM jailed shell assignment requested.', [
+            'hosting_account_id' => $account->id,
+            'username' => $account->username,
+            'current_shell' => $shell ?: 'unknown',
+        ]);
+
+        try {
+            $this->call($server, 'modifyacct', [
+                'user' => $account->username,
+                'HASSHELL' => 1,
+                'shell' => self::JAILSHELL,
+            ]);
+        } catch (RuntimeException) {
+            Log::warning('WHM jailed shell assignment denied.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+                'reason' => 'whm_permission_or_api_failure',
+            ]);
+            throw new RuntimeException($this->shellAccessFailure($account));
+        }
+
+        try {
+            $confirmed = $this->accountShell($server, $account);
+        } catch (RuntimeException) {
+            Log::warning('WHM jailed shell assignment could not be verified.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+            ]);
+            throw new RuntimeException($this->shellAccessFailure($account));
+        }
+        if ($confirmed !== self::JAILSHELL) {
+            Log::warning('WHM jailed shell assignment was not confirmed.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+                'reported_shell' => $confirmed ?: 'unknown',
+            ]);
+            throw new RuntimeException($this->shellAccessFailure($account));
+        }
+
+        Log::info('WHM jailed shell assignment confirmed.', [
+            'hosting_account_id' => $account->id,
+            'username' => $account->username,
+            'shell' => self::JAILSHELL,
+        ]);
+
+        return ['shell' => $confirmed, 'changed' => true];
+    }
+
+    private function accountShell(HostingServer $server, HostingAccount $account): string
+    {
+        $payload = $this->call($server, 'accountsummary', ['user' => $account->username]);
+        $accounts = data_get($payload, 'data.acct');
+        if (! is_array($accounts) || count($accounts) !== 1 || ! is_array($accounts[0])) {
+            throw new RuntimeException('WHM returned an invalid account summary while checking jailed shell access.');
+        }
+
+        $username = strtolower(trim((string) ($accounts[0]['user'] ?? '')));
+        if ($username !== strtolower($account->username)) {
+            throw new RuntimeException('WHM returned the wrong account while checking jailed shell access.');
+        }
+
+        return trim((string) ($accounts[0]['shell'] ?? ''));
+    }
+
+    private function shellAccessFailure(HostingAccount $account): string
+    {
+        return "Shell access could not be enabled for cPanel account \"{$account->username}\". "
+            .'Jailed shell is required for automated WordPress provisioning. '
+            .'Enable shell access for this account/package in WHM or ask Krystal to grant the reseller the required shell-management permission.';
     }
 
     private function exactDomainAccounts(HostingServer $server, string $domain): array

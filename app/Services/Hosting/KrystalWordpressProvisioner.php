@@ -8,9 +8,9 @@ use App\Models\HostingAccount;
 use App\Models\HostingPackage;
 use App\Models\HostingServer;
 use App\Models\WordpressProfile;
+use Illuminate\Support\Facades\Log;
 use phpseclib3\Crypt\PublicKeyLoader;
 use phpseclib3\Net\SSH2;
-use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class KrystalWordpressProvisioner
@@ -41,14 +41,20 @@ class KrystalWordpressProvisioner
 
     public function testSsh(HostingServer $server, HostingAccount $account, string $password): array
     {
-        $this->execute($server, $account, $password, 'printf connected', 'SSH connection failed. Check Shell Access and cPanel credentials.');
-        $this->execute(
+        $connected = trim($this->execute($server, $account, $password, "printf '__WEBSTAMP_CONNECTED__'", 'SSH connection failed. Check Shell Access and cPanel credentials.'));
+        if ($connected !== '__WEBSTAMP_CONNECTED__') {
+            throw new RuntimeException('SSH connection failed because the account could not execute shell commands. Check jailed shell access in WHM.');
+        }
+        $tools = trim($this->execute(
             $server,
             $account,
             $password,
-            'for tool in php wp; do command -v "$tool" >/dev/null 2>&1 || exit 1; done; printf tools-ready',
+            'for tool in php wp; do command -v "$tool" >/dev/null 2>&1 || exit 1; done; printf \'__WEBSTAMP_TOOLS_READY__\'',
             'SSH connected, but PHP or WP-CLI is unavailable for this account.'
-        );
+        ));
+        if ($tools !== '__WEBSTAMP_TOOLS_READY__') {
+            throw new RuntimeException('SSH connected, but PHP or WP-CLI could not be executed for this account.');
+        }
         return ['connected' => true, 'tools_verified' => ['php', 'wp'], 'port' => (int) config('hosting.ssh.port', 722)];
     }
 
@@ -123,6 +129,12 @@ class KrystalWordpressProvisioner
             $this->execute($server, $account, $password, $this->wpCliCommand([
                 'config', 'create', '--dbname='.$database['name'], '--dbuser='.$database['user'], '--dbpass='.$database['password'], '--dbhost=localhost', '--skip-check',
             ]), 'Creating wp-config.php failed.');
+        } else {
+            $configuredDatabase = trim($this->execute($server, $account, $password, $this->wpCliCommand(['config', 'get', 'DB_NAME']), 'The existing wp-config.php could not be verified.'));
+            $configuredUser = trim($this->execute($server, $account, $password, $this->wpCliCommand(['config', 'get', 'DB_USER']), 'The existing wp-config.php could not be verified.'));
+            if (! hash_equals((string) $database['name'], $configuredDatabase) || ! hash_equals((string) $database['user'], $configuredUser)) {
+                throw new RuntimeException('The existing wp-config.php belongs to different database credentials. Provisioning stopped without overwriting it.');
+            }
         }
         return ['configured' => true, 'salts' => 'generated'];
     }
@@ -168,77 +180,17 @@ class KrystalWordpressProvisioner
     public function verify(HostingServer $server, HostingAccount $account, string $password, string $expectedUrl): array
     {
         $siteUrl = trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'siteurl']), 'WordPress verification failed.'));
-        $diagnostic = $this->verificationDiagnostic($server, $account, $password);
-        Log::info('Temporary WordPress verification diagnostic.', $diagnostic);
         if (rtrim($siteUrl, '/') !== rtrim($expectedUrl, '/')) {
-            $actualSiteUrl = $this->safeDiagnosticText($diagnostic['siteurl'] ?: $siteUrl, [
-                $password,
-                ...array_values(array_filter((array) ($server->credentials ?? []), 'is_scalar')),
-            ], 500);
-            throw new RuntimeException(
-                'WordPress verification failed because the installed site URL does not match. '
-                .'Expected "'.$expectedUrl.'" but found "'.$actualSiteUrl.'".'
-            );
+            throw new RuntimeException('WordPress verification failed because the installed site URL does not match.');
+        }
+        $home = trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'home']), 'WordPress verification failed.'));
+        if (rtrim($home, '/') !== rtrim($expectedUrl, '/')) {
+            throw new RuntimeException('WordPress verification failed because the installed home URL does not match.');
         }
         $this->execute($server, $account, $password, 'test -f public_html/wp-config.php', 'WordPress verification failed because wp-config.php is missing.');
         $tables = trim($this->execute($server, $account, $password, $this->wpCliCommand(['db', 'tables']), 'WordPress verification failed because its database tables are unavailable.'));
         if ($tables === '') throw new RuntimeException('WordPress verification failed because its database tables are unavailable.');
-        return ['verified' => true, 'site_url' => $siteUrl];
-    }
-
-    private function verificationDiagnostic(HostingServer $server, HostingAccount $account, string $password): array
-    {
-        $secrets = collect([
-            $password,
-            ...array_values(array_filter((array) ($server->credentials ?? []), 'is_scalar')),
-        ])->map(fn ($value) => (string) $value)->filter()->values()->all();
-
-        $commands = [
-            'whoami' => 'whoami',
-            'pwd' => 'pwd -P',
-            'public_html_pwd' => 'cd ~/public_html && pwd -P',
-            'siteurl' => $this->wpCliCommand(['option', 'get', 'siteurl']),
-            'home' => $this->wpCliCommand(['option', 'get', 'home']),
-        ];
-        $results = [];
-        foreach ($commands as $name => $command) {
-            $result = $this->run($server, $account, $password, $command);
-            $results[$name] = [
-                'exit_code' => (int) ($result['exit_code'] ?? 1),
-                'raw_output' => $this->safeDiagnosticText((string) ($result['output'] ?? ''), $secrets, 500),
-            ];
-            Log::info('Temporary WordPress SSH command diagnostic.', [
-                'command_name' => $name,
-                ...$results[$name],
-            ]);
-        }
-
-        $failures = collect($results)
-            ->filter(fn (array $result) => $result['exit_code'] !== 0)
-            ->map(fn (array $result, string $name) => $name.': '.$result['raw_output'])
-            ->implode(' | ');
-
-        $values = [
-            'ssh_user' => $results['whoami']['raw_output'],
-            'working_directory' => $results['public_html_pwd']['raw_output'],
-            'siteurl' => $results['siteurl']['raw_output'],
-            'home' => $results['home']['raw_output'],
-            'stderr_summary' => $this->safeDiagnosticText($failures, $secrets, 300),
-        ];
-
-        return $values;
-    }
-
-    private function safeDiagnosticText(string $value, array $secrets, int $limit): string
-    {
-        $value = trim(strip_tags($value));
-        foreach ($secrets as $secret) {
-            if ($secret !== '') $value = str_replace($secret, '[REDACTED]', $value);
-        }
-        $value = preg_replace('/\b(password|token|authorization)\s*[:=]\s*\S+/i', '$1=[REDACTED]', $value) ?? '';
-        $value = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $value) ?? '';
-
-        return mb_substr(trim($value), 0, $limit);
+        return ['verified' => true, 'site_url' => $siteUrl, 'home_url' => $home];
     }
 
     public function wpCliCommand(array $arguments): string
@@ -275,12 +227,26 @@ class KrystalWordpressProvisioner
     {
         $result = $this->run($server, $account, $password, $command, $timeout);
         if ($result['exit_code'] !== 0) throw new RuntimeException($safeFailure);
-        return $result['output'];
+        return $result['stdout'];
     }
 
     private function run(HostingServer $server, HostingAccount $account, string $password, string $command, int $timeout = 60): array
     {
-        return $this->ssh->run($server, $account, $password, $command, $timeout);
+        $result = $this->ssh->run($server, $account, $password, $command, $timeout);
+        $stdout = (string) ($result['stdout'] ?? '');
+        $stderr = (string) ($result['stderr'] ?? '');
+        $combined = strtolower($stdout."\n".$stderr);
+        if (str_contains($combined, 'shell access is not enabled on your account')
+            || str_contains($combined, 'if you need shell access please contact support')
+            || str_contains($combined, '/usr/local/cpanel/bin/noshell')) {
+            throw new RuntimeException('Shell command execution is disabled for this cPanel account. Enable jailed shell access in WHM before retrying.');
+        }
+
+        return [
+            'exit_code' => (int) ($result['exit_code'] ?? 1),
+            'stdout' => $stdout,
+            'stderr' => $stderr,
+        ];
     }
 
     private function validateDatabaseName(string $name): void

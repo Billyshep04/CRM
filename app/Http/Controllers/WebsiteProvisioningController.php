@@ -98,8 +98,9 @@ class WebsiteProvisioningController extends Controller
 
     public function show(WebsiteProvisioningRun $websiteProvisioningRun) { return response()->json(['data' => $this->present($websiteProvisioningRun)]); }
 
-    public function retry(WebsiteProvisioningRun $websiteProvisioningRun)
+    public function retry(Request $request, WebsiteProvisioningRun $websiteProvisioningRun)
     {
+        $data = $request->validate(['recover_ssh_steps' => ['sometimes', 'boolean']]);
         if (! in_array($websiteProvisioningRun->state, ['failed', 'action_required', 'waiting_for_dns', 'waiting_for_ssl'], true)) throw ValidationException::withMessages(['state' => ['Only incomplete provisioning runs can be checked or retried.']]);
         if ($websiteProvisioningRun->mode === 'mock' && ! app()->environment(['local', 'testing'])) {
             if (config('hosting.provisioning_mode') !== 'live' || ! config('hosting.allow_live_provisioning')) {
@@ -109,7 +110,18 @@ class WebsiteProvisioningController extends Controller
             $websiteProvisioningRun->website?->update(['provisioning_status' => 'pending', 'lifecycle_state' => 'draft']);
             $websiteProvisioningRun->update(['mode' => 'live', 'state' => 'pending', 'failed_step' => null, 'safe_error' => null, 'expected_ip' => null, 'dns_status' => null, 'ssl_status' => null, 'completed_at' => null, 'next_check_at' => null]);
         } else {
-            $websiteProvisioningRun->steps()->whereIn('status', ['failed', 'manual_action', 'waiting'])->update(['status' => 'pending', 'safe_message' => null, 'completed_at' => null]);
+            if (($data['recover_ssh_steps'] ?? false) === true) {
+                if ($websiteProvisioningRun->mode !== 'live' || $websiteProvisioningRun->website_type !== 'wordpress' || ! $websiteProvisioningRun->hosting_account_id) {
+                    throw ValidationException::withMessages(['recover_ssh_steps' => ['SSH step recovery is only available for live WordPress runs with an existing cPanel account.']]);
+                }
+                $websiteProvisioningRun->steps()->whereIn('step', [
+                    'connect_ssh', 'download_wordpress', 'create_wp_config', 'install_wordpress', 'configure_wordpress', 'verify_wordpress',
+                ])->update(['status' => 'pending', 'safe_message' => null, 'metadata' => null, 'started_at' => null, 'completed_at' => null]);
+                $websiteProvisioningRun->website?->update(['provisioning_status' => 'pending']);
+                $websiteProvisioningRun->update(['state' => 'pending', 'failed_step' => null, 'safe_error' => null, 'completed_at' => null]);
+            } else {
+                $websiteProvisioningRun->steps()->whereIn('status', ['failed', 'manual_action', 'waiting'])->update(['status' => 'pending', 'safe_message' => null, 'completed_at' => null]);
+            }
             $websiteProvisioningRun->update(['next_check_at' => null]);
         }
         ProcessWebsiteProvisioning::dispatch($websiteProvisioningRun->id);

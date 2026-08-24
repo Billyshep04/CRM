@@ -14,7 +14,6 @@ use App\Services\Hosting\ProvisioningDnsService;
 use App\Services\Hosting\ProvisioningSslService;
 use App\Services\Hosting\ProvisioningHttpService;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -40,7 +39,7 @@ class KrystalWordpressProvisioningTest extends TestCase
 
     public function test_wordpress_download_refuses_to_overwrite_existing_public_html(): void
     {
-        $runner = new RecordingSshRunner(['test -f public_html/wp-load.php' => ['exit_code' => 1, 'output' => ''], 'find public_html' => ['exit_code' => 0, 'output' => "index.php\nassets\n"]]);
+        $runner = new RecordingSshRunner(['test -f public_html/wp-load.php' => ['exit_code' => 1, 'stdout' => '', 'stderr' => ''], 'find public_html' => ['exit_code' => 0, 'stdout' => "index.php\nassets\n", 'stderr' => '']]);
         $this->expectException(RuntimeException::class);
         $this->expectExceptionMessage('public_html contains an existing website');
         (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))->downloadWordpress($this->server(), $this->account(), 'not-logged');
@@ -73,8 +72,8 @@ class KrystalWordpressProvisioningTest extends TestCase
     public function test_database_config_and_install_commands_are_unattended_and_idempotent(): void
     {
         $runner = new RecordingSshRunner([
-            'test -f public_html/wp-config.php' => ['exit_code' => 1, 'output' => ''],
-            "'core' 'is-installed'" => ['exit_code' => 1, 'output' => ''],
+            'test -f public_html/wp-config.php' => ['exit_code' => 1, 'stdout' => '', 'stderr' => ''],
+            "'core' 'is-installed'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => ''],
         ]);
         $uapi = new RecordingCpanelUapiClient;
         $service = new KrystalWordpressProvisioner($runner, $uapi);
@@ -90,9 +89,33 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->assertStringContainsString("php -d disable_functions= \"$(which wp)\" 'core' 'install'", $commands);
     }
 
+    public function test_retry_reuses_matching_wp_config_and_existing_wordpress_installation(): void
+    {
+        $runner = new RecordingSshRunner([
+            'test -f public_html/wp-config.php' => ['exit_code' => 0, 'stdout' => '', 'stderr' => ''],
+            "'config' 'get' 'DB_NAME'" => ['exit_code' => 0, 'stdout' => "customerone_wp\n", 'stderr' => ''],
+            "'config' 'get' 'DB_USER'" => ['exit_code' => 0, 'stdout' => "customerone_wpuser\n", 'stderr' => ''],
+            "'core' 'is-installed'" => ['exit_code' => 0, 'stdout' => '', 'stderr' => ''],
+        ]);
+        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
+        $service->createConfig($this->server(), $this->account(), 'not-logged', [
+            'name' => 'customerone_wp', 'user' => 'customerone_wpuser', 'password' => 'not-logged',
+        ]);
+        $service->install($this->server(), $this->account(), 'not-logged', [
+            'url' => 'https://example.test', 'title' => 'Example', 'admin_username' => 'webstamp_admin',
+            'admin_password' => 'not-logged', 'admin_email' => 'admin@example.test',
+        ]);
+
+        $commands = implode("\n", $runner->commands);
+        $this->assertStringNotContainsString("'config' 'create'", $commands);
+        $this->assertStringNotContainsString("'core' 'install'", $commands);
+        $this->assertStringContainsString("'config' 'get' 'DB_NAME'", $commands);
+        $this->assertStringContainsString("'config' 'get' 'DB_USER'", $commands);
+    }
+
     public function test_entire_database_chain_uses_cpanels_authoritative_prefix(): void
     {
-        $runner = new RecordingSshRunner(['test -f public_html/wp-config.php' => ['exit_code' => 1, 'output' => '']]);
+        $runner = new RecordingSshRunner(['test -f public_html/wp-config.php' => ['exit_code' => 1, 'stdout' => '', 'stderr' => '']]);
         $uapi = new RecordingCpanelUapiClient([
             'get_restrictions' => ['result' => ['status' => 1, 'data' => ['prefix' => 'unusualprefix_', 'max_database_name_length' => 64, 'max_username_length' => 32]]],
         ]);
@@ -166,75 +189,67 @@ class KrystalWordpressProvisioningTest extends TestCase
         }
     }
 
-    public function test_verify_diagnostic_logs_individual_real_ssh_results_and_preserves_mismatch_failure(): void
+    public function test_wordpress_verification_strictly_checks_siteurl_and_home(): void
     {
-        $secret = 'never-log-this-cpanel-password';
         $runner = new RecordingSshRunner([
-            'cd ~/public_html && pwd -P' => ['exit_code' => 0, 'output' => " /home/coppering4tn/public_html \n"],
-            'pwd -P' => ['exit_code' => 0, 'output' => " /home/coppering4tn \n"],
-            'whoami' => ['exit_code' => 0, 'output' => "  coppering4tn\n"],
-            "'option' 'get' 'home'" => ['exit_code' => 1, 'output' => "PHP warning containing {$secret}\nhttp://copperingots.uk/\n"],
-            "'option' 'get' 'siteurl'" => ['exit_code' => 0, 'output' => "http://copperingots.uk/\n"],
+            "'option' 'get' 'siteurl'" => ['exit_code' => 0, 'stdout' => "https://example.test/\n", 'stderr' => ''],
+            "'option' 'get' 'home'" => ['exit_code' => 0, 'stdout' => "https://wrong.test\n", 'stderr' => ''],
         ]);
-        Log::spy();
-        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
 
-        try {
-            $service->verify($this->server(), $this->account(), $secret, 'https://copperingots.uk');
-            $this->fail('Expected a genuine URL mismatch.');
-        } catch (RuntimeException $exception) {
-            $this->assertStringContainsString('Expected "https://copperingots.uk" but found "http://copperingots.uk/".', $exception->getMessage());
-        }
-
-        $this->assertContains('whoami', $runner->commands);
-        $this->assertContains('pwd -P', $runner->commands);
-        $this->assertContains('cd ~/public_html && pwd -P', $runner->commands);
-        $this->assertContains('cd ~/public_html && php -d disable_functions= "$(which wp)" \'option\' \'get\' \'siteurl\'', $runner->commands);
-        $this->assertContains('cd ~/public_html && php -d disable_functions= "$(which wp)" \'option\' \'get\' \'home\'', $runner->commands);
-
-        $expectedCommands = [
-            'whoami' => [0, 'coppering4tn'],
-            'pwd' => [0, '/home/coppering4tn'],
-            'public_html_pwd' => [0, '/home/coppering4tn/public_html'],
-            'siteurl' => [0, 'http://copperingots.uk/'],
-            'home' => [1, null],
-        ];
-        Log::shouldHaveReceived('info')->times(6)->withArgs(function ($message, $context) use ($secret, $expectedCommands) {
-            $this->assertStringNotContainsString($secret, json_encode($context));
-            if ($message === 'Temporary WordPress SSH command diagnostic.') {
-                $this->assertArrayHasKey($context['command_name'], $expectedCommands);
-                [$exitCode, $output] = $expectedCommands[$context['command_name']];
-                $this->assertSame($exitCode, $context['exit_code']);
-                if ($output !== null) $this->assertSame($output, $context['raw_output']);
-                else $this->assertStringContainsString('[REDACTED]', $context['raw_output']);
-                return true;
-            }
-
-            $this->assertSame('Temporary WordPress verification diagnostic.', $message);
-            $this->assertSame(['ssh_user', 'working_directory', 'siteurl', 'home', 'stderr_summary'], array_keys($context));
-            $this->assertSame('coppering4tn', $context['ssh_user']);
-            $this->assertSame('/home/coppering4tn/public_html', $context['working_directory']);
-            $this->assertSame('http://copperingots.uk/', $context['siteurl']);
-            $this->assertStringContainsString('http://copperingots.uk/', $context['home']);
-            $this->assertStringContainsString('[REDACTED]', $context['home']);
-            $this->assertStringContainsString('[REDACTED]', $context['stderr_summary']);
-            $this->assertLessThanOrEqual(300, mb_strlen($context['stderr_summary']));
-            return true;
-        });
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('installed home URL does not match');
+        (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+            ->verify($this->server(), $this->account(), 'not-logged', 'https://example.test');
     }
 
-    public function test_ssh_probe_returns_safe_success_and_safe_failure(): void
+    public function test_temporary_wordpress_verification_diagnostic_is_removed(): void
+    {
+        $source = file_get_contents(app_path('Services/Hosting/KrystalWordpressProvisioner.php'));
+
+        $this->assertStringNotContainsString('Temporary WordPress', $source);
+        $this->assertStringNotContainsString('whoami', $source);
+        $this->assertStringNotContainsString('working_directory', $source);
+        $this->assertStringNotContainsString('actual_siteurl', $source);
+    }
+
+    public function test_ssh_probe_requires_exact_sentinels(): void
     {
         $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
         $this->assertTrue($service->testSsh($this->server(), $this->account(), 'not-returned')['connected']);
-        $failed = new KrystalWordpressProvisioner(new RecordingSshRunner(['printf connected' => ['exit_code' => 1, 'output' => 'secret server output']]), new RecordingCpanelUapiClient);
-        try { $failed->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected failure.'); }
-        catch (RuntimeException $exception) { $this->assertSame('SSH connection failed. Check Shell Access and cPanel credentials.', $exception->getMessage()); }
+
+        $failed = new KrystalWordpressProvisioner(new RecordingSshRunner([
+            '__WEBSTAMP_CONNECTED__' => ['exit_code' => 0, 'stdout' => 'login succeeded without command execution', 'stderr' => ''],
+        ]), new RecordingCpanelUapiClient);
+        try { $failed->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected missing sentinel failure.'); }
+        catch (RuntimeException $exception) { $this->assertStringContainsString('could not execute shell commands', $exception->getMessage()); }
+    }
+
+    public function test_shell_disabled_output_is_rejected_even_with_exit_zero(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner([
+            '__WEBSTAMP_CONNECTED__' => ['exit_code' => 0, 'stdout' => 'Shell access is not enabled on your account! If you need shell access please contact support.', 'stderr' => ''],
+        ]), new RecordingCpanelUapiClient);
+
+        try { $service->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected disabled shell failure.'); }
+        catch (RuntimeException $exception) { $this->assertSame('Shell command execution is disabled for this cPanel account. Enable jailed shell access in WHM before retrying.', $exception->getMessage()); }
+    }
+
+    public function test_wp_cli_shell_disabled_output_is_rejected_centrally(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner([
+            "'option' 'get' 'siteurl'" => ['exit_code' => 0, 'stdout' => '', 'stderr' => 'If you need shell access please contact support'],
+        ]), new RecordingCpanelUapiClient);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Shell command execution is disabled');
+        $service->verify($this->server(), $this->account(), 'not-returned', 'https://example.test');
     }
 
     public function test_ssh_probe_checks_all_tools_needed_by_later_steps(): void
     {
-        $service = new KrystalWordpressProvisioner(new RecordingSshRunner(['for tool in php wp' => ['exit_code' => 1, 'output' => 'not returned']]), new RecordingCpanelUapiClient);
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner([
+            'for tool in php wp' => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'not returned'],
+        ]), new RecordingCpanelUapiClient);
         try { $service->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected missing tools failure.'); }
         catch (RuntimeException $exception) { $this->assertSame('SSH connected, but PHP or WP-CLI is unavailable for this account.', $exception->getMessage()); }
     }
@@ -304,7 +319,13 @@ class RecordingSshRunner implements SshCommandRunner
     {
         $this->commands[] = $command;
         foreach ($this->responses as $fragment => $response) if (str_contains($command, $fragment)) return $response;
-        return ['exit_code' => 0, 'output' => ''];
+        if (str_contains($command, '__WEBSTAMP_CONNECTED__')) {
+            return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_CONNECTED__', 'stderr' => ''];
+        }
+        if (str_contains($command, '__WEBSTAMP_TOOLS_READY__')) {
+            return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_TOOLS_READY__', 'stderr' => ''];
+        }
+        return ['exit_code' => 0, 'stdout' => '', 'stderr' => ''];
     }
 }
 
