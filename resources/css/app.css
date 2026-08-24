@@ -1493,6 +1493,21 @@ body[data-role="admin"] .admin-inline-only {
     margin-top: 4px;
 }
 
+.provisioning-run-card {
+    align-items: stretch;
+    flex-direction: column;
+}
+
+.provisioning-run-card .site-actions {
+    justify-content: flex-start;
+    width: 100%;
+}
+
+.provisioning-run-card .site-actions .btn {
+    width: max-content;
+    white-space: nowrap;
+}
+
 .admin-only {
     display: none;
 }
