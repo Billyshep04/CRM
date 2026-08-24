@@ -168,11 +168,64 @@ class KrystalWordpressProvisioner
     public function verify(HostingServer $server, HostingAccount $account, string $password, string $expectedUrl): array
     {
         $siteUrl = trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'siteurl']), 'WordPress verification failed.'));
-        if (rtrim($siteUrl, '/') !== rtrim($expectedUrl, '/')) throw new RuntimeException('WordPress verification failed because the installed site URL does not match.');
+        $diagnostic = $this->verificationDiagnostic($server, $account, $password);
+        Log::info('Temporary WordPress verification diagnostic.', $diagnostic);
+        if (rtrim($siteUrl, '/') !== rtrim($expectedUrl, '/')) {
+            $actualSiteUrl = $this->safeDiagnosticText($diagnostic['siteurl'] ?: $siteUrl, [
+                $password,
+                ...array_values(array_filter((array) ($server->credentials ?? []), 'is_scalar')),
+            ], 500);
+            throw new RuntimeException(
+                'WordPress verification failed because the installed site URL does not match. '
+                .'Expected "'.$expectedUrl.'" but found "'.$actualSiteUrl.'".'
+            );
+        }
         $this->execute($server, $account, $password, 'test -f public_html/wp-config.php', 'WordPress verification failed because wp-config.php is missing.');
         $tables = trim($this->execute($server, $account, $password, $this->wpCliCommand(['db', 'tables']), 'WordPress verification failed because its database tables are unavailable.'));
         if ($tables === '') throw new RuntimeException('WordPress verification failed because its database tables are unavailable.');
         return ['verified' => true, 'site_url' => $siteUrl];
+    }
+
+    private function verificationDiagnostic(HostingServer $server, HostingAccount $account, string $password): array
+    {
+        $siteUrlCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'siteurl']));
+        $homeCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'home']));
+        $command = <<<'SH'
+tmp=$(mktemp) || exit 1; trap 'rm -f "$tmp"' EXIT; ssh_user=''; working_directory=''; siteurl=''; home=''; { if cd ~/public_html; then ssh_user=$(whoami); working_directory=$(pwd -P); siteurl=$(__SITEURL__); home=$(__HOME__); fi; } 2>"$tmp"; printf '__WS_SSH_USER__%s\n' "$(printf '%s' "$ssh_user" | base64 | tr -d '\n')"; printf '__WS_WORKING_DIRECTORY__%s\n' "$(printf '%s' "$working_directory" | base64 | tr -d '\n')"; printf '__WS_SITEURL__%s\n' "$(printf '%s' "$siteurl" | base64 | tr -d '\n')"; printf '__WS_HOME__%s\n' "$(printf '%s' "$home" | base64 | tr -d '\n')"; printf '__WS_STDERR__%s\n' "$(base64 < "$tmp" | tr -d '\n')"
+SH;
+        $command = str_replace(['__SITEURL__', '__HOME__'], [$siteUrlCommand, $homeCommand], $command);
+        $result = $this->run($server, $account, $password, $command);
+        $values = collect([
+            'ssh_user' => '__WS_SSH_USER__',
+            'working_directory' => '__WS_WORKING_DIRECTORY__',
+            'siteurl' => '__WS_SITEURL__',
+            'home' => '__WS_HOME__',
+            'stderr_summary' => '__WS_STDERR__',
+        ])->mapWithKeys(function (string $marker, string $field) use ($result) {
+            preg_match('/^'.preg_quote($marker, '/').'([A-Za-z0-9+\/=]*)$/m', (string) ($result['output'] ?? ''), $matches);
+            $decoded = isset($matches[1]) ? base64_decode($matches[1], true) : false;
+            return [$field => trim($decoded === false ? '' : $decoded)];
+        })->all();
+
+        $secrets = collect([
+            $password,
+            ...array_values(array_filter((array) ($server->credentials ?? []), 'is_scalar')),
+        ])->map(fn ($value) => (string) $value)->filter()->values()->all();
+        $values['stderr_summary'] = $this->safeDiagnosticText($values['stderr_summary'], $secrets, 300);
+
+        return $values;
+    }
+
+    private function safeDiagnosticText(string $value, array $secrets, int $limit): string
+    {
+        $value = trim(strip_tags($value));
+        foreach ($secrets as $secret) {
+            if ($secret !== '') $value = str_replace($secret, '[REDACTED]', $value);
+        }
+        $value = preg_replace('/\b(password|token|authorization)\s*[:=]\s*\S+/i', '$1=[REDACTED]', $value) ?? '';
+        $value = preg_replace('/[\x00-\x1F\x7F]+/u', ' ', $value) ?? '';
+
+        return mb_substr(trim($value), 0, $limit);
     }
 
     public function wpCliCommand(array $arguments): string

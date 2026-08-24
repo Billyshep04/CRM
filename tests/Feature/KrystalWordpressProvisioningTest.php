@@ -14,6 +14,7 @@ use App\Services\Hosting\ProvisioningDnsService;
 use App\Services\Hosting\ProvisioningSslService;
 use App\Services\Hosting\ProvisioningHttpService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -163,6 +164,50 @@ class KrystalWordpressProvisioningTest extends TestCase
             $this->assertSame('The cPanel account has reached its MySQL database or user quota.', $exception->getMessage());
             $this->assertStringNotContainsString('database-secret', $exception->getMessage());
         }
+    }
+
+    public function test_verify_diagnostic_separates_stdout_from_sanitized_stderr_and_preserves_mismatch_failure(): void
+    {
+        $secret = 'never-log-this-cpanel-password';
+        $encoded = fn (string $value) => base64_encode($value);
+        $diagnosticOutput = implode("\n", [
+            '__WS_SSH_USER__'.$encoded("  coppering4tn\n"),
+            '__WS_WORKING_DIRECTORY__'.$encoded(" /home/coppering4tn/public_html \n"),
+            '__WS_SITEURL__'.$encoded("\nhttp://copperingots.uk/ \n"),
+            '__WS_HOME__'.$encoded(" http://copperingots.uk/\n"),
+            '__WS_STDERR__'.$encoded("PHP warning containing {$secret}\n"),
+        ]);
+        $runner = new RecordingSshRunner([
+            'tmp=$(mktemp)' => ['exit_code' => 0, 'output' => $diagnosticOutput],
+            "'option' 'get' 'siteurl'" => ['exit_code' => 0, 'output' => "http://copperingots.uk/\n"],
+        ]);
+        Log::spy();
+        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
+
+        try {
+            $service->verify($this->server(), $this->account(), $secret, 'https://copperingots.uk');
+            $this->fail('Expected a genuine URL mismatch.');
+        } catch (RuntimeException $exception) {
+            $this->assertStringContainsString('Expected "https://copperingots.uk" but found "http://copperingots.uk/".', $exception->getMessage());
+        }
+
+        $diagnosticCommand = collect($runner->commands)->first(fn ($command) => str_contains($command, 'tmp=$(mktemp)'));
+        $this->assertIsString($diagnosticCommand);
+        $this->assertSame(2, substr_count($diagnosticCommand, 'php -d disable_functions= "$(which wp)"'));
+
+        Log::shouldHaveReceived('info')->once()->withArgs(function ($message, $context) use ($secret) {
+            $this->assertSame('Temporary WordPress verification diagnostic.', $message);
+            $this->assertSame(['ssh_user', 'working_directory', 'siteurl', 'home', 'stderr_summary'], array_keys($context));
+            $this->assertSame('coppering4tn', $context['ssh_user']);
+            $this->assertSame('/home/coppering4tn/public_html', $context['working_directory']);
+            $this->assertSame('http://copperingots.uk/', $context['siteurl']);
+            $this->assertSame('http://copperingots.uk/', $context['home']);
+            $this->assertStringContainsString('[REDACTED]', $context['stderr_summary']);
+            $this->assertStringNotContainsString($secret, json_encode($context));
+            $this->assertLessThanOrEqual(300, mb_strlen($context['stderr_summary']));
+
+            return true;
+        });
     }
 
     public function test_ssh_probe_returns_safe_success_and_safe_failure(): void
