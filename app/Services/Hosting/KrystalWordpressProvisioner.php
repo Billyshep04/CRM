@@ -188,29 +188,43 @@ class KrystalWordpressProvisioner
 
     private function verificationDiagnostic(HostingServer $server, HostingAccount $account, string $password): array
     {
-        $siteUrlCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'siteurl']));
-        $homeCommand = str_replace('cd ~/public_html && ', '', $this->wpCliCommand(['option', 'get', 'home']));
-        $command = <<<'SH'
-tmp=$(mktemp) || exit 1; trap 'rm -f "$tmp"' EXIT; ssh_user=''; working_directory=''; siteurl=''; home=''; { if cd ~/public_html; then ssh_user=$(whoami); working_directory=$(pwd -P); siteurl=$(__SITEURL__); home=$(__HOME__); fi; } 2>"$tmp"; printf '__WS_SSH_USER_BEGIN__\n%s\n__WS_SSH_USER_END__\n' "$ssh_user"; printf '__WS_WORKING_DIRECTORY_BEGIN__\n%s\n__WS_WORKING_DIRECTORY_END__\n' "$working_directory"; printf '__WS_SITEURL_BEGIN__\n%s\n__WS_SITEURL_END__\n' "$siteurl"; printf '__WS_HOME_BEGIN__\n%s\n__WS_HOME_END__\n' "$home"; printf '__WS_STDERR_BEGIN__\n'; cat "$tmp"; printf '\n__WS_STDERR_END__\n'
-SH;
-        $command = str_replace(['__SITEURL__', '__HOME__'], [$siteUrlCommand, $homeCommand], $command);
-        $result = $this->run($server, $account, $password, $command);
-        $values = collect([
-            'ssh_user' => 'SSH_USER',
-            'working_directory' => 'WORKING_DIRECTORY',
-            'siteurl' => 'SITEURL',
-            'home' => 'HOME',
-            'stderr_summary' => 'STDERR',
-        ])->mapWithKeys(function (string $marker, string $field) use ($result) {
-            preg_match('/^__WS_'.preg_quote($marker, '/').'_BEGIN__\R(.*?)\R__WS_'.preg_quote($marker, '/').'_END__$/ms', (string) ($result['output'] ?? ''), $matches);
-            return [$field => trim((string) ($matches[1] ?? ''))];
-        })->all();
-
         $secrets = collect([
             $password,
             ...array_values(array_filter((array) ($server->credentials ?? []), 'is_scalar')),
         ])->map(fn ($value) => (string) $value)->filter()->values()->all();
-        $values['stderr_summary'] = $this->safeDiagnosticText($values['stderr_summary'], $secrets, 300);
+
+        $commands = [
+            'whoami' => 'whoami',
+            'pwd' => 'pwd -P',
+            'public_html_pwd' => 'cd ~/public_html && pwd -P',
+            'siteurl' => $this->wpCliCommand(['option', 'get', 'siteurl']),
+            'home' => $this->wpCliCommand(['option', 'get', 'home']),
+        ];
+        $results = [];
+        foreach ($commands as $name => $command) {
+            $result = $this->run($server, $account, $password, $command);
+            $results[$name] = [
+                'exit_code' => (int) ($result['exit_code'] ?? 1),
+                'raw_output' => $this->safeDiagnosticText((string) ($result['output'] ?? ''), $secrets, 500),
+            ];
+            Log::info('Temporary WordPress SSH command diagnostic.', [
+                'command_name' => $name,
+                ...$results[$name],
+            ]);
+        }
+
+        $failures = collect($results)
+            ->filter(fn (array $result) => $result['exit_code'] !== 0)
+            ->map(fn (array $result, string $name) => $name.': '.$result['raw_output'])
+            ->implode(' | ');
+
+        $values = [
+            'ssh_user' => $results['whoami']['raw_output'],
+            'working_directory' => $results['public_html_pwd']['raw_output'],
+            'siteurl' => $results['siteurl']['raw_output'],
+            'home' => $results['home']['raw_output'],
+            'stderr_summary' => $this->safeDiagnosticText($failures, $secrets, 300),
+        ];
 
         return $values;
     }

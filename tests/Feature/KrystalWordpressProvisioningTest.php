@@ -166,18 +166,14 @@ class KrystalWordpressProvisioningTest extends TestCase
         }
     }
 
-    public function test_verify_diagnostic_separates_stdout_from_sanitized_stderr_and_preserves_mismatch_failure(): void
+    public function test_verify_diagnostic_logs_individual_real_ssh_results_and_preserves_mismatch_failure(): void
     {
         $secret = 'never-log-this-cpanel-password';
-        $diagnosticOutput = implode("\n", [
-            '__WS_SSH_USER_BEGIN__', "  coppering4tn ", '__WS_SSH_USER_END__',
-            '__WS_WORKING_DIRECTORY_BEGIN__', ' /home/coppering4tn/public_html ', '__WS_WORKING_DIRECTORY_END__',
-            '__WS_SITEURL_BEGIN__', ' http://copperingots.uk/ ', '__WS_SITEURL_END__',
-            '__WS_HOME_BEGIN__', ' http://copperingots.uk/ ', '__WS_HOME_END__',
-            '__WS_STDERR_BEGIN__', "PHP warning containing {$secret}", '__WS_STDERR_END__',
-        ]);
         $runner = new RecordingSshRunner([
-            'tmp=$(mktemp)' => ['exit_code' => 0, 'output' => $diagnosticOutput],
+            'cd ~/public_html && pwd -P' => ['exit_code' => 0, 'output' => " /home/coppering4tn/public_html \n"],
+            'pwd -P' => ['exit_code' => 0, 'output' => " /home/coppering4tn \n"],
+            'whoami' => ['exit_code' => 0, 'output' => "  coppering4tn\n"],
+            "'option' 'get' 'home'" => ['exit_code' => 1, 'output' => "PHP warning containing {$secret}\nhttp://copperingots.uk/\n"],
             "'option' 'get' 'siteurl'" => ['exit_code' => 0, 'output' => "http://copperingots.uk/\n"],
         ]);
         Log::spy();
@@ -190,27 +186,39 @@ class KrystalWordpressProvisioningTest extends TestCase
             $this->assertStringContainsString('Expected "https://copperingots.uk" but found "http://copperingots.uk/".', $exception->getMessage());
         }
 
-        $diagnosticCommand = collect($runner->commands)->first(fn ($command) => str_contains($command, 'tmp=$(mktemp)'));
-        $this->assertIsString($diagnosticCommand);
-        $this->assertSame(2, substr_count($diagnosticCommand, 'php -d disable_functions= "$(which wp)"'));
-        $this->assertStringContainsString("printf '__WS_SITEURL_BEGIN__\\n%s\\n__WS_SITEURL_END__\\n'", $diagnosticCommand);
-        $this->assertStringContainsString("printf '__WS_HOME_BEGIN__\\n%s\\n__WS_HOME_END__\\n'", $diagnosticCommand);
-        $this->assertStringContainsString('cat "$tmp"', $diagnosticCommand);
-        $this->assertStringNotContainsString('base64', $diagnosticCommand);
-        $this->assertStringNotContainsString('siteurl=$(__SITEURL__)', $diagnosticCommand);
-        $this->assertStringNotContainsString('home=$(__HOME__)', $diagnosticCommand);
+        $this->assertContains('whoami', $runner->commands);
+        $this->assertContains('pwd -P', $runner->commands);
+        $this->assertContains('cd ~/public_html && pwd -P', $runner->commands);
+        $this->assertContains('cd ~/public_html && php -d disable_functions= "$(which wp)" \'option\' \'get\' \'siteurl\'', $runner->commands);
+        $this->assertContains('cd ~/public_html && php -d disable_functions= "$(which wp)" \'option\' \'get\' \'home\'', $runner->commands);
 
-        Log::shouldHaveReceived('info')->once()->withArgs(function ($message, $context) use ($secret) {
+        $expectedCommands = [
+            'whoami' => [0, 'coppering4tn'],
+            'pwd' => [0, '/home/coppering4tn'],
+            'public_html_pwd' => [0, '/home/coppering4tn/public_html'],
+            'siteurl' => [0, 'http://copperingots.uk/'],
+            'home' => [1, null],
+        ];
+        Log::shouldHaveReceived('info')->times(6)->withArgs(function ($message, $context) use ($secret, $expectedCommands) {
+            $this->assertStringNotContainsString($secret, json_encode($context));
+            if ($message === 'Temporary WordPress SSH command diagnostic.') {
+                $this->assertArrayHasKey($context['command_name'], $expectedCommands);
+                [$exitCode, $output] = $expectedCommands[$context['command_name']];
+                $this->assertSame($exitCode, $context['exit_code']);
+                if ($output !== null) $this->assertSame($output, $context['raw_output']);
+                else $this->assertStringContainsString('[REDACTED]', $context['raw_output']);
+                return true;
+            }
+
             $this->assertSame('Temporary WordPress verification diagnostic.', $message);
             $this->assertSame(['ssh_user', 'working_directory', 'siteurl', 'home', 'stderr_summary'], array_keys($context));
             $this->assertSame('coppering4tn', $context['ssh_user']);
             $this->assertSame('/home/coppering4tn/public_html', $context['working_directory']);
             $this->assertSame('http://copperingots.uk/', $context['siteurl']);
-            $this->assertSame('http://copperingots.uk/', $context['home']);
+            $this->assertStringContainsString('http://copperingots.uk/', $context['home']);
+            $this->assertStringContainsString('[REDACTED]', $context['home']);
             $this->assertStringContainsString('[REDACTED]', $context['stderr_summary']);
-            $this->assertStringNotContainsString($secret, json_encode($context));
             $this->assertLessThanOrEqual(300, mb_strlen($context['stderr_summary']));
-
             return true;
         });
     }
