@@ -217,9 +217,6 @@ class KrystalWhmProvider implements HostingProviderInterface
             'password' => $data['password'],
             'plan' => $data['package_name'],
         ];
-        if (($data['shell_access'] ?? false) === true) {
-            $query['hasshell'] = 1;
-        }
         try {
             $response = $this->call(
                 $server,
@@ -263,6 +260,8 @@ class KrystalWhmProvider implements HostingProviderInterface
             'domain' => $domain,
             'proposed_username' => $proposedUsername,
             'authoritative_username' => $authoritative['username'],
+            'requested_package' => $data['package_name'],
+            'assigned_package' => $authoritative['package_name'] ?? null,
         ]);
 
         return [

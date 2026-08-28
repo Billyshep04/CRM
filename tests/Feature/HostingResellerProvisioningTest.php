@@ -51,7 +51,7 @@ class HostingResellerProvisioningTest extends TestCase {
  public function test_production_rejects_mock_provisioning_instead_of_claiming_success():void{$original=$this->app['env'];$this->app['env']='production';config(['hosting.provisioning_mode'=>'mock']);try{$admin=$this->user('admin');$customer=$this->customer();[$server,$package]=$this->hosting();$this->actingAs($admin)->postJson('/api/website-provisioning',$this->payload($customer,$server,$package,'never-fake.test'))->assertUnprocessable()->assertJsonValidationErrors('provisioning');$this->assertDatabaseCount('websites',0);}finally{$this->app['env']=$original;}}
  public function test_whm_verification_requires_the_exact_subdomain_and_assigned_ip():void{Http::fake(['https://whm.example.test:2087/json-api/listaccts*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'dev4site','domain'=>'other.web-stamp.co.uk','ip'=>'1.2.3.4','suspended'=>0]]]])]);$server=HostingServer::create(['name'=>'Krystal','api_type'=>'whm','hostname'=>'whm.example.test','credentials'=>['username'=>'reseller','token'=>'secret']]);$account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'dev4site','username'=>'dev4site','primary_domain'=>'dev4.web-stamp.co.uk','status'=>'pending']);$this->expectException(\RuntimeException::class);$this->expectExceptionMessage('not visible in WHM');app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAccount($server,$account);}
 
- public function test_whm_package_shell_access_is_refreshed_and_requested_during_account_creation():void
+ public function test_whm_package_shell_access_is_refreshed_and_package_controls_account_creation():void
  {
   $created=false;
   Http::fake(function($request)use(&$created){if(str_contains($request->url(),'/listpkgs'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>'1']]]]);if(str_contains($request->url(),'/listaccts'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>$created?[['user'=>'newsite','domain'=>'newsite.test','ip'=>'1.2.3.4','plan'=>'Standard','suspended'=>0]]:[]]]);if(str_contains($request->url(),'/createacct')){$created=true;return Http::response(['metadata'=>['result'=>1,'reason'=>'Account created'],'data'=>['ip'=>'1.2.3.4']]);}return Http::response([],404);});
@@ -59,7 +59,7 @@ class HostingResellerProvisioningTest extends TestCase {
   $provider=app(\App\Services\Hosting\KrystalWhmProvider::class);
   $this->assertTrue($provider->packages($server)[0]['shell_access']);
   $provider->createAccount($server,['username'=>'newsite','domain'=>'newsite.test','password'=>'not-logged','package_name'=>'Standard','shell_access'=>true]);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['hasshell']===1);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&!array_key_exists('hasshell',$request->data()));
  }
  public function test_whm_confirms_existing_jailed_shell_without_modifying_account():void
  {
@@ -186,7 +186,7 @@ class HostingResellerProvisioningTest extends TestCase {
   $this->assertTrue($package->fresh()->shell_access);
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'validate_prerequisites','status'=>'complete','attempts'=>2]);
   $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'failed_step'=>'create_cpanel_account']);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['hasshell']===1);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&!array_key_exists('hasshell',$request->data()));
  }
  public function test_shell_enablement_failure_stops_at_connect_ssh_before_wordpress_commands():void
  {
