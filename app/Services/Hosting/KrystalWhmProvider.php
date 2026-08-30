@@ -217,6 +217,9 @@ class KrystalWhmProvider implements HostingProviderInterface
             'password' => $data['password'],
             'plan' => $data['package_name'],
         ];
+        if (($data['shell_access'] ?? false) === true) {
+            $query['hasshell'] = 1;
+        }
         try {
             $response = $this->call(
                 $server,
@@ -317,6 +320,14 @@ class KrystalWhmProvider implements HostingProviderInterface
         }
         if ($shell === self::JAILSHELL) {
             return ['shell' => $shell, 'changed' => false];
+        }
+
+        if ($shell !== '' && ! str_ends_with($shell, '/noshell')) {
+            Log::warning('WHM assigned unrestricted shell; jailed shell correction required.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+                'reported_shell' => $shell,
+            ]);
         }
 
         Log::info('WHM jailed shell assignment requested.', [
