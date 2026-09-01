@@ -219,6 +219,7 @@ class KrystalWhmProvider implements HostingProviderInterface
         ];
         if (($data['shell_access'] ?? false) === true) {
             $query['hasshell'] = 1;
+            $query['shell'] = self::JAILSHELL;
         }
         try {
             $response = $this->call(

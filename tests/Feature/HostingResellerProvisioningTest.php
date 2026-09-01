@@ -59,7 +59,7 @@ class HostingResellerProvisioningTest extends TestCase {
   $provider=app(\App\Services\Hosting\KrystalWhmProvider::class);
   $this->assertTrue($provider->packages($server)[0]['shell_access']);
   $provider->createAccount($server,['username'=>'newsite','domain'=>'newsite.test','password'=>'not-logged','package_name'=>'Standard','shell_access'=>true]);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
  }
  public function test_whm_confirms_existing_jailed_shell_without_modifying_account():void
  {
@@ -196,7 +196,7 @@ class HostingResellerProvisioningTest extends TestCase {
   $this->assertTrue($package->fresh()->shell_access);
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'validate_prerequisites','status'=>'complete','attempts'=>2]);
   $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'failed_step'=>'create_cpanel_account']);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1);
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
  }
  public function test_shell_enablement_failure_stops_at_connect_ssh_before_wordpress_commands():void
  {
