@@ -314,7 +314,8 @@ class KrystalWhmProvider implements HostingProviderInterface
                 'hosting_account_id' => $account->id,
                 'username' => $account->username,
             ]);
-            throw new RuntimeException($this->shellAccessFailure($account));
+
+            return ['shell' => null, 'changed' => false, 'inspection' => 'unavailable'];
         }
         if ($this->isDisabledShell($shell)) {
             Log::warning('WHM reported unusable shell access.', [

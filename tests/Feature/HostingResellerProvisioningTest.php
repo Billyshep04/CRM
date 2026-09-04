@@ -92,6 +92,15 @@ class HostingResellerProvisioningTest extends TestCase {
   try{app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);$this->fail('Expected disabled shell failure.');}catch(\RuntimeException $exception){$this->assertStringContainsString('Usable SSH access could not be confirmed',$exception->getMessage());$this->assertStringContainsString('ask Krystal',$exception->getMessage());$this->assertStringNotContainsString($token,$exception->getMessage());}
   Log::shouldHaveReceived('warning')->withArgs(fn($message,$context)=>$message==='WHM reported unusable shell access.'&&!str_contains(json_encode($context),$token));
  }
+ public function test_whm_shell_inspection_permission_denial_defers_to_the_real_ssh_check():void
+ {
+  $token='never-log-inspection-token';Log::spy();
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>0,'reason'=>'Permission denied']])]);
+  $server=$this->whmServer($token);$account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'newclient','username'=>'newclient','primary_domain'=>'newclient.test','status'=>'active']);
+  $result=app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);
+  $this->assertNull($result['shell']);$this->assertFalse($result['changed']);$this->assertSame('unavailable',$result['inspection']);
+  Log::shouldHaveReceived('warning')->once()->withArgs(fn($message,$context)=>$message==='WHM shell state could not be inspected.'&&!str_contains(json_encode($context),$token));
+ }
  public function test_whm_account_creation_reconciles_an_account_created_after_an_earlier_timeout():void
  {
   Http::fake(['https://whm.example.test:2087/json-api/listaccts*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'recovered1','domain'=>'recovered.test','ip'=>'1.2.3.4','plan'=>'Standard','suspended'=>0]]]])]);
@@ -230,6 +239,25 @@ class HostingResellerProvisioningTest extends TestCase {
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'download_wordpress','status'=>'pending']);
   $this->assertCount(1,$ssh->commands);
   $this->assertStringContainsString('__WEBSTAMP_CONNECTED__',$ssh->commands[0]);
+ }
+ public function test_accountsummary_permission_denial_allows_connect_ssh_when_real_sentinels_succeed():void
+ {
+  config(['hosting.provisioning_mode'=>'live','hosting.allow_live_provisioning'=>true]);
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>0,'reason'=>'Permission denied']])]);
+  $ssh=new class implements \App\Contracts\SshCommandRunner { public array $commands=[];public function run(HostingServer $server,HostingAccount $account,string $password,string $command,int $timeout=60):array{$this->commands[]=$command;$stdout=str_contains($command,'__WEBSTAMP_CONNECTED__')?'__WEBSTAMP_CONNECTED__':'__WEBSTAMP_TOOLS_READY__';return['exit_code'=>0,'stdout'=>$stdout,'stderr'=>''];} };
+  $this->app->instance(\App\Contracts\SshCommandRunner::class,$ssh);
+  $admin=$this->user('admin');$customer=$this->customer();$server=$this->whmServer();
+  $package=HostingPackage::create(['hosting_server_id'=>$server->id,'external_id'=>'Standard','name'=>'Standard','shell_access'=>true]);
+  $website=\App\Models\Website::create(['customer_id'=>$customer->id,'hosting_server_id'=>$server->id,'name'=>'Shell permitted','domain'=>'shell-permitted.test','login_url'=>'https://shell-permitted.test/wp-admin/','environment'=>'production','wordpress_enabled'=>true,'management_enabled'=>true,'hosting_enabled'=>true,'provisioning_status'=>'pending','status'=>'unknown','portal_visibility'=>\App\Models\Website::defaultPortalVisibility()]);
+  $account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'shellpermitted','username'=>'shellpermitted','primary_domain'=>'shell-permitted.test','status'=>'active']);
+  $run=\App\Models\WebsiteProvisioningRun::create(['public_id'=>(string)\Illuminate\Support\Str::uuid(),'website_id'=>$website->id,'hosting_server_id'=>$server->id,'hosting_package_id'=>$package->id,'hosting_account_id'=>$account->id,'initiated_by_user_id'=>$admin->id,'idempotency_key'=>(string)\Illuminate\Support\Str::uuid(),'domain'=>'shell-permitted.test','mode'=>'live','website_type'=>'wordpress','secrets_encrypted'=>['cpanel_password'=>'not-returned']]);
+  $run->steps()->create(['step'=>'connect_ssh']);
+  app(\App\Services\Hosting\WebsiteProvisioner::class)->process($run->fresh());
+  $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'state'=>'complete','failed_step'=>null]);
+  $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'connect_ssh','status'=>'complete']);
+  $this->assertCount(2,$ssh->commands);
+  $this->assertStringContainsString('__WEBSTAMP_CONNECTED__',$ssh->commands[0]);
+  $this->assertStringContainsString('__WEBSTAMP_TOOLS_READY__',$ssh->commands[1]);
  }
  public function test_controlled_shell_recovery_resets_only_ssh_dependent_steps_and_preserves_database_state():void
  {
