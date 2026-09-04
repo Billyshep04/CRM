@@ -20,7 +20,7 @@ class KrystalWordpressProvisioner
     public function validatePrerequisites(HostingPackage $package, bool $live, ?HostingServer $server = null): array
     {
         if ($live && $package->shell_access === false) {
-            throw new RuntimeException('WordPress provisioning cannot continue because Shell Access is not enabled for the selected hosting package.');
+            throw new RuntimeException('WordPress provisioning cannot continue because usable SSH access is not enabled for the selected hosting package.');
         }
         $fingerprint = trim((string) ($server?->metadata['ssh_host_fingerprint'] ?? config('hosting.ssh.host_fingerprint')));
         if ($live && (! class_exists(SSH2::class) || ! class_exists(PublicKeyLoader::class))) {
@@ -41,9 +41,9 @@ class KrystalWordpressProvisioner
 
     public function testSsh(HostingServer $server, HostingAccount $account, string $password): array
     {
-        $connected = trim($this->execute($server, $account, $password, "printf '__WEBSTAMP_CONNECTED__'", 'SSH connection failed. Check Shell Access and cPanel credentials.'));
+        $connected = trim($this->execute($server, $account, $password, "printf '__WEBSTAMP_CONNECTED__'", 'SSH connection failed. Check usable SSH access and cPanel credentials.'));
         if ($connected !== '__WEBSTAMP_CONNECTED__') {
-            throw new RuntimeException('SSH connection failed because the account could not execute shell commands. Check jailed shell access in WHM.');
+            throw new RuntimeException('SSH connection failed because the account could not execute shell commands. Check usable SSH access in WHM.');
         }
         $tools = trim($this->execute(
             $server,
@@ -239,7 +239,7 @@ class KrystalWordpressProvisioner
         if (str_contains($combined, 'shell access is not enabled on your account')
             || str_contains($combined, 'if you need shell access please contact support')
             || str_contains($combined, '/usr/local/cpanel/bin/noshell')) {
-            throw new RuntimeException('Shell command execution is disabled for this cPanel account. Enable jailed shell access in WHM before retrying.');
+            throw new RuntimeException('Shell command execution is disabled for this cPanel account. Enable usable SSH access in WHM before retrying.');
         }
 
         return [

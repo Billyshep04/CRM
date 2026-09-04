@@ -59,42 +59,38 @@ class HostingResellerProvisioningTest extends TestCase {
   $provider=app(\App\Services\Hosting\KrystalWhmProvider::class);
   $this->assertTrue($provider->packages($server)[0]['shell_access']);
   $provider->createAccount($server,['username'=>'newsite','domain'=>'newsite.test','password'=>'not-logged','package_name'=>'Standard','shell_access'=>true]);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&!isset($request['shell']));
  }
- public function test_whm_confirms_existing_jailed_shell_without_modifying_account():void
+ public function test_whm_accepts_existing_jailed_shell_without_modifying_account():void
  {
   Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/usr/local/cpanel/bin/jailshell']]]])]);
   [$server,$account]=$this->whmUapiAccount();
-  $result=app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureJailedShell($server,$account);
+  $result=app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);
   $this->assertSame('/usr/local/cpanel/bin/jailshell',$result['shell']);$this->assertFalse($result['changed']);
   Http::assertNotSent(fn($request)=>str_contains($request->url(),'/modifyacct'));
  }
- public function test_whm_changes_noshell_to_jailed_shell_and_confirms_it():void
+ public function test_whm_rejects_noshell_without_attempting_shell_conversion():void
  {
-  $summaryCalls=0;
-  Http::fake(function($request)use(&$summaryCalls){if(str_contains($request->url(),'/accountsummary')){$summaryCalls++;$shell=$summaryCalls===1?'/usr/local/cpanel/bin/noshell':'/usr/local/cpanel/bin/jailshell';return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>$shell]]]]);}if(str_contains($request->url(),'/modifyacct'))return Http::response(['metadata'=>['result'=>1,'reason'=>'Account modified']]);return Http::response([],404);});
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/usr/local/cpanel/bin/noshell']]]])]);
   [$server,$account]=$this->whmUapiAccount();
-  $result=app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureJailedShell($server,$account);
-  $this->assertTrue($result['changed']);$this->assertSame('/usr/local/cpanel/bin/jailshell',$result['shell']);$this->assertSame(2,$summaryCalls);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/modifyacct')&&$request['user']==='newclient'&&$request['HASSHELL']===1&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
+  try{app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);$this->fail('Expected disabled shell rejection.');}catch(\RuntimeException $exception){$this->assertStringContainsString('Usable SSH access could not be confirmed',$exception->getMessage());}
+  Http::assertNotSent(fn($request)=>str_contains($request->url(),'/modifyacct'));
  }
- public function test_whm_does_not_treat_unrestricted_shell_as_jailed_shell():void
+ public function test_whm_accepts_valid_normal_cloudlinux_shell_without_modifying_account():void
  {
-  Log::spy();$summaryCalls=0;
-  Http::fake(function($request)use(&$summaryCalls){if(str_contains($request->url(),'/accountsummary')){$summaryCalls++;return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/bin/bash']]]]);}if(str_contains($request->url(),'/modifyacct'))return Http::response(['metadata'=>['result'=>1,'reason'=>'Account modified']]);return Http::response([],404);});
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/bin/bash']]]])]);
   [$server,$account]=$this->whmUapiAccount();
-  try{app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureJailedShell($server,$account);$this->fail('Expected unrestricted shell rejection.');}catch(\RuntimeException $exception){$this->assertStringContainsString('Jailed shell is required',$exception->getMessage());}
-  $this->assertSame(2,$summaryCalls);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/modifyacct')&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
-  Log::shouldHaveReceived('warning')->withArgs(fn($message,$context)=>$message==='WHM assigned unrestricted shell; jailed shell correction required.'&&$context['reported_shell']==='/bin/bash');
+  $result=app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);
+  $this->assertSame('/bin/bash',$result['shell']);$this->assertFalse($result['changed']);
+  Http::assertNotSent(fn($request)=>str_contains($request->url(),'/modifyacct'));
  }
- public function test_whm_shell_permission_denial_returns_actionable_error_without_secrets():void
+ public function test_whm_disabled_shell_returns_actionable_error_without_secrets():void
  {
   $token='never-log-shell-token';Log::spy();
-  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/usr/local/cpanel/bin/noshell']]]]),'https://whm.example.test:2087/json-api/modifyacct*'=>Http::response(['metadata'=>['result'=>0,'reason'=>'Permission denied']])]);
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'newclient','shell'=>'/usr/sbin/nologin']]]])]);
   $server=$this->whmServer($token);$account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'newclient','username'=>'newclient','primary_domain'=>'newclient.test','status'=>'active']);
-  try{app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureJailedShell($server,$account);$this->fail('Expected shell permission failure.');}catch(\RuntimeException $exception){$this->assertStringContainsString('Jailed shell is required',$exception->getMessage());$this->assertStringContainsString('ask Krystal',$exception->getMessage());$this->assertStringNotContainsString($token,$exception->getMessage());}
-  Log::shouldHaveReceived('warning')->withArgs(fn($message,$context)=>$message==='WHM jailed shell assignment denied.'&&!str_contains(json_encode($context),$token));
+  try{app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyUsableShell($server,$account);$this->fail('Expected disabled shell failure.');}catch(\RuntimeException $exception){$this->assertStringContainsString('Usable SSH access could not be confirmed',$exception->getMessage());$this->assertStringContainsString('ask Krystal',$exception->getMessage());$this->assertStringNotContainsString($token,$exception->getMessage());}
+  Log::shouldHaveReceived('warning')->withArgs(fn($message,$context)=>$message==='WHM reported unusable shell access.'&&!str_contains(json_encode($context),$token));
  }
  public function test_whm_account_creation_reconciles_an_account_created_after_an_earlier_timeout():void
  {
@@ -196,12 +192,12 @@ class HostingResellerProvisioningTest extends TestCase {
   $this->assertTrue($package->fresh()->shell_access);
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'validate_prerequisites','status'=>'complete','attempts'=>2]);
   $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'failed_step'=>'create_cpanel_account']);
-  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&$request['shell']==='/usr/local/cpanel/bin/jailshell');
+  Http::assertSent(fn($request)=>str_contains($request->url(),'/createacct')&&$request['plan']==='Standard'&&$request['hasshell']===1&&!isset($request['shell']));
  }
  public function test_shell_enablement_failure_stops_at_connect_ssh_before_wordpress_commands():void
  {
   config(['hosting.provisioning_mode'=>'live','hosting.allow_live_provisioning'=>true]);
-  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'shellblocked','shell'=>'/usr/local/cpanel/bin/noshell']]]]),'https://whm.example.test:2087/json-api/modifyacct*'=>Http::response(['metadata'=>['result'=>0,'reason'=>'Permission denied']])]);
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'shellblocked','shell'=>'/usr/local/cpanel/bin/noshell']]]])]);
   $ssh=new class implements \App\Contracts\SshCommandRunner { public array $commands=[];public function run(HostingServer $server,HostingAccount $account,string $password,string $command,int $timeout=60):array{$this->commands[]=$command;return['exit_code'=>0,'stdout'=>'__WEBSTAMP_CONNECTED__','stderr'=>''];} };
   $this->app->instance(\App\Contracts\SshCommandRunner::class,$ssh);
   $admin=$this->user('admin');$customer=$this->customer();$server=$this->whmServer();
@@ -215,6 +211,25 @@ class HostingResellerProvisioningTest extends TestCase {
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'connect_ssh','status'=>'failed']);
   $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'download_wordpress','status'=>'pending']);
   $this->assertSame([],$ssh->commands);
+ }
+ public function test_reported_normal_shell_still_stops_at_connect_ssh_when_sentinel_fails():void
+ {
+  config(['hosting.provisioning_mode'=>'live','hosting.allow_live_provisioning'=>true]);
+  Http::fake(['https://whm.example.test:2087/json-api/accountsummary*'=>Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>'shelltest','shell'=>'/bin/bash']]]])]);
+  $ssh=new class implements \App\Contracts\SshCommandRunner { public array $commands=[];public function run(HostingServer $server,HostingAccount $account,string $password,string $command,int $timeout=60):array{$this->commands[]=$command;return['exit_code'=>0,'stdout'=>'login succeeded without command execution','stderr'=>''];} };
+  $this->app->instance(\App\Contracts\SshCommandRunner::class,$ssh);
+  $admin=$this->user('admin');$customer=$this->customer();$server=$this->whmServer();
+  $package=HostingPackage::create(['hosting_server_id'=>$server->id,'external_id'=>'Standard','name'=>'Standard','shell_access'=>true]);
+  $website=\App\Models\Website::create(['customer_id'=>$customer->id,'hosting_server_id'=>$server->id,'name'=>'Shell test','domain'=>'shell-test.test','login_url'=>'https://shell-test.test/wp-admin/','environment'=>'production','wordpress_enabled'=>true,'management_enabled'=>true,'hosting_enabled'=>true,'provisioning_status'=>'pending','status'=>'unknown','portal_visibility'=>\App\Models\Website::defaultPortalVisibility()]);
+  $account=HostingAccount::create(['hosting_server_id'=>$server->id,'external_id'=>'shelltest','username'=>'shelltest','primary_domain'=>'shell-test.test','status'=>'active']);
+  $run=\App\Models\WebsiteProvisioningRun::create(['public_id'=>(string)\Illuminate\Support\Str::uuid(),'website_id'=>$website->id,'hosting_server_id'=>$server->id,'hosting_package_id'=>$package->id,'hosting_account_id'=>$account->id,'initiated_by_user_id'=>$admin->id,'idempotency_key'=>(string)\Illuminate\Support\Str::uuid(),'domain'=>'shell-test.test','mode'=>'live','website_type'=>'wordpress','secrets_encrypted'=>['cpanel_password'=>'not-returned']]);
+  foreach(['connect_ssh','download_wordpress','create_wp_config']as$step)$run->steps()->create(['step'=>$step]);
+  app(\App\Services\Hosting\WebsiteProvisioner::class)->process($run->fresh());
+  $this->assertDatabaseHas('website_provisioning_runs',['id'=>$run->id,'state'=>'failed','failed_step'=>'connect_ssh']);
+  $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'connect_ssh','status'=>'failed']);
+  $this->assertDatabaseHas('website_provisioning_steps',['website_provisioning_run_id'=>$run->id,'step'=>'download_wordpress','status'=>'pending']);
+  $this->assertCount(1,$ssh->commands);
+  $this->assertStringContainsString('__WEBSTAMP_CONNECTED__',$ssh->commands[0]);
  }
  public function test_controlled_shell_recovery_resets_only_ssh_dependent_steps_and_preserves_database_state():void
  {
@@ -238,7 +253,7 @@ class HostingResellerProvisioningTest extends TestCase {
  {
   config(['hosting.provisioning_mode'=>'live','hosting.allow_live_provisioning'=>true]);
   $createdUsername=null;
-  Http::fake(function($request)use(&$createdUsername){$url=$request->url();if(str_contains($url,'/listpkgs'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>1]]]]);if(str_contains($url,'/listaccts'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>$createdUsername?[['user'=>$createdUsername,'domain'=>'pipeline.test','ip'=>'1.2.3.4','plan'=>'Standard','suspended'=>0]]:[]]]);if(str_contains($url,'/accountsummary'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>$createdUsername,'shell'=>'/usr/local/cpanel/bin/jailshell']]]]);if(str_contains($url,'/createacct')){$createdUsername=$request['username'];return Http::response(['metadata'=>['result'=>1,'reason'=>'Account created'],'data'=>['ip'=>'1.2.3.4']]);}if(str_contains($url,'/json-api/uapi_cpanel')){$data=$request['cpanel.function']==='get_restrictions'?['prefix'=>'pipeline_','max_database_name_length'=>64,'max_username_length'=>32]:null;return Http::response(['metadata'=>['reason'=>'OK','command'=>'uapi_cpanel','result'=>1,'version'=>1],'data'=>['uapi'=>['status'=>1,'messages'=>null,'errors'=>null,'metadata'=>[],'warnings'=>null,'data'=>$data]]]);}if(str_starts_with($url,'http://pipeline.test/'))return Http::response('',301,['Location'=>'https://pipeline.test/']);if(str_starts_with($url,'https://pipeline.test/'))return Http::response('',200);return Http::response([],404);});
+  Http::fake(function($request)use(&$createdUsername){$url=$request->url();if(str_contains($url,'/listpkgs'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['pkg'=>[['name'=>'Standard','HASSHELL'=>1]]]]);if(str_contains($url,'/listaccts'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>$createdUsername?[['user'=>$createdUsername,'domain'=>'pipeline.test','ip'=>'1.2.3.4','plan'=>'Standard','suspended'=>0]]:[]]]);if(str_contains($url,'/accountsummary'))return Http::response(['metadata'=>['result'=>1,'reason'=>'OK'],'data'=>['acct'=>[['user'=>$createdUsername,'shell'=>'/bin/bash']]]]);if(str_contains($url,'/createacct')){$createdUsername=$request['username'];return Http::response(['metadata'=>['result'=>1,'reason'=>'Account created'],'data'=>['ip'=>'1.2.3.4']]);}if(str_contains($url,'/json-api/uapi_cpanel')){$data=$request['cpanel.function']==='get_restrictions'?['prefix'=>'pipeline_','max_database_name_length'=>64,'max_username_length'=>32]:null;return Http::response(['metadata'=>['reason'=>'OK','command'=>'uapi_cpanel','result'=>1,'version'=>1],'data'=>['uapi'=>['status'=>1,'messages'=>null,'errors'=>null,'metadata'=>[],'warnings'=>null,'data'=>$data]]]);}if(str_starts_with($url,'http://pipeline.test/'))return Http::response('',301,['Location'=>'https://pipeline.test/']);if(str_starts_with($url,'https://pipeline.test/'))return Http::response('',200);return Http::response([],404);});
   $ssh=new class implements \App\Contracts\SshCommandRunner { public array $commands=[];private int $configChecks=0;public function run(HostingServer $server,HostingAccount $account,string $password,string $command,int $timeout=60):array{$this->commands[]=$command;if(str_contains($command,'__WEBSTAMP_CONNECTED__'))return['exit_code'=>0,'stdout'=>'__WEBSTAMP_CONNECTED__','stderr'=>''];if(str_contains($command,'__WEBSTAMP_TOOLS_READY__'))return['exit_code'=>0,'stdout'=>'__WEBSTAMP_TOOLS_READY__','stderr'=>''];if(str_contains($command,"'option' 'get' 'siteurl'")||str_contains($command,"'option' 'get' 'home'"))return['exit_code'=>0,'stdout'=>'https://pipeline.test','stderr'=>''];if(str_contains($command,"'db' 'tables'"))return['exit_code'=>0,'stdout'=>'wp_posts','stderr'=>''];if(str_contains($command,'test -f public_html/wp-config.php')){$this->configChecks++;return['exit_code'=>$this->configChecks===1?1:0,'stdout'=>'','stderr'=>''];}if(str_contains($command,'test -f public_html/wp-load.php')||str_contains($command,"'core' 'is-installed'"))return['exit_code'=>1,'stdout'=>'','stderr'=>''];return['exit_code'=>0,'stdout'=>'','stderr'=>''];} };
   $this->app->instance(\App\Contracts\SshCommandRunner::class,$ssh);
   $this->app->instance(\App\Contracts\DnsResolver::class,new class implements \App\Contracts\DnsResolver { public function aRecords(string $host):array{return['1.2.3.4'];}public function cnameRecords(string $host):array{return[];}public function nameservers(string $host):array{return[];} });

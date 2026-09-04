@@ -49,7 +49,7 @@ class KrystalWordpressProvisioningTest extends TestCase
     {
         $package = new HostingPackage(['name' => 'No shell', 'shell_access' => false]);
         $this->expectException(RuntimeException::class);
-        $this->expectExceptionMessage('Shell Access is not enabled');
+        $this->expectExceptionMessage('usable SSH access is not enabled');
         (new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient))->validatePrerequisites($package, true);
     }
 
@@ -231,7 +231,7 @@ class KrystalWordpressProvisioningTest extends TestCase
         ]), new RecordingCpanelUapiClient);
 
         try { $service->testSsh($this->server(), $this->account(), 'not-returned'); $this->fail('Expected disabled shell failure.'); }
-        catch (RuntimeException $exception) { $this->assertSame('Shell command execution is disabled for this cPanel account. Enable jailed shell access in WHM before retrying.', $exception->getMessage()); }
+        catch (RuntimeException $exception) { $this->assertSame('Shell command execution is disabled for this cPanel account. Enable usable SSH access in WHM before retrying.', $exception->getMessage()); }
     }
 
     public function test_wp_cli_shell_disabled_output_is_rejected_centrally(): void

@@ -117,7 +117,7 @@ class WebsiteProvisioner
             }
         } elseif ($step->step === 'connect_ssh') {
             if ($live && $provider instanceof KrystalWhmProvider) {
-                $provider->ensureJailedShell($server, $this->account($run));
+                $provider->verifyUsableShell($server, $this->account($run));
             }
             $result = $live ? $this->wordpress->testSsh($server, $this->account($run), $this->secrets($run)['cpanel_password']) : ['connected' => true, 'port' => 722, 'mock' => true];
         } elseif (in_array($step->step, ['download_wordpress', 'create_database', 'create_database_user', 'grant_database_privileges', 'create_wp_config', 'install_wordpress', 'configure_wordpress', 'verify_wordpress'], true)) {
