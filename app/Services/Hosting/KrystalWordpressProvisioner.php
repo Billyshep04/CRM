@@ -162,6 +162,11 @@ class KrystalWordpressProvisioner
             $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'siteurl', $options['site_url']]), 'Setting the WordPress site URL failed.');
             $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'home', $options['site_url']]), 'Setting the WordPress home URL failed.');
         }
+        if (! empty($options['wordpress_environment_type'])) {
+            $environment = (string) $options['wordpress_environment_type'];
+            if (! in_array($environment, ['local', 'development', 'staging', 'production'], true)) throw new RuntimeException('The WordPress environment type is invalid.');
+            $this->execute($server, $account, $password, $this->wpCliCommand(['config', 'set', 'WP_ENVIRONMENT_TYPE', $environment, '--type=constant']), 'Setting the WordPress environment marker failed.');
+        }
         if (($options['discourage_search_engines'] ?? $configuration['discourage_search_engines'] ?? false) === true) {
             $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'blog_public', '0']), 'Setting search-engine visibility failed.');
         }
@@ -191,6 +196,33 @@ class KrystalWordpressProvisioner
         $tables = trim($this->execute($server, $account, $password, $this->wpCliCommand(['db', 'tables']), 'WordPress verification failed because its database tables are unavailable.'));
         if ($tables === '') throw new RuntimeException('WordPress verification failed because its database tables are unavailable.');
         return ['verified' => true, 'site_url' => $siteUrl, 'home_url' => $home];
+    }
+
+    public function migrateDomain(HostingServer $server, HostingAccount $account, string $password, string $fromUrl, string $toUrl, bool $allowIndexing): array
+    {
+        $siteUrl = rtrim(trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'siteurl']), 'The current WordPress URL could not be read.')), '/');
+        $home = rtrim(trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'home']), 'The current WordPress home URL could not be read.')), '/');
+        $fromUrl = rtrim($fromUrl, '/');
+        $toUrl = rtrim($toUrl, '/');
+
+        if ($siteUrl !== $toUrl || $home !== $toUrl) {
+            if ($siteUrl !== $fromUrl || $home !== $fromUrl) {
+                throw new RuntimeException('WordPress is using an unexpected URL. Launch stopped before changing the database.');
+            }
+            $arguments = ['search-replace', $fromUrl, $toUrl, '--all-tables-with-prefix', '--skip-columns=guid', '--precise'];
+            $this->execute($server, $account, $password, $this->wpCliCommand([...$arguments, '--dry-run']), 'The WordPress domain migration dry run failed.', 180);
+            $this->execute($server, $account, $password, $this->wpCliCommand($arguments), 'The WordPress domain migration failed.', 300);
+            $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'siteurl', $toUrl]), 'Updating the WordPress site URL failed.');
+            $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'home', $toUrl]), 'Updating the WordPress home URL failed.');
+        }
+
+        $this->execute($server, $account, $password, $this->wpCliCommand(['config', 'set', 'WP_ENVIRONMENT_TYPE', 'production', '--type=constant']), 'Updating the WordPress environment marker failed.');
+        if ($allowIndexing) {
+            $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'blog_public', '1']), 'Enabling search-engine visibility failed.');
+        }
+        $this->execute($server, $account, $password, $this->wpCliCommand(['rewrite', 'flush', '--hard']), 'Refreshing WordPress permalinks failed.');
+
+        return ['migrated' => true, 'from_url' => $fromUrl, 'to_url' => $toUrl, 'indexing_enabled' => $allowIndexing];
     }
 
     public function wpCliCommand(array $arguments): string

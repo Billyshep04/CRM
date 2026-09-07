@@ -8,6 +8,7 @@ use App\Models\HostingServer;
 use App\Models\Website;
 use App\Models\WebsiteProvisioningRun;
 use App\Models\WordpressProfile;
+use App\Services\Hosting\DevelopmentDomainGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -34,17 +35,26 @@ class WebsiteProvisioningController extends Controller
                 'id' => $server->id, 'name' => $server->name, 'provider' => $server->provider, 'api_type' => $server->api_type,
                 'credential_username' => $server->credentials['username'] ?? null, 'has_token' => ! empty($server->credentials['token']),
                 'ssh_host_fingerprint' => $server->metadata['ssh_host_fingerprint'] ?? null,
+                'development_base_domain' => $server->metadata['development_base_domain'] ?? config('hosting.development_base_domain'),
                 'packages' => $server->packages->map(fn ($package) => ['id' => $package->id, 'name' => $package->name, 'shell_access' => $package->shell_access, 'limits' => $package->limits]),
             ]),
             'profiles' => WordpressProfile::where('active', true)->get(),
         ]]);
     }
 
-    public function store(Request $request)
+    public function developmentDomain(Request $request, DevelopmentDomainGenerator $generator)
+    {
+        $data = $request->validate(['hosting_server_id' => ['required', 'exists:hosting_servers,id'], 'name' => ['required', 'string', 'max:255']]);
+        $server = HostingServer::whereKey($data['hosting_server_id'])->where('status', 'active')->firstOrFail();
+
+        return response()->json(['data' => ['domain' => $generator->generate($server, $data['name']), 'base_domain' => $generator->baseDomain($server)]]);
+    }
+
+    public function store(Request $request, DevelopmentDomainGenerator $generator)
     {
         $data = $request->validate([
             'customer_id' => ['required', 'exists:customers,id'], 'name' => ['required', 'string', 'max:255'],
-            'domain' => ['required', 'string', 'max:253', 'regex:/^(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i'],
+            'domain' => ['nullable', 'required_if:environment,production', 'string', 'max:253', 'regex:/^(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/i'],
             'environment' => ['required', Rule::in(['production', 'development', 'staging'])],
             'hosting_server_id' => ['required', 'exists:hosting_servers,id'], 'hosting_package_id' => ['required', 'exists:hosting_packages,id'],
             'wordpress_profile_id' => ['nullable', 'exists:wordpress_profiles,id'], 'website_type' => ['required', Rule::in(['wordpress', 'blank'])],
@@ -58,12 +68,23 @@ class WebsiteProvisioningController extends Controller
             throw ValidationException::withMessages(['provisioning' => ['Preview provisioning cannot create hosting accounts on production. Set HOSTING_PROVISIONING_MODE=live and explicitly enable live provisioning.']]);
         }
         if ($mode === 'live' && ! config('hosting.allow_live_provisioning')) throw ValidationException::withMessages(['provisioning' => ['Live hosting provisioning is disabled.']]);
-        $data['domain'] = strtolower(rtrim(trim($data['domain']), '.'));
 
         $package = HostingPackage::whereKey($data['hosting_package_id'])->where('hosting_server_id', $data['hosting_server_id'])->first();
         if (! $package) throw ValidationException::withMessages(['hosting_package_id' => ['The selected package does not belong to the selected hosting server.']]);
         $server = HostingServer::whereKey($data['hosting_server_id'])->where('status', 'active')->firstOrFail();
         if ($mode === 'live' && $server->api_type !== 'whm') throw ValidationException::withMessages(['hosting_server_id' => ['Live Krystal provisioning requires a WHM hosting connection.']]);
+        if ($data['environment'] === 'development') {
+            if (empty($data['domain'])) $data['domain'] = $generator->generate($server, $data['name']);
+            else {
+                $data['domain'] = strtolower(rtrim(trim($data['domain']), '.'));
+                try { $generator->validateAvailable($server, $data['domain']); }
+                catch (\RuntimeException $exception) { throw ValidationException::withMessages(['domain' => [$exception->getMessage()]]); }
+            }
+            $data['options']['discourage_search_engines'] = true;
+            $data['options']['wordpress_environment_type'] = 'staging';
+        } else {
+            $data['domain'] = strtolower(rtrim(trim($data['domain']), '.'));
+        }
         if ($data['website_type'] === 'wordpress') {
             $data['options']['site_title'] ??= $data['name'];
             $data['options']['admin_username'] ??= config('hosting.wordpress_admin_username', 'webstamp_admin');
@@ -78,10 +99,14 @@ class WebsiteProvisioningController extends Controller
                     $query->whereNull('website_id')->orWhereHas('website');
                 })
                 ->exists();
-            if (Website::where('domain', $data['domain'])->exists() || $activeProvisioningExists) throw ValidationException::withMessages(['domain' => ['This domain already exists or is already being provisioned.']]);
+            $websiteConflict = Website::where(function ($query) use ($data): void {
+                $query->where('domain', $data['domain'])->orWhere('current_domain', $data['domain'])->orWhere('development_domain', $data['domain'])->orWhere('production_domain', $data['domain']);
+            })->exists();
+            if ($websiteConflict || $activeProvisioningExists) throw ValidationException::withMessages(['domain' => ['This domain already exists or is already being provisioned.']]);
 
             $token = Str::random(64);
-            $website = Website::create(['customer_id' => $data['customer_id'], 'hosting_server_id' => $data['hosting_server_id'], 'name' => $data['name'], 'domain' => $data['domain'], 'login_url' => 'https://'.$data['domain'].'/wp-admin/', 'environment' => $data['environment'], 'wordpress_enabled' => $data['website_type'] === 'wordpress', 'management_enabled' => true, 'hosting_enabled' => true, 'provisioning_status' => 'pending', 'status' => 'unknown', 'portal_visibility' => Website::defaultPortalVisibility(), 'agent_token_hash' => hash('sha256', $token), 'agent_token_encrypted' => $token]);
+            $isDevelopment = $data['environment'] === 'development';
+            $website = Website::create(['customer_id' => $data['customer_id'], 'hosting_server_id' => $data['hosting_server_id'], 'name' => $data['name'], 'domain' => $data['domain'], 'development_domain' => $isDevelopment ? $data['domain'] : null, 'production_domain' => $isDevelopment ? null : $data['domain'], 'current_domain' => $data['domain'], 'login_url' => 'https://'.$data['domain'].'/wp-admin/', 'environment' => $data['environment'], 'wordpress_enabled' => $data['website_type'] === 'wordpress', 'management_enabled' => true, 'hosting_enabled' => true, 'provisioning_status' => 'pending', 'status' => 'unknown', 'portal_visibility' => Website::defaultPortalVisibility(), 'agent_token_hash' => hash('sha256', $token), 'agent_token_encrypted' => $token]);
             $run = WebsiteProvisioningRun::create(['public_id' => (string) Str::uuid(), 'website_id' => $website->id, 'hosting_server_id' => $data['hosting_server_id'], 'hosting_package_id' => $data['hosting_package_id'], 'wordpress_profile_id' => $data['wordpress_profile_id'] ?? null, 'initiated_by_user_id' => $request->user()->id, 'idempotency_key' => $data['idempotency_key'], 'domain' => $data['domain'], 'mode' => config('hosting.provisioning_mode', 'mock'), 'website_type' => $data['website_type'], 'options' => $data['options'] ?? []]);
             $steps = ['validate_prerequisites', 'create_cpanel_account', 'wait_for_cpanel'];
             if ($data['website_type'] === 'wordpress') $steps = [...$steps, 'connect_ssh', 'download_wordpress', 'create_database', 'create_database_user', 'grant_database_privileges', 'create_wp_config', 'install_wordpress', 'configure_wordpress', 'verify_wordpress'];
@@ -130,7 +155,7 @@ class WebsiteProvisioningController extends Controller
 
     private function present(WebsiteProvisioningRun $run): array
     {
-        $run->loadMissing(['website:id,name,domain,provisioning_status', 'account:id,username,primary_domain,assigned_ip,status', 'steps:id,website_provisioning_run_id,step,status,attempts,safe_message,metadata,started_at,completed_at']);
+        $run->loadMissing(['website:id,name,domain,environment,development_domain,production_domain,current_domain,provisioning_status', 'account:id,username,primary_domain,assigned_ip,status', 'steps:id,website_provisioning_run_id,step,status,attempts,safe_message,metadata,started_at,completed_at']);
         return ['id' => $run->id, 'public_id' => $run->public_id, 'state' => $run->state, 'mode' => $run->mode, 'website_type' => $run->website_type, 'domain' => $run->domain, 'expected_ip' => $run->expected_ip, 'dns_provider' => $run->dns_provider, 'dns_status' => $run->dns_status, 'ssl_status' => $run->ssl_status, 'next_check_at' => $run->next_check_at, 'safe_error' => $run->safe_error, 'website' => $run->website, 'account' => $run->account, 'steps' => $run->steps];
     }
 }

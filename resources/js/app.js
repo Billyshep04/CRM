@@ -256,6 +256,15 @@ const dom = {
     websiteDetailProvisioning: document.getElementById('website-detail-provisioning'),
     websiteDetailHosting: document.getElementById('website-detail-hosting'),
     websiteDetailWordpress: document.getElementById('website-detail-wordpress'),
+    websiteGoLiveOpen: document.getElementById('website-go-live-open'),
+    websiteGoLiveModal: document.getElementById('website-go-live-modal'),
+    websiteGoLiveClose: document.getElementById('website-go-live-close'),
+    websiteGoLiveForm: document.getElementById('website-go-live-form'),
+    websiteGoLiveDevelopmentDomain: document.getElementById('website-go-live-development-domain'),
+    websiteGoLivePreflight: document.getElementById('website-go-live-preflight'),
+    websiteGoLiveResult: document.getElementById('website-go-live-result'),
+    websiteGoLiveChecklist: document.getElementById('website-go-live-checklist'),
+    websiteGoLiveStatus: document.getElementById('website-go-live-status'),
     websiteDeleteOpen: document.getElementById('website-delete-open'),
     websiteDeleteModal: document.getElementById('website-delete-modal'),
     websiteDeleteClose: document.getElementById('website-delete-close'),
@@ -312,6 +321,8 @@ const dom = {
     customerWebsiteProvisioningResult: document.getElementById('customer-website-provisioning-result'),
     customerWebsiteProvisioningChecklist: document.getElementById('customer-website-provisioning-checklist'),
     customerWebsiteKrystalStatus: document.getElementById('customer-website-krystal-status'),
+    customerWebsiteDevelopmentDomain: document.getElementById('customer-website-development-domain'),
+    customerWebsiteRegenerateDomain: document.getElementById('customer-website-regenerate-domain'),
     customerWebsiteConnectPanel: document.getElementById('customer-website-connect-panel'),
     customerWebsiteConnectCustomer: document.getElementById('customer-website-connect-customer'),
     customerWebsiteConnectStatus: document.getElementById('customer-website-connect-status'),
@@ -541,6 +552,8 @@ const state = {
     customerProvisioningStage: 1,
     customerProvisioningRunId: null,
     customerWebsiteTargetCustomer: null,
+    customerDevelopmentDomain: null,
+    websiteLaunchRunId: null,
     krystalDomains: [],
     currentLead: null,
     filters: {
@@ -2150,7 +2163,7 @@ async function loadPortalWebsites() {
             card.className = 'site-card';
             card.innerHTML = `
                 <div>
-                    <div class="site-name">${escapeHtml(website.name)}</div>
+                    <div class="site-name">${escapeHtml(website.name)} <span class="setup-pill ${website.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${website.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span></div>
                     <div class="site-url">${escapeHtml(website.public_url || website.domain || '')}</div>
                 </div>
                 <a class="btn btn-primary btn-small" href="${escapeHtml(website.public_url)}" target="_blank" rel="noopener">Visit website</a>
@@ -2159,7 +2172,7 @@ async function loadPortalWebsites() {
             if (dom.portalWebsitesDetail) {
                 const detail = document.createElement('div');
                 detail.className = 'site-card';
-                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)}</div><div class="site-url">${escapeHtml(website.domain || website.public_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Status temporarily unavailable')} · Uptime ${escapeHtml(website.uptime?.label || 'Monitoring pending')} · SSL ${escapeHtml(website.ssl?.label || 'Status temporarily unavailable')} · ${escapeHtml(website.maintenance?.label || 'Maintenance status unavailable')}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-portal-website="${website.id}">View details</button><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url)}" target="_blank" rel="noopener">Visit website</a></div>`;
+                detail.innerHTML = `<div><div class="site-name">${escapeHtml(website.name)} <span class="setup-pill ${website.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${website.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span></div><div class="site-url">${escapeHtml(website.domain || website.public_url || '')}</div><div class="card-subtitle">${escapeHtml(website.availability || 'Status temporarily unavailable')} · Uptime ${escapeHtml(website.uptime?.label || 'Monitoring pending')} · SSL ${escapeHtml(website.ssl?.label || 'Status temporarily unavailable')} · ${escapeHtml(website.maintenance?.label || 'Maintenance status unavailable')}</div></div><div class="form-actions"><button class="btn btn-primary btn-small" data-open-portal-website="${website.id}">View details</button><a class="btn btn-outline btn-small" href="${escapeHtml(website.public_url)}" target="_blank" rel="noopener">Visit website</a></div>`;
                 dom.portalWebsitesDetail.appendChild(detail);
             }
         });
@@ -2180,7 +2193,7 @@ async function loadPortalWebsites() {
 
 function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteDetailTitle) dom.portalWebsiteDetailTitle.textContent = site.name || 'Website';
-    if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.textContent = site.domain || site.public_url || '';
+    if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.innerHTML = `${escapeHtml(site.domain || site.public_url || '')} <span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
     if (dom.portalWebsiteVisit) dom.portalWebsiteVisit.href = site.public_url || site.login_url || '#';
     if (dom.portalWebsiteDetailSummary) dom.portalWebsiteDetailSummary.innerHTML = [
         ['Status', site.status ? site.status.replaceAll('_', ' ') : 'Not available'], ['Project', site.project_status || 'Active'], ['Availability', site.availability || 'Status temporarily unavailable'], ['30-day uptime', site.uptime?.label || 'Monitoring pending'], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Monitoring pending'],
@@ -2226,7 +2239,9 @@ async function loadManagedWebsites() {
         websites.forEach((site) => {
             const card = document.createElement('div'); card.className = 'site-card';
             const isKrystalHosted = Boolean(site.hosting_connected);
-            const hostingState = isKrystalHosted
+            const hostingState = site.hosting_account?.provider_missing
+                ? '<span class="setup-pill setup-pill-danger">Missing from Krystal</span>'
+                : isKrystalHosted
                 ? '<span class="setup-pill setup-pill-success"><span class="connection-dot connected"></span>Krystal hosting</span>'
                 : (site.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
             const monitoringState = site.wordpress_enabled
@@ -2238,7 +2253,8 @@ async function loadManagedWebsites() {
             const monitoringAction = site.wordpress_enabled && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-check-website="${site.id}">${site.agent_connected ? 'Check monitoring' : 'Check connection'}</button>` : '';
             const cpanelAction = isKrystalHosted && state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-open-website-cpanel="${site.hosting_account_id}">Open cPanel</button>` : '';
             const editAction = state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-edit-website="${site.id}">Edit</button>` : '';
-            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)}</div><div class="site-url">${escapeHtml(site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${monitoringAction}${cpanelAction}${editAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
+            const environmentBadge = `<span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
+            card.innerHTML = `<div><div class="site-name">${escapeHtml(site.name)} ${environmentBadge}</div><div class="site-url">${escapeHtml(site.current_domain || site.domain || site.login_url)} · ${escapeHtml(site.customer?.name || 'No customer')}</div><div class="website-connection-states">${hostingState}${monitoringState}</div></div><div class="site-actions">${tokenAction}${monitoringAction}${cpanelAction}${editAction}<button class="btn btn-primary btn-small" data-open-website="${site.id}">View details</button><a class="btn btn-ghost btn-small" href="${escapeHtml(site.login_url)}" target="_blank" rel="noopener">Visit site</a></div>`;
             dom.websitesList.appendChild(card);
         });
         if (dom.websitesUnlinkedToggle) dom.websitesUnlinkedToggle.textContent = state.showingUnlinkedWebsites ? 'Show all websites' : `Setup required (${summary.setup_required ?? 0})`;
@@ -2336,7 +2352,7 @@ async function loadHostingOptions() {
         if (dom.managedWebsiteServer) dom.managedWebsiteServer.innerHTML = '<option value="">No hosting provisioning</option>' + servers.map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
         if (dom.managedWebsiteProfile) dom.managedWebsiteProfile.innerHTML = '<option value="">No profile</option>' + (state.hostingOptions.profiles || []).map((item) => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
         const server = servers[0];
-        if (server && dom.hostingServerForm) { dom.hostingServerForm.elements.id.value = server.id; dom.hostingServerForm.elements.name.value = server.name || 'Krystal Trinity'; dom.hostingServerForm.elements.hostname.value = server.hostname || ''; dom.hostingServerForm.elements.username.value = server.credential_username || ''; dom.hostingServerForm.elements.ssh_host_fingerprint.value = server.ssh_host_fingerprint || ''; }
+        if (server && dom.hostingServerForm) { dom.hostingServerForm.elements.id.value = server.id; dom.hostingServerForm.elements.name.value = server.name || 'Krystal Trinity'; dom.hostingServerForm.elements.hostname.value = server.hostname || ''; dom.hostingServerForm.elements.username.value = server.credential_username || ''; dom.hostingServerForm.elements.ssh_host_fingerprint.value = server.ssh_host_fingerprint || ''; dom.hostingServerForm.elements.development_base_domain.value = server.development_base_domain || 'dev.web-stamp.co.uk'; }
         if (dom.hostingServerStatus) dom.hostingServerStatus.textContent = server ? `Connected server: ${server.hostname || server.name}. The API token remains hidden.` : 'No Krystal connection has been saved yet.';
         if (dom.krystalConnectionSummary) {
             dom.krystalConnectionSummary.textContent = server?.has_token ? 'Krystal connected' : 'Connection required';
@@ -2411,12 +2427,13 @@ function renderWebsiteDetail(site) {
     const customerSnapshot = site.customer_snapshot || {};
     const maintenanceSnapshot = customerSnapshot.maintenance || {};
     if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
-    if (dom.websiteDetailDomain) dom.websiteDetailDomain.textContent = site.domain || site.login_url || '';
+    if (dom.websiteDetailDomain) dom.websiteDetailDomain.innerHTML = `${escapeHtml(site.current_domain || site.domain || site.login_url || '')} <span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
+    if (dom.websiteGoLiveOpen) dom.websiteGoLiveOpen.hidden = !site.go_live?.available;
     if (dom.websiteDetailSummary) dom.websiteDetailSummary.innerHTML = [
         ['Overall status', customerSnapshot.overall_status || site.status || 'unknown'], ['Availability', customerSnapshot.availability?.label || 'not checked'], ['WordPress', maintenanceSnapshot.wordpress_version || 'unknown'], ['Plugins', maintenanceSnapshot.plugin_count ?? 'unknown'], ['Out-of-date plugins', maintenanceSnapshot.plugin_updates ?? 'unknown'], ['Response time', customerSnapshot.availability?.response_time_ms ? `${customerSnapshot.availability.response_time_ms} ms` : '—'], ['SSL', customerSnapshot.ssl?.label || 'unknown'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
-        ['Customer', site.customer?.name || '—'], ['Public URL', site.login_url || '—'], ['Environment', site.environment || 'production'], ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_connected ? (site.hosting_server?.name || 'Krystal') : (site.hosting_enabled ? 'Setup not verified' : 'External')], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
+        ['Customer', site.customer?.name || '—'], ['Current URL', `https://${site.current_domain || site.domain}`], ['Development domain', site.development_domain || '—'], ['Production domain', site.production_domain || 'Not launched'], ['Went live', formatDate(site.went_live_at)], ['Environment', site.environment || 'production'], ...(site.environment === 'development' ? [['Go Live', site.go_live?.available ? 'Ready' : (site.go_live?.issues || []).join(' ')]] : []), ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_connected ? (site.hosting_server?.name || 'Krystal') : (site.hosting_enabled ? 'Setup not verified' : 'External')], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
     ].map(([label, value]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div></div>`).join('');
     const diagnostics = site.data_source_diagnostics || {};
     if (dom.websiteDetailDataSources) dom.websiteDetailDataSources.innerHTML = Object.entries({monitoring_system: 'Monitoring system', external_monitoring: 'External monitoring', ssl: 'SSL', wordpress_agent: 'WordPress Agent', hosting: 'Krystal hosting', performance: 'Performance scoring', backups: 'Backups'}).map(([key, label]) => {
@@ -2442,6 +2459,11 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
     const runs = site.provisioning_runs || [];
     if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => { const stateLabel={complete:'Website online',waiting_for_dns:'DNS connection pending',waiting_for_ssl:'SSL pending',failed:'Setup needs attention'}[run.state]||'Setup in progress'; const provider=run.dns_status?.provider?.label||run.dns_provider; return `<div class="site-card provisioning-run-card"><div><div class="site-name">${escapeHtml(stateLabel)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${run.account?.username?`cPanel ${escapeHtml(run.account.username)} · `:''}${run.expected_ip?`IP ${escapeHtml(run.expected_ip)} · `:''}${provider?`DNS ${escapeHtml(provider)} · `:''}${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':step.status==='failed'?'!':step.status==='waiting'?'◷':step.status==='manual_action'?'↗':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div><div class="site-actions">${['failed','action_required','waiting_for_dns','waiting_for_ssl'].includes(run.state)?`<button class="btn btn-outline" data-retry-provisioning="${run.id}">Check again</button>`:''}${run.state==='complete'&&run.website_type==='wordpress'?'<button class="btn btn-outline" data-reveal-website-credential>Reveal WordPress login once</button>':''}</div></div>`; }).join('') : '<div class="table-empty">No provisioning history.</div>';
+    const launches = site.launch_runs || [];
+    if (dom.websiteDetailProvisioning && launches.length) {
+        if (!runs.length) dom.websiteDetailProvisioning.innerHTML = '';
+        dom.websiteDetailProvisioning.insertAdjacentHTML('beforeend', launches.map(run => `<div class="site-card provisioning-run-card"><div><div class="site-name">Go Live · ${escapeHtml(run.state.replaceAll('_', ' '))}</div><div class="site-url">${escapeHtml(run.development_domain)} → ${escapeHtml(run.production_domain)} · ${(run.steps || []).map(step => `${step.status === 'complete' ? '✓' : step.status === 'failed' ? '!' : step.status === 'waiting' ? '◷' : '○'} ${escapeHtml(step.step.replaceAll('_', ' '))}`).join(' · ')}${run.safe_error ? ` · ${escapeHtml(run.safe_error)}` : ''}</div></div><div class="site-actions">${['failed','waiting_for_dns','waiting_for_ssl'].includes(run.state) ? `<button class="btn btn-outline" data-retry-launch="${run.id}">Check again</button>` : ''}</div></div>`).join(''));
+    }
     if (dom.websiteAnalyticsForm) {
         dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
         dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
@@ -2460,6 +2482,34 @@ async function loadWebsiteDetail(websiteId) {
         state.currentWebsite = site;
         renderWebsiteDetail(site);
     } catch (error) { showToast('Unable to load website details.', true); }
+}
+
+function setWebsiteLaunchStage(stage) {
+    dom.websiteGoLiveForm?.querySelectorAll('[data-launch-stage]').forEach(panel => { panel.hidden = Number(panel.dataset.launchStage) !== stage; });
+    dom.websiteGoLiveForm?.querySelectorAll('#website-go-live-steps > div').forEach((item, index) => { item.classList.toggle('active', index + 1 === stage); item.classList.toggle('complete', index + 1 < stage); });
+}
+
+function renderWebsiteLaunch(run) {
+    if (!run) return;
+    state.websiteLaunchRunId = run.id;
+    setWebsiteLaunchStage(3);
+    const dns = run.dns_status || {};
+    const root = dns.root || {};
+    const dnsHelp = run.state === 'waiting_for_dns' ? `<div class="manual-action-card"><strong>Update DNS, then check again</strong><p>A record for ${escapeHtml(run.production_domain)} → ${escapeHtml(run.expected_ip || 'assigned Krystal IP')}</p>${dns.www_required === false ? '' : `<p>CNAME for www → ${escapeHtml(run.production_domain)}</p>`}<p>Currently detected: ${escapeHtml((root.current || []).join(', ') || 'no A record')}</p></div>` : '';
+    const sslHelp = run.state === 'waiting_for_ssl' ? '<div class="manual-action-card"><strong>AutoSSL is pending</strong><p>DNS is connected. Krystal is issuing the certificate; check again shortly.</p></div>' : '';
+    const complete = run.state === 'complete' ? `<div class="manual-action-card"><strong>Website is live</strong><p><a class="btn btn-primary btn-small" href="https://${escapeHtml(run.production_domain)}" target="_blank" rel="noopener">Open live website</a></p></div>` : '';
+    if (dom.websiteGoLiveResult) dom.websiteGoLiveResult.innerHTML = `<strong>${escapeHtml(run.state.replaceAll('_', ' '))}</strong>${run.safe_error ? `<p>${escapeHtml(run.safe_error)}</p>` : ''}${dnsHelp}${sslHelp}${complete}`;
+    if (dom.websiteGoLiveChecklist) dom.websiteGoLiveChecklist.innerHTML = (run.steps || []).map(step => `<div class="customer-connect-domain"><div><strong>${step.status === 'complete' ? '✓' : step.status === 'failed' ? '!' : step.status === 'waiting' ? '◷' : '○'} ${escapeHtml(step.step.replaceAll('_', ' '))}</strong><small>${escapeHtml(step.safe_message || step.status)}</small></div></div>`).join('');
+    const check = dom.websiteGoLiveForm?.querySelector('[data-launch-check]');
+    if (check) check.hidden = !['failed', 'waiting_for_dns', 'waiting_for_ssl'].includes(run.state);
+}
+
+async function refreshWebsiteLaunch(retry = false) {
+    if (!state.websiteLaunchRunId) return;
+    const response = retry ? await api.post(`/api/website-launches/${state.websiteLaunchRunId}/retry`) : await api.get(`/api/website-launches/${state.websiteLaunchRunId}`);
+    const run = response?.data?.data;
+    renderWebsiteLaunch(run);
+    if (run && !['complete', 'failed', 'waiting_for_dns', 'waiting_for_ssl'].includes(run.state)) window.setTimeout(() => refreshWebsiteLaunch(false).catch(() => {}), 2500);
 }
 
 function resolveRole(user) {
@@ -4831,11 +4881,48 @@ function setCustomerProvisioningStage(stage = 1) {
     dom.customerWebsiteProvisioningSteps?.querySelectorAll(':scope > div').forEach((item, index) => { item.classList.toggle('active', index + 1 === state.customerProvisioningStage); item.classList.toggle('complete', index + 1 < state.customerProvisioningStage); });
 }
 
+function customerWebsiteEnvironment() {
+    return dom.customerWebsiteKrystalForm?.querySelector('input[name="environment"]:checked')?.value || 'development';
+}
+
+function showCustomerWebsiteEnvironment() {
+    const development = customerWebsiteEnvironment() === 'development';
+    const live = dom.customerWebsiteKrystalForm?.querySelector('[data-live-domain]');
+    const preview = dom.customerWebsiteKrystalForm?.querySelector('[data-development-domain]');
+    if (live) live.hidden = development;
+    if (preview) preview.hidden = !development;
+    if (dom.customerWebsiteKrystalForm?.elements.domain) dom.customerWebsiteKrystalForm.elements.domain.required = !development;
+    if (dom.customerWebsiteKrystalForm?.elements.discourage_search_engines) {
+        dom.customerWebsiteKrystalForm.elements.discourage_search_engines.checked = development;
+        dom.customerWebsiteKrystalForm.elements.discourage_search_engines.disabled = development;
+    }
+}
+
+async function generateCustomerDevelopmentDomain() {
+    const server = state.hostingOptions.servers?.[0];
+    const name = dom.customerWebsiteKrystalForm?.elements.name.value.trim();
+    if (!server || !name) {
+        state.customerDevelopmentDomain = null;
+        if (dom.customerWebsiteDevelopmentDomain) dom.customerWebsiteDevelopmentDomain.textContent = 'Enter a website name to generate an address';
+        return;
+    }
+    if (dom.customerWebsiteRegenerateDomain) dom.customerWebsiteRegenerateDomain.disabled = true;
+    try {
+        const response = await api.post('/api/website-provisioning/development-domain', { hosting_server_id: server.id, name });
+        state.customerDevelopmentDomain = response?.data?.data?.domain || null;
+        if (dom.customerWebsiteDevelopmentDomain) dom.customerWebsiteDevelopmentDomain.textContent = state.customerDevelopmentDomain || 'Unable to generate address';
+    } catch (error) {
+        state.customerDevelopmentDomain = null;
+        setFormStatus(dom.customerWebsiteKrystalStatus, getErrorMessage(error, 'Unable to generate a development address.'), true);
+    } finally { if (dom.customerWebsiteRegenerateDomain) dom.customerWebsiteRegenerateDomain.disabled = false; }
+}
+
 function closeCustomerWebsiteModal() {
     if (dom.customerWebsiteModal) dom.customerWebsiteModal.hidden = true;
     resetCustomerWebsiteForm();
     dom.customerWebsiteKrystalForm?.reset();
     state.customerProvisioningRunId = null;
+    state.customerDevelopmentDomain = null;
     state.customerWebsiteTargetCustomer = null;
     setCustomerProvisioningStage(1);
     setCustomerWebsiteMode('choice');
@@ -4892,6 +4979,7 @@ async function openCustomerWebsiteModal({ chooseCustomer = false } = {}) {
     await loadHostingOptions();
     populateCustomerKrystalPackages();
     setCustomerProvisioningStage(1);
+    showCustomerWebsiteEnvironment();
     if (chooseCustomer) {
         await ensureCustomersLoaded();
         state.customerWebsiteTargetCustomer = null;
@@ -4975,7 +5063,8 @@ async function handleCustomerKrystalCreate(event) {
         return;
     }
     const formData = new FormData(dom.customerWebsiteKrystalForm);
-    const enteredDomain = String(formData.get('domain') || '').trim();
+    const environment = customerWebsiteEnvironment();
+    const enteredDomain = environment === 'development' ? String(state.customerDevelopmentDomain || '') : String(formData.get('domain') || '').trim();
     let domain;
     try {
         const parsed = new URL(/^https?:\/\//i.test(enteredDomain) ? enteredDomain : `https://${enteredDomain}`);
@@ -4997,7 +5086,7 @@ async function handleCustomerKrystalCreate(event) {
             customer_id: Number(customer.id),
             name: String(formData.get('name') || '').trim(),
             domain,
-            environment: 'production',
+            environment,
             hosting_server_id: Number(server.id),
             hosting_package_id: Number(formData.get('hosting_package_id')),
             wordpress_profile_id: formData.get('wordpress_profile_id') ? Number(formData.get('wordpress_profile_id')) : null,
@@ -7848,7 +7937,12 @@ if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.addEventListe
     const check = event.target.closest('[data-provision-check]');
     const finish = event.target.closest('[data-provision-finish]');
     if (next) {
-        if (state.customerProvisioningStage === 1 && (!dom.customerWebsiteKrystalForm.elements.name.value.trim() || !dom.customerWebsiteKrystalForm.elements.domain.value.trim())) return setFormStatus(dom.customerWebsiteKrystalStatus, 'Enter the website name and domain first.', true);
+        if (state.customerProvisioningStage === 1) {
+            if (!dom.customerWebsiteKrystalForm.elements.name.value.trim()) return setFormStatus(dom.customerWebsiteKrystalStatus, 'Enter the website name first.', true);
+            if (customerWebsiteEnvironment() === 'development' && !state.customerDevelopmentDomain) await generateCustomerDevelopmentDomain();
+            if (customerWebsiteEnvironment() === 'development' && !state.customerDevelopmentDomain) return;
+            if (customerWebsiteEnvironment() === 'production' && !dom.customerWebsiteKrystalForm.elements.domain.value.trim()) return setFormStatus(dom.customerWebsiteKrystalStatus, 'Enter the live domain first.', true);
+        }
         if (state.customerProvisioningStage === 2 && !dom.customerWebsiteKrystalForm.elements.hosting_package_id.value) return setFormStatus(dom.customerWebsiteKrystalStatus, 'Select a Krystal hosting package.', true);
         setFormStatus(dom.customerWebsiteKrystalStatus, ''); setCustomerProvisioningStage(state.customerProvisioningStage + 1);
     }
@@ -7860,6 +7954,13 @@ if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.addEventListe
         if (customerId) await refreshWebsiteWizardViews(customerId);
     }
 });
+if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.addEventListener('change', (event) => {
+    if (event.target.name === 'environment') showCustomerWebsiteEnvironment();
+});
+if (dom.customerWebsiteKrystalForm?.elements.name) dom.customerWebsiteKrystalForm.elements.name.addEventListener('blur', () => {
+    if (customerWebsiteEnvironment() === 'development' && !state.customerDevelopmentDomain) generateCustomerDevelopmentDomain();
+});
+if (dom.customerWebsiteRegenerateDomain) dom.customerWebsiteRegenerateDomain.addEventListener('click', generateCustomerDevelopmentDomain);
 if (dom.customerWebsiteConnectRefresh) dom.customerWebsiteConnectRefresh.addEventListener('click', scanCustomerKrystalWebsites);
 if (dom.customerWebsiteConnectList) dom.customerWebsiteConnectList.addEventListener('click', async (event) => {
     const copyButton = event.target.closest('[data-copy-customer-agent-token]');
@@ -8458,7 +8559,7 @@ if (dom.websitesSearch) dom.websitesSearch.addEventListener('input', loadManaged
 if (dom.websitesStatus) dom.websitesStatus.addEventListener('change', loadManagedWebsites);
 if (dom.managedWebsiteServer) dom.managedWebsiteServer.addEventListener('change', populateHostingPackageOptions);
 if (dom.hostingServerForm) dom.hostingServerForm.addEventListener('submit', async (event) => {
-    event.preventDefault(); const f=new FormData(dom.hostingServerForm); const id=f.get('id'); const payload={name:String(f.get('name')||''),provider:'krystal',server_type:'reseller',api_type:'whm',hostname:String(f.get('hostname')||''),credentials:{username:String(f.get('username')||''),token:String(f.get('token')||'')},metadata:{ssh_host_fingerprint:String(f.get('ssh_host_fingerprint')||'')},status:'active'};
+    event.preventDefault(); const f=new FormData(dom.hostingServerForm); const id=f.get('id'); const payload={name:String(f.get('name')||''),provider:'krystal',server_type:'reseller',api_type:'whm',hostname:String(f.get('hostname')||''),credentials:{username:String(f.get('username')||''),token:String(f.get('token')||'')},metadata:{ssh_host_fingerprint:String(f.get('ssh_host_fingerprint')||''),development_base_domain:String(f.get('development_base_domain')||'dev.web-stamp.co.uk')},status:'active'};
     try { if(id)await api.put(`/api/hosting-servers/${id}`,payload);else await api.post('/api/hosting-servers',payload); dom.hostingServerForm.elements.token.value=''; await loadHostingOptions(); setFormStatus(dom.hostingServerStatus,'WHM connection saved securely.'); } catch(error){setFormStatus(dom.hostingServerStatus,getErrorMessage(error,'Unable to save WHM connection.'),true);}
 });
 if (dom.hostingTest) dom.hostingTest.addEventListener('click', async()=>{const id=dom.hostingServerForm?.elements.id.value;if(!id)return showToast('Save the WHM connection first.',true);try{const r=await api.post(`/api/hosting-servers/${id}/test`);showToast(r?.data?.data?.message||'Connection successful.');}catch(e){showToast(getErrorMessage(e,'WHM connection failed.'),true);}});
@@ -8586,6 +8687,35 @@ if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', asy
     catch (error) { showToast('Website check failed.', true); }
     finally { dom.websiteDetailCheck.disabled = false; }
 });
+if (dom.websiteGoLiveOpen) dom.websiteGoLiveOpen.addEventListener('click', () => {
+    if (!state.currentWebsite || !dom.websiteGoLiveModal || !dom.websiteGoLiveForm) return;
+    dom.websiteGoLiveForm.reset(); state.websiteLaunchRunId = null; setWebsiteLaunchStage(1);
+    dom.websiteGoLiveDevelopmentDomain.textContent = state.currentWebsite.development_domain || state.currentWebsite.domain;
+    dom.websiteGoLiveModal.hidden = false; setFormStatus(dom.websiteGoLiveStatus, '');
+});
+const closeWebsiteGoLive = () => { if (dom.websiteGoLiveModal) dom.websiteGoLiveModal.hidden = true; };
+if (dom.websiteGoLiveClose) dom.websiteGoLiveClose.addEventListener('click', closeWebsiteGoLive);
+if (dom.websiteGoLiveModal) dom.websiteGoLiveModal.addEventListener('click', event => { if (event.target === dom.websiteGoLiveModal) closeWebsiteGoLive(); });
+if (dom.websiteGoLiveForm) dom.websiteGoLiveForm.addEventListener('click', async event => {
+    const preflight = event.target.closest('[data-launch-preflight]');
+    const back = event.target.closest('[data-launch-back]');
+    const check = event.target.closest('[data-launch-check]');
+    const finish = event.target.closest('[data-launch-finish]');
+    if (preflight) {
+        if (!dom.websiteGoLiveForm.elements.production_domain.value.trim()) return setFormStatus(dom.websiteGoLiveStatus, 'Enter the permanent live domain.', true);
+        preflight.disabled = true;
+        try { const domain = dom.websiteGoLiveForm.elements.production_domain.value.trim(); const response = await api.get(`/api/websites/${state.currentWebsite.id}/go-live/preflight?production_domain=${encodeURIComponent(domain)}`); const result=response?.data?.data||{}; dom.websiteGoLivePreflight.innerHTML=result.ready?'<strong>Ready to launch</strong><br>The production domain is available, and the Krystal account and retained automation access are ready. The full preflight will run again before any change.':`<strong>Not ready</strong><br>${escapeHtml((result.issues||[]).join(' '))}`; setWebsiteLaunchStage(2); }
+        catch(error){setFormStatus(dom.websiteGoLiveStatus,getErrorMessage(error,'Unable to check launch readiness.'),true);} finally { preflight.disabled=false; }
+    }
+    if (back) setWebsiteLaunchStage(1);
+    if (check) { check.disabled=true; try { await refreshWebsiteLaunch(true); } catch(error){setFormStatus(dom.websiteGoLiveStatus,getErrorMessage(error,'Unable to resume launch.'),true);} finally { check.disabled=false; } }
+    if (finish) { closeWebsiteGoLive(); await loadWebsiteDetail(state.currentWebsite.id); }
+});
+if (dom.websiteGoLiveForm) dom.websiteGoLiveForm.addEventListener('submit', async event => {
+    event.preventDefault(); const submit=dom.websiteGoLiveForm.querySelector('button[type="submit"]'); submit.disabled=true;
+    try { const data=new FormData(dom.websiteGoLiveForm); const response=await api.post(`/api/websites/${state.currentWebsite.id}/go-live`,{production_domain:String(data.get('production_domain')||'').trim(),enable_indexing:data.get('enable_indexing')==='on',idempotency_key:crypto.randomUUID()}); renderWebsiteLaunch(response?.data?.data); window.setTimeout(()=>refreshWebsiteLaunch(false).catch(()=>{}),1200); }
+    catch(error){setFormStatus(dom.websiteGoLiveStatus,getErrorMessage(error,'Unable to start launch.'),true);} finally { submit.disabled=false; }
+});
 document.querySelectorAll('[data-website-tab]').forEach((button) => button.addEventListener('click', () => {
     const tab = button.dataset.websiteTab;
     document.querySelectorAll('[data-website-tab]').forEach((item) => { item.classList.toggle('btn-primary', item === button); item.classList.toggle('btn-outline', item !== button); });
@@ -8594,6 +8724,8 @@ document.querySelectorAll('[data-website-tab]').forEach((button) => button.addEv
 if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.addEventListener('click', async (event) => {
     const reveal=event.target.closest('[data-reveal-website-credential]');
     if(reveal){reveal.disabled=true;try{const response=await api.post(`/api/websites/${state.currentWebsite.id}/reveal-credential`);const data=response?.data?.data;window.prompt('Copy this WordPress login now. The password cannot be shown again.',`Username: ${data.username}\nPassword: ${data.password}`);await loadWebsiteDetail(state.currentWebsite.id);}catch(error){showToast(getErrorMessage(error,'Generated login is unavailable.'),true);}finally{reveal.disabled=false;}return;}
+    const launchButton=event.target.closest('[data-retry-launch]');
+    if(launchButton){launchButton.disabled=true;try{await api.post(`/api/website-launches/${launchButton.dataset.retryLaunch}/retry`);await loadWebsiteDetail(state.currentWebsite.id);showToast('Launch resumed.');}catch(error){showToast(getErrorMessage(error,'Unable to resume launch.'),true);}finally{launchButton.disabled=false;}return;}
     const button=event.target.closest('[data-retry-provisioning]'); if(!button)return; button.disabled=true;
     try { await api.post(`/api/website-provisioning/${button.dataset.retryProvisioning}/retry`); await loadWebsiteDetail(state.currentWebsite.id); showToast('Provisioning resumed from the incomplete step.'); }
     catch(error){showToast(getErrorMessage(error,'Unable to retry provisioning.'),true);} finally{button.disabled=false;}

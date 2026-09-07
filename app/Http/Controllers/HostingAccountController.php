@@ -23,7 +23,7 @@ class HostingAccountController extends Controller
             fn ($query) => $query->where('hosting_server_id', $request->integer('hosting_server_id'))
         )->when(
             $request->boolean('unassigned'),
-            fn ($query) => $query->whereNull('customer_id')
+            fn ($query) => $query->whereNull('customer_id')->where('provider_missing', false)
         )->orderBy('username')->get()]);
     }
 
@@ -38,6 +38,7 @@ class HostingAccountController extends Controller
 
     public function update(Request $request, HostingAccount $hostingAccount)
     {
+        if ($hostingAccount->provider_missing) return response()->json(['message' => 'This hosting account is no longer present on Krystal and cannot be connected.'], 422);
         $data = $request->validate([
             'customer_id' => ['nullable', 'exists:customers,id'],
             'website_id' => ['nullable', 'exists:websites,id'],

@@ -24,6 +24,10 @@ class Website extends Model
         'subscription_id',
         'name',
         'domain',
+        'development_domain',
+        'production_domain',
+        'current_domain',
+        'went_live_at',
         'login_url',
         'environment',
         'cpanel_username',
@@ -51,7 +55,7 @@ class Website extends Model
 
     protected $casts = [
         'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
-        'agent_last_seen_at' => 'datetime', 'agent_last_failed_at' => 'datetime', 'last_checked_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
+        'agent_last_seen_at' => 'datetime', 'agent_last_failed_at' => 'datetime', 'last_checked_at' => 'datetime', 'went_live_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
         'agent_token_encrypted' => 'encrypted',
     ];
 
@@ -74,13 +78,14 @@ class Website extends Model
     public function activities(): HasMany { return $this->hasMany(WebsiteActivity::class)->latest('performed_at'); }
     public function latestHealthCheck(): HasOne { return $this->hasOne(WebsiteHealthCheck::class)->latestOfMany('checked_at'); }
     public function provisioningRuns(): HasMany { return $this->hasMany(WebsiteProvisioningRun::class)->latest(); }
+    public function launchRuns(): HasMany { return $this->hasMany(WebsiteLaunchRun::class)->latest(); }
     public function credentials(): HasMany { return $this->hasMany(WebsiteCredential::class); }
 
     public function hasVerifiedHostingConnection(): bool
     {
         $account = $this->relationLoaded('hostingAccount') ? $this->hostingAccount : $this->hostingAccount()->first();
         $server = $this->relationLoaded('hostingServer') ? $this->hostingServer : $this->hostingServer()->first();
-        if (! $this->hosting_enabled || ! $account || ! $server || $server->api_type !== 'whm' || ! $account->last_synced_at) return false;
+        if (! $this->hosting_enabled || ! $account || ! $server || $server->api_type !== 'whm' || ! $account->last_synced_at || $account->provider_missing) return false;
         if (data_get($account->metadata, 'mock', false)) return false;
 
         $domain = $this->normaliseDomain($this->domain ?: $this->login_url);

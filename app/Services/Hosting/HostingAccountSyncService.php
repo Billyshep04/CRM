@@ -17,11 +17,14 @@ class HostingAccountSyncService
     {
         $provider = $this->providers->for($server);
         $warnings = [];
+        $seenAt = now();
+        $remoteAccounts = collect($provider->accounts($server));
+        $seenExternalIds = $remoteAccounts->pluck('external_id')->map(fn ($value) => (string) $value)->all();
 
-        $accounts = collect($provider->accounts($server))->map(function (array $data) use ($server, $provider, &$warnings): HostingAccount {
+        $accounts = $remoteAccounts->map(function (array $data) use ($server, $provider, &$warnings, $seenAt): HostingAccount {
             $account = HostingAccount::updateOrCreate(
                 ['hosting_server_id' => $server->id, 'external_id' => $data['external_id']],
-                [...$data, 'last_synced_at' => now()]
+                [...$data, 'last_synced_at' => $seenAt, 'provider_last_seen_at' => $seenAt, 'provider_missing' => false, 'provider_missing_at' => null]
             );
 
             try {
@@ -42,6 +45,10 @@ class HostingAccountSyncService
             return $account->fresh();
         });
 
+        $missingQuery = $server->accounts();
+        if ($seenExternalIds !== []) $missingQuery->whereNotIn('external_id', $seenExternalIds);
+        $missingQuery->where('provider_missing', false)->update(['provider_missing' => true, 'provider_missing_at' => $seenAt]);
+
         try {
             $packages = collect($provider->packages($server))->map(fn (array $data) => HostingPackage::updateOrCreate(
                 ['hosting_server_id' => $server->id, 'external_id' => $data['external_id']],
@@ -57,6 +64,7 @@ class HostingAccountSyncService
             'domains' => $accounts->sum(fn (HostingAccount $account) => count($account->domains ?? [])),
             'packages' => $packages->count(),
             'warnings' => array_values(array_unique($warnings)),
+            'missing' => $server->accounts()->where('provider_missing', true)->count(),
         ];
     }
 

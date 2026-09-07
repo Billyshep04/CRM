@@ -24,7 +24,7 @@ class KrystalWebsiteImportController extends Controller
         }
 
         $websites = Website::query()->with(['customer', 'hostingAccount'])->get();
-        $domains = $hostingServer->accounts()->with('websites.customer')->get()
+        $domains = $hostingServer->accounts()->where('provider_missing', false)->with('websites.customer')->get()
             ->flatMap(function (HostingAccount $account) use ($websites): array {
                 return collect($this->accountDomains($account))->map(function (array $domainData) use ($account, $websites): array {
                     $domain = $this->normaliseDomain($domainData['domain']);
@@ -67,6 +67,7 @@ class KrystalWebsiteImportController extends Controller
 
     public function import(Request $request, HostingAccount $hostingAccount)
     {
+        if ($hostingAccount->provider_missing) throw ValidationException::withMessages(['hosting_account' => ['This account is no longer present on Krystal. Run a fresh scan and select an active account.']]);
         $data = $request->validate([
             'domain' => ['required', 'string', 'max:255'],
             'customer_id' => ['required', 'integer', 'exists:customers,id'],

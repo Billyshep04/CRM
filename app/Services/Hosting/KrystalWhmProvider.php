@@ -335,6 +335,54 @@ class KrystalWhmProvider implements HostingProviderInterface
         return ['shell' => $shell, 'changed' => false];
     }
 
+    public function domainOwners(HostingServer $server, string $domain): array
+    {
+        $domain = strtolower(rtrim($domain, '.'));
+        $owners = [];
+        foreach ($this->accounts($server) as $remote) {
+            $account = new HostingAccount([
+                'hosting_server_id' => $server->id,
+                'external_id' => $remote['external_id'],
+                'username' => $remote['username'],
+                'primary_domain' => $remote['primary_domain'],
+            ]);
+            foreach ($this->domains($server, $account) as $item) {
+                if (strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $domain) {
+                    $owners[] = ['username' => $remote['username'], 'type' => $item['type'] ?? 'unknown'];
+                }
+            }
+        }
+
+        return collect($owners)->unique(fn ($owner) => $owner['username'].'|'.$owner['type'])->values()->all();
+    }
+
+    public function changePrimaryDomain(HostingServer $server, HostingAccount $account, string $domain): array
+    {
+        $domain = strtolower(rtrim($domain, '.'));
+        $existingTarget = $this->exactDomainAccounts($server, $domain);
+        if ($existingTarget !== []) {
+            $match = $this->singleDomainAccount($existingTarget, $domain);
+            if (strtolower($match['username']) !== strtolower($account->username)) {
+                throw new RuntimeException("The production domain already belongs to cPanel account \"{$match['username']}\". Launch stopped for safety.");
+            }
+
+            return $match;
+        }
+        if (strtolower(rtrim((string) $account->primary_domain, '.')) !== $domain) {
+            $payload = $this->call($server, 'modifyacct', ['user' => $account->username, 'domain' => $domain], 120);
+            if (data_get($payload, 'metadata.result') !== 1) {
+                throw new RuntimeException($this->safeWhmReason($payload) ?: 'WHM could not change the cPanel account domain.');
+            }
+        }
+
+        $match = $this->singleDomainAccount($this->exactDomainAccounts($server, $domain), $domain);
+        if (strtolower($match['username']) !== strtolower($account->username)) {
+            throw new RuntimeException('WHM returned a different cPanel account after the domain change. Launch stopped for safety.');
+        }
+
+        return $match;
+    }
+
     private function isDisabledShell(string $shell): bool
     {
         $shell = strtolower(trim($shell));

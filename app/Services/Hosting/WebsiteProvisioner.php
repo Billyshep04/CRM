@@ -103,7 +103,9 @@ class WebsiteProvisioner
                     'shell_access' => $run->website_type === 'wordpress',
                     'retrying' => (int) $step->attempts > 1,
                 ]);
-                $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null]);
+                $accountData = [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null];
+                if ($website->environment === 'development') $accountData['automation_password_encrypted'] = $secrets['cpanel_password'];
+                $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], $accountData);
                 $run->update(['hosting_account_id' => $account->id, 'expected_ip' => $account->assigned_ip]);
                 $website->update(['hosting_account_id' => $account->id, 'cpanel_username' => $account->username, 'hosting_enabled' => true]);
             }

@@ -5,6 +5,8 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 use App\Jobs\ProcessWebsiteProvisioning;
 use App\Models\WebsiteProvisioningRun;
+use App\Jobs\ProcessWebsiteLaunch;
+use App\Models\WebsiteLaunchRun;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -38,3 +40,12 @@ Artisan::command('websites:resume-provisioning', function (): void {
 })->purpose('Resume website provisioning runs waiting for DNS or SSL.');
 
 Schedule::command('websites:resume-provisioning')->everyTenMinutes()->withoutOverlapping()->onOneServer();
+
+Artisan::command('websites:resume-launches', function (): void {
+    WebsiteLaunchRun::query()
+        ->whereIn('state', ['waiting_for_dns', 'waiting_for_ssl'])
+        ->where('next_check_at', '<=', now())
+        ->each(fn (WebsiteLaunchRun $run) => ProcessWebsiteLaunch::dispatch($run->id));
+})->purpose('Resume website launches waiting for DNS or SSL.');
+
+Schedule::command('websites:resume-launches')->everyTenMinutes()->withoutOverlapping()->onOneServer();

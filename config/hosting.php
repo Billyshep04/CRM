@@ -7,5 +7,6 @@ return [
     'whm_account_creation_timeout_seconds'=>(int)env('HOSTING_WHM_ACCOUNT_CREATION_TIMEOUT_SECONDS',120),
     'dns_retry_minutes'=>(int)env('HOSTING_DNS_RETRY_MINUTES',10),
     'ssl_retry_minutes'=>(int)env('HOSTING_SSL_RETRY_MINUTES',10),
+    'development_base_domain'=>env('DEVELOPMENT_BASE_DOMAIN','dev.web-stamp.co.uk'),
     'health'=>['disk_warning_percent'=>(int)env('HOSTING_DISK_WARNING_PERCENT',80),'disk_critical_percent'=>(int)env('HOSTING_DISK_CRITICAL_PERCENT',92),'backup_warning_hours'=>(int)env('HOSTING_BACKUP_WARNING_HOURS',48)],
 ];

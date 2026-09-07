@@ -40,6 +40,7 @@ use App\Http\Controllers\HostingAccountController;
 use App\Http\Controllers\WebsiteProvisioningController;
 use App\Http\Controllers\KrystalWebsiteImportController;
 use App\Http\Controllers\WebsiteManagementController;
+use App\Http\Controllers\WebsiteLaunchController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/auth/login', [AuthController::class, 'login']);
@@ -183,8 +184,13 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('website-provisioning/options', [WebsiteProvisioningController::class, 'options'])->middleware('permission:hosting_view');
         Route::get('website-provisioning/hosting-accounts', [HostingAccountController::class, 'index'])->middleware('permission:hosting_view');
         Route::post('website-provisioning', [WebsiteProvisioningController::class, 'store'])->middleware('permission:hosting_provision');
+        Route::post('website-provisioning/development-domain', [WebsiteProvisioningController::class, 'developmentDomain'])->middleware('permission:hosting_provision');
         Route::get('website-provisioning/{websiteProvisioningRun}', [WebsiteProvisioningController::class, 'show'])->middleware('permission:hosting_view');
         Route::post('website-provisioning/{websiteProvisioningRun}/retry', [WebsiteProvisioningController::class, 'retry'])->middleware('permission:hosting_provision');
+        Route::get('websites/{website}/go-live/preflight', [WebsiteLaunchController::class, 'preflight'])->middleware('permission:hosting_view');
+        Route::post('websites/{website}/go-live', [WebsiteLaunchController::class, 'store'])->middleware('permission:hosting_provision');
+        Route::get('website-launches/{websiteLaunchRun}', [WebsiteLaunchController::class, 'show'])->middleware('permission:hosting_view');
+        Route::post('website-launches/{websiteLaunchRun}/retry', [WebsiteLaunchController::class, 'retry'])->middleware('permission:hosting_provision');
     });
 
     Route::prefix('portal')->middleware('role:customer')->group(function (): void {

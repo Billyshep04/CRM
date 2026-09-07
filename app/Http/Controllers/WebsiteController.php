@@ -56,20 +56,28 @@ class WebsiteController extends Controller
     {
         $data = $this->validated($request);
         $token = Str::random(64);
-        $website = Website::create([...$data, 'domain' => $data['domain'] ?? $this->domain($data['login_url']), 'portal_visibility' => $data['portal_visibility'] ?? Website::defaultPortalVisibility(), 'agent_token_hash' => hash('sha256', $token), 'agent_token_encrypted' => $token]);
+        $domain = $data['domain'] ?? $this->domain($data['login_url']);
+        $environment = $data['environment'] ?? 'production';
+        $website = Website::create([...$data, 'domain' => $domain, 'current_domain' => $domain, 'development_domain' => $environment === 'development' ? $domain : null, 'production_domain' => $environment === 'development' ? null : $domain, 'environment' => $environment, 'portal_visibility' => $data['portal_visibility'] ?? Website::defaultPortalVisibility(), 'agent_token_hash' => hash('sha256', $token), 'agent_token_encrypted' => $token]);
         WebsiteActivity::create(['website_id' => $website->id, 'created_by_user_id' => $request->user()?->id, 'type' => 'website_created', 'title' => 'Website added', 'performed_at' => now()]);
         return (new WebsiteResource($website->load(['customer', 'hostingServer', 'subscription', 'latestHealthCheck'])))->additional(['agent_token' => $token]);
     }
 
     public function show(Website $website)
     {
-        return new WebsiteResource($website->load(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100), 'provisioningRuns.steps', 'provisioningRuns.account']));
+        return new WebsiteResource($website->load(['customer', 'hostingServer', 'hostingAccount', 'subscription', 'latestHealthCheck', 'healthChecks' => fn ($q) => $q->limit(100), 'incidents' => fn ($q) => $q->limit(100), 'activities' => fn ($q) => $q->limit(100), 'provisioningRuns.steps', 'provisioningRuns.account', 'launchRuns.steps', 'launchRuns.account']));
     }
 
     public function update(Request $request, Website $website)
     {
         $data = $this->validated($request, true);
         if (isset($data['login_url']) && !array_key_exists('domain', $data)) $data['domain'] = $this->domain($data['login_url']);
+        if (array_key_exists('domain', $data)) {
+            $environment = $data['environment'] ?? $website->environment;
+            $data['current_domain'] = $data['domain'];
+            if ($environment === 'development') $data['development_domain'] = $data['domain'];
+            else $data['production_domain'] = $data['domain'];
+        }
 
         if (array_key_exists('hosting_enabled', $data)) {
             $metadata = $data['metadata'] ?? $website->metadata ?? [];
