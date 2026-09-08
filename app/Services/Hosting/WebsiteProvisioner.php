@@ -3,8 +3,10 @@
 namespace App\Services\Hosting;
 
 use App\Exceptions\ManualProvisioningActionRequired;
+use App\Exceptions\CpanelUsernameUnavailable;
 use App\Exceptions\ProvisioningWait;
 use App\Models\HostingAccount;
+use App\Models\HostingServer;
 use App\Models\WebsiteActivity;
 use App\Models\WebsiteCredential;
 use App\Models\WebsiteHealthCheck;
@@ -16,6 +18,8 @@ use Throwable;
 
 class WebsiteProvisioner
 {
+    private const CPANEL_USERNAME_ATTEMPTS = 4;
+
     public function __construct(
         private HostingProviderManager $providers,
         private KrystalWordpressProvisioner $wordpress,
@@ -90,19 +94,41 @@ class WebsiteProvisioner
             if (! $run->hosting_account_id) {
                 $secrets = $this->secrets($run);
                 $username = $secrets['cpanel_username_proposal']
-                    ?? ($website->cpanel_username ?: $this->username($website->domain));
-                if (! isset($secrets['cpanel_username_proposal'])) {
-                    $secrets['cpanel_username_proposal'] = $username;
-                    $run->update(['secrets_encrypted' => $secrets]);
+                    ?? ($website->cpanel_username ?: $this->username($website->domain, $server));
+                $rejected = array_values(array_unique(array_filter((array) ($secrets['cpanel_username_rejected'] ?? []), 'is_string')));
+                if (in_array($username, $rejected, true)) {
+                    $username = $this->username($website->domain, $server, $rejected);
                 }
-                $result = $provider->createAccount($server, [
-                    'username' => $username,
-                    'domain' => $website->domain,
-                    'password' => $secrets['cpanel_password'],
-                    'package_name' => $run->hostingPackage?->external_id,
-                    'shell_access' => $run->website_type === 'wordpress',
-                    'retrying' => (int) $step->attempts > 1,
-                ]);
+                $result = null;
+                for ($attempt = 0; $attempt < self::CPANEL_USERNAME_ATTEMPTS; $attempt++) {
+                    $secrets['cpanel_username_proposal'] = $username;
+                    $secrets['cpanel_username_rejected'] = $rejected;
+                    $run->update(['secrets_encrypted' => $secrets]);
+                    try {
+                        $result = $provider->createAccount($server, [
+                            'username' => $username,
+                            'domain' => $website->domain,
+                            'password' => $secrets['cpanel_password'],
+                            'package_name' => $run->hostingPackage?->external_id,
+                            'shell_access' => $run->website_type === 'wordpress',
+                            'retrying' => (int) $step->attempts > 1 || $attempt > 0,
+                        ]);
+                        break;
+                    } catch (CpanelUsernameUnavailable $exception) {
+                        $rejected[] = $username;
+                        $rejected = array_values(array_unique($rejected));
+                        $secrets['cpanel_username_rejected'] = $rejected;
+                        $run->update(['secrets_encrypted' => $secrets]);
+                        if ($attempt === self::CPANEL_USERNAME_ATTEMPTS - 1) {
+                            throw new RuntimeException('WHM rejected several generated cPanel usernames. Choose Check again to generate fresh candidates.', 0, $exception);
+                        }
+                        $username = $this->username($website->domain, $server, $rejected);
+                    }
+                }
+                if (! is_array($result)) throw new RuntimeException('The cPanel account could not be created.');
+                $secrets['cpanel_username_proposal'] = $result['username'];
+                unset($secrets['cpanel_username_rejected']);
+                $run->update(['secrets_encrypted' => $secrets]);
                 $accountData = [...$result, 'customer_id' => $website->customer_id, 'last_synced_at' => null];
                 if ($website->environment === 'development') $accountData['automation_password_encrypted'] = $secrets['cpanel_password'];
                 $account = HostingAccount::updateOrCreate(['hosting_server_id' => $server->id, 'external_id' => $result['external_id']], $accountData);
@@ -269,7 +295,18 @@ class WebsiteProvisioner
     }
     private function account(WebsiteProvisioningRun $run): HostingAccount { return $run->account()->first() ?? throw new RuntimeException('The hosting account has not been created yet.'); }
     private function guardLive(WebsiteProvisioningRun $run): void { if ($run->mode === 'live' && ! config('hosting.allow_live_provisioning')) throw new RuntimeException('Live hosting provisioning is disabled.'); }
-    private function username(string $domain): string { $base = preg_replace('/[^a-z0-9]/', '', strtolower(strtok($domain, '.'))); return substr($base ?: 'webstamp', 0, 9).Str::lower(Str::random(3)); }
+    private function username(string $domain, HostingServer $server, array $excluded = []): string
+    {
+        $base = preg_replace('/[^a-z0-9]/', '', strtolower(strtok($domain, '.'))) ?: 'site';
+        $stem = substr('ws'.$base, 0, 8);
+        for ($attempt = 0; $attempt < 20; $attempt++) {
+            $candidate = $stem.Str::lower(Str::random(4));
+            if (in_array($candidate, $excluded, true)) continue;
+            if (HostingAccount::where('hosting_server_id', $server->id)->where('username', $candidate)->exists()) continue;
+            return $candidate;
+        }
+        throw new RuntimeException('A unique cPanel username could not be generated. Choose Check again to retry.');
+    }
     private function state(string $step): string { return ['validate_prerequisites' => 'validating', 'create_cpanel_account' => 'creating_hosting', 'wait_for_cpanel' => 'waiting_for_hosting', 'connect_ssh' => 'connecting_ssh', 'download_wordpress' => 'installing_wordpress', 'create_database' => 'installing_wordpress', 'create_database_user' => 'installing_wordpress', 'grant_database_privileges' => 'installing_wordpress', 'create_wp_config' => 'installing_wordpress', 'install_wordpress' => 'installing_wordpress', 'configure_wordpress' => 'configuring_wordpress', 'verify_wordpress' => 'verifying_wordpress', 'check_dns' => 'checking_dns', 'check_ssl' => 'checking_ssl', 'install_agent' => 'installing_agent', 'enable_monitoring' => 'enabling_monitoring', 'run_initial_health_check' => 'running_checks'][$step] ?? 'pending'; }
     private function safeMetadata(array $result): array { return collect($result)->except(['password', 'admin_password', 'database_password', 'token', 'agent_token', 'api_token', 'output', 'stdout', 'stderr'])->all(); }
 }

@@ -3,6 +3,7 @@
 namespace App\Services\Hosting;
 
 use App\Contracts\HostingProviderInterface;
+use App\Exceptions\CpanelUsernameUnavailable;
 use App\Models\HostingAccount;
 use App\Models\HostingServer;
 use App\Models\Website;
@@ -227,6 +228,34 @@ class KrystalWhmProvider implements HostingProviderInterface
             );
         } catch (RuntimeException $exception) {
             $safe = $this->redactCreateAccountSecrets($exception->getMessage(), $server, $data);
+            if ($this->isUsernameUnavailable($safe)) {
+                $created = $this->exactDomainAccounts($server, $domain);
+                if ($created !== []) {
+                    $match = $this->singleDomainAccount($created, $domain);
+                    if (strtolower($match['username']) === $proposedUsername) {
+                        Log::info('WHM username rejection reconciled an account that was created.', [
+                            'domain' => $domain,
+                            'authoritative_username' => $match['username'],
+                        ]);
+
+                        return [
+                            ...$match,
+                            'package_name' => $match['package_name'] ?? $data['package_name'],
+                            'metadata' => [...($match['metadata'] ?? []), 'reconciled_after_username_response' => true],
+                        ];
+                    }
+
+                    throw new RuntimeException(
+                        "This domain already exists on Krystal under cPanel account \"{$match['username']}\". Link the existing hosting account explicitly or use another domain."
+                    );
+                }
+
+                Log::info('WHM rejected an unavailable cPanel username.', [
+                    'domain' => $domain,
+                    'proposed_username' => $proposedUsername,
+                ]);
+                throw new CpanelUsernameUnavailable('The generated cPanel username is unavailable.', 0, $exception);
+            }
             Log::warning('WHM createacct failed.', [
                 'domain' => $domain,
                 'proposed_username' => $proposedUsername,
@@ -278,6 +307,15 @@ class KrystalWhmProvider implements HostingProviderInterface
                 'provisioned_by_crm' => true,
             ],
         ];
+    }
+
+    private function isUsernameUnavailable(string $message): bool
+    {
+        $message = strtolower($message);
+
+        return str_contains($message, 'reserved username')
+            || preg_match('/\busername\b.{0,120}\b(?:already exists|already in use|unavailable|not available|reserved)\b/', $message) === 1
+            || preg_match('/\buser\b.{0,80}\busername\b.{0,120}\balready exists\b/', $message) === 1;
     }
 
     public function verifyAccount(HostingServer $server, HostingAccount $account): array
