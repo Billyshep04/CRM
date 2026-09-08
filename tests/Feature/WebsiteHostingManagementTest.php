@@ -27,10 +27,11 @@ class WebsiteHostingManagementTest extends TestCase
         $other = $this->customer(null, 'other@example.com');
         $mine = $this->website($customer, ['portal_visibility' => [...Website::defaultPortalVisibility(), 'technical_details' => false]]);
         $theirs = $this->website($other);
+        \App\Models\WebsiteCredential::create(['website_id' => $mine->id, 'type' => 'wordpress_admin', 'username' => 'private-admin', 'secret_encrypted' => 'private-password']);
         WebsiteHealthCheck::create(['website_id' => $mine->id, 'checked_at' => now(), 'uptime_status' => 'online', 'ssl_status' => 'valid', 'wordpress_version' => '6.9', 'overall_status' => 'healthy']);
 
-        $this->actingAs($portal)->getJson('/api/portal/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine->id)->assertJsonMissing(['wordpress_version' => '6.9']);
-        $this->actingAs($portal)->getJson("/api/portal/websites/{$mine->id}")->assertOk()->assertJsonPath('data.id', $mine->id)->assertJsonPath('data.availability', 'Online');
+        $this->actingAs($portal)->getJson('/api/portal/websites')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine->id)->assertJsonMissing(['wordpress_version' => '6.9'])->assertJsonMissingPath('data.0.wordpress_login');
+        $this->actingAs($portal)->getJson("/api/portal/websites/{$mine->id}")->assertOk()->assertJsonPath('data.id', $mine->id)->assertJsonPath('data.availability', 'Online')->assertJsonMissingPath('data.wordpress_login')->assertJsonMissing(['username' => 'private-admin'])->assertJsonMissing(['password' => 'private-password']);
         $this->actingAs($portal)->getJson("/api/portal/websites/{$theirs->id}")->assertNotFound();
     }
 

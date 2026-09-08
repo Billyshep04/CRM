@@ -198,6 +198,19 @@ class KrystalWordpressProvisioner
         return ['verified' => true, 'site_url' => $siteUrl, 'home_url' => $home];
     }
 
+    public function resetAdminPassword(HostingServer $server, HostingAccount $account, string $password, string $username, string $newPassword): array
+    {
+        $this->execute(
+            $server,
+            $account,
+            $password,
+            $this->wpCliCommand(['user', 'update', $username, '--user_pass='.$newPassword]),
+            'The WordPress login could not be reset.'
+        );
+
+        return ['reset' => true, 'username' => $username];
+    }
+
     public function migrateDomain(HostingServer $server, HostingAccount $account, string $password, string $fromUrl, string $toUrl, bool $allowIndexing): array
     {
         $siteUrl = rtrim(trim($this->execute($server, $account, $password, $this->wpCliCommand(['option', 'get', 'siteurl']), 'The current WordPress URL could not be read.')), '/');

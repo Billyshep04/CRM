@@ -7,6 +7,7 @@ use App\Models\HostingPackage;
 use App\Models\HostingServer;
 use App\Models\Website;
 use App\Models\WebsiteProvisioningRun;
+use App\Models\WebsiteCredential;
 use App\Models\WordpressProfile;
 use App\Services\Hosting\DevelopmentDomainGenerator;
 use Illuminate\Http\Request;
@@ -156,6 +157,12 @@ class WebsiteProvisioningController extends Controller
     private function present(WebsiteProvisioningRun $run): array
     {
         $run->loadMissing(['website:id,name,domain,environment,development_domain,production_domain,current_domain,provisioning_status', 'account:id,username,primary_domain,assigned_ip,status', 'steps:id,website_provisioning_run_id,step,status,attempts,safe_message,metadata,started_at,completed_at']);
-        return ['id' => $run->id, 'public_id' => $run->public_id, 'state' => $run->state, 'mode' => $run->mode, 'website_type' => $run->website_type, 'domain' => $run->domain, 'expected_ip' => $run->expected_ip, 'dns_provider' => $run->dns_provider, 'dns_status' => $run->dns_status, 'ssl_status' => $run->ssl_status, 'next_check_at' => $run->next_check_at, 'safe_error' => $run->safe_error, 'website' => $run->website, 'account' => $run->account, 'steps' => $run->steps];
+        $credential = WebsiteCredential::where('website_id', $run->website_id)->where('type', 'wordpress_admin')->latest('id')->first();
+        $credentialState = [
+            'reveal_available' => (bool) ($credential && ! $credential->revealed_at && ! $credential->revoked_at),
+            'revealed' => (bool) ($credential?->revealed_at),
+            'reset_available' => (bool) ($run->website_type === 'wordpress' && $run->account()->whereNotNull('automation_password_encrypted')->exists()),
+        ];
+        return ['id' => $run->id, 'public_id' => $run->public_id, 'state' => $run->state, 'mode' => $run->mode, 'website_type' => $run->website_type, 'domain' => $run->domain, 'expected_ip' => $run->expected_ip, 'dns_provider' => $run->dns_provider, 'dns_status' => $run->dns_status, 'ssl_status' => $run->ssl_status, 'next_check_at' => $run->next_check_at, 'safe_error' => $run->safe_error, 'wordpress_login' => $credentialState, 'website' => $run->website, 'account' => $run->account, 'steps' => $run->steps];
     }
 }

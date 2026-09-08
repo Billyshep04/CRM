@@ -2458,7 +2458,7 @@ function renderWebsiteDetail(site) {
     const activities = site.activities || [];
     if (dom.websiteDetailActivities) dom.websiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No activity recorded.</div>';
     const runs = site.provisioning_runs || [];
-    if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => { const stateLabel={complete:'Website online',waiting_for_dns:'DNS connection pending',waiting_for_ssl:'SSL pending',failed:'Setup needs attention'}[run.state]||'Setup in progress'; const provider=run.dns_status?.provider?.label||run.dns_provider; return `<div class="site-card provisioning-run-card"><div><div class="site-name">${escapeHtml(stateLabel)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${run.account?.username?`cPanel ${escapeHtml(run.account.username)} · `:''}${run.expected_ip?`IP ${escapeHtml(run.expected_ip)} · `:''}${provider?`DNS ${escapeHtml(provider)} · `:''}${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':step.status==='failed'?'!':step.status==='waiting'?'◷':step.status==='manual_action'?'↗':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div><div class="site-actions">${['failed','action_required','waiting_for_dns','waiting_for_ssl'].includes(run.state)?`<button class="btn btn-outline" data-retry-provisioning="${run.id}">Check again</button>`:''}${run.state==='complete'&&run.website_type==='wordpress'?'<button class="btn btn-outline" data-reveal-website-credential>Reveal WordPress login once</button>':''}</div></div>`; }).join('') : '<div class="table-empty">No provisioning history.</div>';
+    if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.innerHTML = runs.length ? runs.map(run => { const stateLabel={complete:'Website online',waiting_for_dns:'DNS connection pending',waiting_for_ssl:'SSL pending',failed:'Setup needs attention'}[run.state]||'Setup in progress'; const provider=run.dns_status?.provider?.label||run.dns_provider; return `<div class="site-card provisioning-run-card"><div><div class="site-name">${escapeHtml(stateLabel)} · ${escapeHtml(run.mode)} mode</div><div class="site-url">${run.account?.username?`cPanel ${escapeHtml(run.account.username)} · `:''}${run.expected_ip?`IP ${escapeHtml(run.expected_ip)} · `:''}${provider?`DNS ${escapeHtml(provider)} · `:''}${(run.steps||[]).map(step=>`${step.status==='complete'?'✓':step.status==='running'?'●':step.status==='failed'?'!':step.status==='waiting'?'◷':step.status==='manual_action'?'↗':'○'} ${escapeHtml(step.step.replaceAll('_',' '))}`).join(' · ')}${run.safe_error?` · ${escapeHtml(run.safe_error)}`:''}</div></div><div class="site-actions">${['failed','action_required','waiting_for_dns','waiting_for_ssl'].includes(run.state)?`<button class="btn btn-outline" data-retry-provisioning="${run.id}">Check again</button>`:''}${run.state==='complete'&&run.website_type==='wordpress'?wordpressLoginActions(site.wordpress_login, site.id):''}</div></div>`; }).join('') : '<div class="table-empty">No provisioning history.</div>';
     const launches = site.launch_runs || [];
     if (dom.websiteDetailProvisioning && launches.length) {
         if (!runs.length) dom.websiteDetailProvisioning.innerHTML = '';
@@ -2473,6 +2473,24 @@ function renderWebsiteDetail(site) {
         dom.websiteAnalyticsOpen.hidden = !site.google_analytics_dashboard_url;
         dom.websiteAnalyticsOpen.href = site.google_analytics_dashboard_url || '#';
     }
+}
+
+function wordpressLoginActions(login, websiteId) {
+    if (login?.reveal_available) return `<button class="btn btn-outline" data-reveal-website-credential="${Number(websiteId)}">Reveal WordPress login once</button>`;
+    if (login?.reset_available) return `<button class="btn btn-outline" data-reset-wordpress-login="${Number(websiteId)}">Reset WordPress login</button>`;
+    return '';
+}
+
+async function revealWebsiteCredential(websiteId) {
+    const response = await api.post(`/api/websites/${websiteId}/reveal-credential`);
+    const data = response?.data?.data;
+    window.prompt('Copy this WordPress login now. The password cannot be shown again.', `Username: ${data.username}\nPassword: ${data.password}`);
+}
+
+async function resetWebsiteCredential(websiteId) {
+    if (!window.confirm('Reset this WordPress administrator password? The current password will stop working.')) return false;
+    await api.post(`/api/websites/${websiteId}/reset-wordpress-login`);
+    return true;
 }
 
 async function loadWebsiteDetail(websiteId) {
@@ -5009,7 +5027,7 @@ function renderCustomerProvisioningRun(run) {
     const sslInstructions = run.state === 'waiting_for_ssl' ? '<div class="manual-action-card"><strong>SSL pending</strong><p>DNS is correct. Krystal AutoSSL is still issuing the certificate; the CRM will check again automatically.</p></div>' : '';
     const complete = run.state === 'complete' ? (preview
         ? '<div class="manual-action-card"><strong>Local preview only</strong><p>No WHM account, WordPress installation, DNS connection, SSL certificate, or monitoring connection was created.</p></div>'
-        : `<div class="manual-action-card"><strong>Website created successfully</strong><p>Domain: ${escapeHtml(run.domain)}<br>Hosting: Verified in Krystal WHM<br>WordPress: ${run.website_type === 'wordpress' ? 'Installed' : 'Not selected'}<br>DNS: Connected<br>SSL: Active</p><p><a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}" target="_blank" rel="noopener">Open website</a> ${run.website_type === 'wordpress' ? `<a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}/wp-admin/" target="_blank" rel="noopener">Open WordPress admin</a>` : ''}</p></div>`) : '';
+        : `<div class="manual-action-card"><strong>Website created successfully</strong><p>Domain: ${escapeHtml(run.domain)}<br>Hosting: Verified in Krystal WHM<br>WordPress: ${run.website_type === 'wordpress' ? 'Installed' : 'Not selected'}<br>DNS: Connected<br>SSL: Active</p><p><a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}" target="_blank" rel="noopener">Open website</a> ${run.website_type === 'wordpress' ? `<a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}/wp-admin/" target="_blank" rel="noopener">Open WordPress admin</a> ${wordpressLoginActions(run.wordpress_login, run.website?.id)}` : ''}</p></div>`) : '';
     if (dom.customerWebsiteProvisioningResult) dom.customerWebsiteProvisioningResult.innerHTML = `<strong>${escapeHtml(labels[run.state] || 'Setup in progress')}</strong><br>${run.expected_ip ? `Assigned IP: ${escapeHtml(run.expected_ip)}<br>` : ''}${provider ? `Detected DNS: ${escapeHtml(provider)}<br>` : ''}${run.safe_error ? escapeHtml(run.safe_error) : ''}${dnsInstructions}${sslInstructions}${complete}`;
     if (dom.customerWebsiteProvisioningChecklist) dom.customerWebsiteProvisioningChecklist.innerHTML = (run.steps || []).map((step) => `<div class="customer-connect-domain"><div><strong>${step.status === 'complete' ? '✓' : step.status === 'failed' ? '!' : step.status === 'waiting' ? '◷' : step.status === 'manual_action' ? '↗' : '○'} ${escapeHtml(step.step.replaceAll('_', ' '))}</strong><small>${escapeHtml(step.safe_message || step.status)}</small></div></div>`).join('');
     const check = dom.customerWebsiteKrystalForm?.querySelector('[data-provision-check]');
@@ -7936,6 +7954,22 @@ if (dom.customerWebsiteKrystalForm) dom.customerWebsiteKrystalForm.addEventListe
     const back = event.target.closest('[data-provision-back]');
     const check = event.target.closest('[data-provision-check]');
     const finish = event.target.closest('[data-provision-finish]');
+    const reveal = event.target.closest('[data-reveal-website-credential]');
+    const resetLogin = event.target.closest('[data-reset-wordpress-login]');
+    if (reveal) {
+        reveal.disabled = true;
+        try { await revealWebsiteCredential(reveal.dataset.revealWebsiteCredential); await refreshCustomerProvisioningRun(false); }
+        catch (error) { showToast(getErrorMessage(error, 'Generated login is unavailable.'), true); }
+        finally { reveal.disabled = false; }
+        return;
+    }
+    if (resetLogin) {
+        resetLogin.disabled = true;
+        try { if (await resetWebsiteCredential(resetLogin.dataset.resetWordpressLogin)) { await refreshCustomerProvisioningRun(false); showToast('WordPress login reset. Reveal the new login once now.'); } }
+        catch (error) { showToast(getErrorMessage(error, 'WordPress login could not be reset.'), true); }
+        finally { resetLogin.disabled = false; }
+        return;
+    }
     if (next) {
         if (state.customerProvisioningStage === 1) {
             if (!dom.customerWebsiteKrystalForm.elements.name.value.trim()) return setFormStatus(dom.customerWebsiteKrystalStatus, 'Enter the website name first.', true);
@@ -8723,7 +8757,9 @@ document.querySelectorAll('[data-website-tab]').forEach((button) => button.addEv
 }));
 if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.addEventListener('click', async (event) => {
     const reveal=event.target.closest('[data-reveal-website-credential]');
-    if(reveal){reveal.disabled=true;try{const response=await api.post(`/api/websites/${state.currentWebsite.id}/reveal-credential`);const data=response?.data?.data;window.prompt('Copy this WordPress login now. The password cannot be shown again.',`Username: ${data.username}\nPassword: ${data.password}`);await loadWebsiteDetail(state.currentWebsite.id);}catch(error){showToast(getErrorMessage(error,'Generated login is unavailable.'),true);}finally{reveal.disabled=false;}return;}
+    if(reveal){reveal.disabled=true;try{await revealWebsiteCredential(reveal.dataset.revealWebsiteCredential||state.currentWebsite.id);await loadWebsiteDetail(state.currentWebsite.id);}catch(error){showToast(getErrorMessage(error,'Generated login is unavailable.'),true);}finally{reveal.disabled=false;}return;}
+    const resetLogin=event.target.closest('[data-reset-wordpress-login]');
+    if(resetLogin){resetLogin.disabled=true;try{if(await resetWebsiteCredential(resetLogin.dataset.resetWordpressLogin||state.currentWebsite.id)){await loadWebsiteDetail(state.currentWebsite.id);showToast('WordPress login reset. Reveal the new login once now.');}}catch(error){showToast(getErrorMessage(error,'WordPress login could not be reset.'),true);}finally{resetLogin.disabled=false;}return;}
     const launchButton=event.target.closest('[data-retry-launch]');
     if(launchButton){launchButton.disabled=true;try{await api.post(`/api/website-launches/${launchButton.dataset.retryLaunch}/retry`);await loadWebsiteDetail(state.currentWebsite.id);showToast('Launch resumed.');}catch(error){showToast(getErrorMessage(error,'Unable to resume launch.'),true);}finally{launchButton.disabled=false;}return;}
     const button=event.target.closest('[data-retry-provisioning]'); if(!button)return; button.disabled=true;

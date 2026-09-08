@@ -80,6 +80,7 @@ class Website extends Model
     public function provisioningRuns(): HasMany { return $this->hasMany(WebsiteProvisioningRun::class)->latest(); }
     public function launchRuns(): HasMany { return $this->hasMany(WebsiteLaunchRun::class)->latest(); }
     public function credentials(): HasMany { return $this->hasMany(WebsiteCredential::class); }
+    public function wordpressCredential(): HasOne { return $this->hasOne(WebsiteCredential::class)->where('type', 'wordpress_admin')->latestOfMany(); }
 
     public function hasVerifiedHostingConnection(): bool
     {

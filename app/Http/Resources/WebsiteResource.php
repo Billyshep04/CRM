@@ -24,6 +24,9 @@ class WebsiteResource extends JsonResource
         if ($this->environment !== 'development') $launchIssues[] = 'This is already a live website.';
         if (! $this->resource->hasVerifiedHostingConnection()) $launchIssues[] = 'A current Krystal hosting connection is required.';
         if ($this->environment === 'development' && ! $this->hostingAccount?->automation_password_encrypted) $launchIssues[] = 'Automation access is not retained for this account.';
+        $wordpressLogin = $this->resource->relationLoaded('wordpressCredential')
+            ? $this->wordpressLoginState($this->wordpressCredential)
+            : null;
         return [
             'id' => $this->id, 'customer_id' => $this->customer_id, 'hosting_server_id' => $this->hosting_server_id, 'hosting_account_id' => $this->hosting_account_id, 'subscription_id' => $this->subscription_id,
             'name' => $this->name, 'domain' => $this->domain, 'development_domain' => $this->development_domain, 'production_domain' => $this->production_domain, 'current_domain' => $this->current_domain ?: $this->domain, 'went_live_at' => $this->went_live_at, 'login_url' => $this->login_url, 'environment' => $this->environment,
@@ -36,6 +39,7 @@ class WebsiteResource extends JsonResource
             'agent_last_seen_at' => $this->agent_last_seen_at, 'agent_last_failed_at' => $this->agent_last_failed_at, 'last_checked_at' => $this->last_checked_at, 'portal_visibility' => $this->portal_visibility,
             'provisioning_status' => $this->provisioning_status, 'lifecycle_state' => $this->lifecycle_state, 'deletion_status' => $this->deletion_status,
             'go_live' => ['available' => $launchIssues === [], 'issues' => $launchIssues],
+            'wordpress_login' => $this->when($wordpressLogin !== null, $wordpressLogin),
             'notes' => $this->notes, 'metadata' => $this->metadata, 'created_at' => $this->created_at, 'updated_at' => $this->updated_at,
             'customer' => new CustomerResource($this->whenLoaded('customer')),
             'hosting_server' => $this->whenLoaded('hostingServer', fn () => $this->hostingServer ? ['id' => $this->hostingServer->id, 'name' => $this->hostingServer->name, 'provider' => $this->hostingServer->provider, 'status' => $this->hostingServer->status] : null),
@@ -47,6 +51,17 @@ class WebsiteResource extends JsonResource
             'launch_runs' => $this->whenLoaded('launchRuns'),
             'customer_snapshot' => $this->when($snapshot !== null, $snapshot),
             'data_source_diagnostics' => $this->when($snapshot !== null, [...($snapshot['diagnostics'] ?? []), 'monitoring_system' => $monitoringSystem]),
+        ];
+    }
+
+    private function wordpressLoginState($credential): array
+    {
+        $available = $credential && ! $credential->revealed_at && ! $credential->revoked_at;
+
+        return [
+            'reveal_available' => (bool) $available,
+            'revealed' => (bool) ($credential?->revealed_at),
+            'reset_available' => (bool) ($this->wordpress_enabled && $this->hostingAccount?->getRawOriginal('automation_password_encrypted')),
         ];
     }
 }

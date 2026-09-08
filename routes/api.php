@@ -170,6 +170,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('websites/{website}/deletion-preview', [WebsiteManagementController::class, 'deletionPreview'])->middleware('permission:hosting_terminate');
         Route::post('websites/{website}/delete', [WebsiteManagementController::class, 'delete'])->middleware(['permission:hosting_terminate','throttle:10,1']);
         Route::post('websites/{website}/reveal-credential', [WebsiteManagementController::class, 'revealCredential'])->middleware('permission:hosting_credentials');
+        Route::post('websites/{website}/reset-wordpress-login', [WebsiteManagementController::class, 'resetWordpressLogin'])->middleware(['permission:hosting_credentials','throttle:10,1']);
         Route::post('hosting-servers/{hostingServer}/test', [HostingServerController::class, 'test'])->middleware('permission:hosting_manage');
         Route::get('hosting-servers', [HostingServerController::class, 'index'])->middleware('permission:hosting_view');
         Route::post('hosting-servers', [HostingServerController::class, 'store'])->middleware('permission:hosting_credentials');
