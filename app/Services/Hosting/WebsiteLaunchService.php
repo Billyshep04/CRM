@@ -26,12 +26,13 @@ class WebsiteLaunchService
     public function process(WebsiteLaunchRun $run): WebsiteLaunchRun
     {
         return Cache::lock("website-launch:{$run->id}", 900)->block(3, function () use ($run) {
+            $this->normalizeLegacySteps($run);
             $run = $run->fresh(['website.hostingServer', 'account', 'steps']);
             if (! $run->website || ! $run->account) return $this->fail($run, null, 'The website or hosting account is no longer available.');
             if ($run->state === 'complete') return $run;
             $run->update(['started_at' => $run->started_at ?? now(), 'attempts' => $run->attempts + 1, 'completed_at' => null, 'next_check_at' => null]);
 
-            foreach ($run->steps as $step) {
+            foreach ($run->steps->sortBy(fn ($step) => $this->stepOrder($step->step)) as $step) {
                 if ($step->status === 'complete') continue;
                 try {
                     $this->executeStep($run, $step);
@@ -73,25 +74,43 @@ class WebsiteLaunchService
             if ($account->provider_missing || $account->status !== 'active') throw new RuntimeException('The linked Krystal hosting account is missing or inactive. Sync hosting before retrying.');
             if ($password === '') throw new RuntimeException('This development account does not have retained automation credentials. Reconnect the account before launching.');
             $matches = $provider->domainOwners($server, $run->production_domain);
-            if ($matches !== []) throw new RuntimeException('The production domain already exists on Krystal. Remove the conflict or explicitly link that account before launching.');
+            if ($matches !== []) {
+                if (count($matches) !== 1 || strtolower((string) ($matches[0]['username'] ?? '')) !== strtolower($account->username)) {
+                    throw new RuntimeException('The production domain already exists on Krystal. Remove the conflict or explicitly link that account before launching.');
+                }
+                $provider->verifyAddonDomain($server, $account, $run->production_domain);
+            }
             $verified = $provider->verifyAccount($server, $account);
             if (! ($verified['ready'] ?? false)) throw new RuntimeException('Krystal could not verify the development hosting account.');
             $this->wordpress->testSsh($server, $account, $password);
             $this->wordpress->verify($server, $account, $password, 'https://'.$run->development_domain);
             $run->update(['expected_ip' => $verified['assigned_ip'] ?? $account->assigned_ip, 'recovery_encrypted' => ['original_domain' => $run->development_domain, 'original_username' => $account->username]]);
             $result = ['ready' => true, 'account' => $account->username, 'expected_ip' => $verified['assigned_ip'] ?? $account->assigned_ip];
+        } elseif ($step->step === 'attach_production_domain') {
+            $result = $provider->ensureAddonDomain($server, $account, $run->production_domain);
+            $domains = collect($account->domains ?? [])
+                ->filter(fn ($item) => is_array($item) && ! empty($item['domain']))
+                ->push(['domain' => $run->development_domain, 'type' => 'primary'])
+                ->push(['domain' => $run->production_domain, 'type' => 'addon'])
+                ->map(fn ($item) => ['domain' => strtolower(rtrim((string) $item['domain'], '.')), 'type' => $item['type'] ?? 'unknown'])
+                ->unique('domain')
+                ->values()
+                ->all();
+            $account->update(['domains' => $domains, 'last_synced_at' => now(), 'provider_missing' => false, 'provider_missing_at' => null]);
+        } elseif ($step->step === 'verify_production_domain') {
+            $result = $provider->verifyAddonDomain($server, $account, $run->production_domain);
+            $verified = $provider->verifyAccount($server, $account);
+            if (! ($verified['ready'] ?? false) || strtolower($verified['username']) !== strtolower($account->username)) {
+                throw new RuntimeException('Krystal did not confirm the production domain on the expected hosting account.');
+            }
+            if (strtolower(rtrim((string) ($verified['primary_domain'] ?? ''), '.')) !== strtolower(rtrim($run->development_domain, '.'))) {
+                throw new RuntimeException('The cPanel account primary domain changed unexpectedly. Launch stopped for safety.');
+            }
         } elseif ($step->step === 'check_dns') {
             if (! $run->expected_ip) throw new RuntimeException('The hosting account has no assigned IP address.');
             $result = $this->dns->inspect($run->production_domain, $run->expected_ip);
             $run->update(['dns_status' => $result]);
             if (! ($result['ready'] ?? false) && ! ($run->options['dns_override'] ?? false)) throw new ProvisioningWait('waiting_for_dns', 'DNS is not pointing to this Krystal account yet. Update the displayed records, then choose Check again.', config('hosting.dns_retry_minutes', 10));
-        } elseif ($step->step === 'change_primary_domain') {
-            $result = $provider->changePrimaryDomain($server, $account, $run->production_domain);
-            $account->update(['external_id' => $result['external_id'], 'username' => $result['username'], 'primary_domain' => $run->production_domain, 'domains' => [['domain' => $run->production_domain, 'type' => 'primary']], 'assigned_ip' => $result['assigned_ip'] ?? $account->assigned_ip, 'last_synced_at' => now(), 'provider_missing' => false, 'provider_missing_at' => null]);
-            $website->update(['cpanel_username' => $result['username']]);
-        } elseif ($step->step === 'reconcile_account') {
-            $result = $provider->verifyAccount($server, $account->fresh());
-            if (! ($result['ready'] ?? false) || strtolower($result['username']) !== strtolower($account->username)) throw new RuntimeException('Krystal did not confirm the renamed hosting account.');
         } elseif ($step->step === 'migrate_wordpress') {
             $result = $this->wordpress->migrateDomain($server, $account, $password, 'https://'.$run->development_domain, 'https://'.$run->production_domain, (bool) ($run->options['enable_indexing'] ?? false));
         } elseif ($step->step === 'trigger_autossl') {
@@ -109,9 +128,11 @@ class WebsiteLaunchService
                 $check = $this->monitor->check($website->fresh(['hostingServer', 'hostingAccount']), 'manual');
                 if ($website->agent_token_encrypted && ! $check->wordpress_checked_at) throw new RuntimeException('The website is live, but the monitoring plugin has not reconnected on the production domain yet.');
             }
+        } elseif ($step->step === 'redirect_development_domain') {
+            $result = $this->wordpress->redirectDevelopmentDomain($server, $account, $password, $run->development_domain, $run->production_domain);
         }
 
-        $step->update(['status' => 'complete', 'completed_at' => now(), 'safe_message' => Str::headline($step->step).' complete.', 'metadata' => $this->safeMetadata($result)]);
+        $step->update(['status' => 'complete', 'completed_at' => now(), 'safe_message' => Str::headline($step->step).' complete.', 'metadata' => [...($step->metadata ?? []), ...$this->safeMetadata($result)]]);
     }
 
     private function fail(WebsiteLaunchRun $run, $step, string $message): WebsiteLaunchRun
@@ -123,7 +144,47 @@ class WebsiteLaunchService
 
     private function state(string $step): string
     {
-        return ['preflight' => 'validating', 'check_dns' => 'checking_dns', 'change_primary_domain' => 'changing_domain', 'reconcile_account' => 'reconciling_hosting', 'migrate_wordpress' => 'migrating_wordpress', 'trigger_autossl' => 'requesting_ssl', 'check_ssl' => 'checking_ssl', 'verify_production' => 'verifying_production'][$step] ?? 'pending';
+        return ['preflight' => 'validating', 'attach_production_domain' => 'attaching_domain', 'verify_production_domain' => 'reconciling_hosting', 'check_dns' => 'checking_dns', 'migrate_wordpress' => 'migrating_wordpress', 'trigger_autossl' => 'requesting_ssl', 'check_ssl' => 'checking_ssl', 'verify_production' => 'verifying_production', 'redirect_development_domain' => 'redirecting_development_domain'][$step] ?? 'pending';
+    }
+
+    private function stepOrder(string $step): int
+    {
+        $order = ['preflight', 'attach_production_domain', 'verify_production_domain', 'check_dns', 'trigger_autossl', 'check_ssl', 'migrate_wordpress', 'verify_production', 'redirect_development_domain'];
+        $position = array_search($step, $order, true);
+        return $position === false ? count($order) : $position;
+    }
+
+    private function normalizeLegacySteps(WebsiteLaunchRun $run): void
+    {
+        $replacements = [
+            'change_primary_domain' => 'attach_production_domain',
+            'reconcile_account' => 'verify_production_domain',
+        ];
+
+        foreach ($replacements as $legacy => $replacement) {
+            $step = $run->steps()->where('step', $legacy)->first();
+            if (! $step) continue;
+            if ($run->steps()->where('step', $replacement)->exists()) {
+                $step->delete();
+                continue;
+            }
+            $legacyMessage = $step->safe_message;
+            $step->update([
+                'step' => $replacement,
+                'status' => $step->status === 'complete' ? 'pending' : $step->status,
+                'completed_at' => null,
+                'safe_message' => $step->status === 'complete' ? null : $step->safe_message,
+                'metadata' => [
+                    ...($step->metadata ?? []),
+                    'legacy_step' => $legacy,
+                    'legacy_safe_message' => $legacyMessage,
+                ],
+            ]);
+        }
+
+        if (! $run->steps()->where('step', 'redirect_development_domain')->exists()) {
+            $run->steps()->create(['step' => 'redirect_development_domain']);
+        }
     }
 
     private function safeMetadata(array $result): array

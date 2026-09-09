@@ -34,7 +34,18 @@ class WebsiteLaunchController extends Controller
                 $query->where('domain', $domain)->orWhere('current_domain', $domain)->orWhere('development_domain', $domain)->orWhere('production_domain', $domain);
             })->exists();
             if ($localConflict) $issues[] = 'This domain is already used by another CRM website.';
-            if ($provider instanceof KrystalWhmProvider && $provider->domainOwners($website->hostingServer, $domain) !== []) $issues[] = 'This domain already exists on Krystal. Resolve or explicitly link that account first.';
+            if ($provider instanceof KrystalWhmProvider) {
+                $owners = $provider->domainOwners($website->hostingServer, $domain);
+                if ($owners !== [] && (count($owners) !== 1 || strtolower((string) ($owners[0]['username'] ?? '')) !== strtolower((string) $website->hostingAccount?->username))) {
+                    $issues[] = 'This domain already exists on Krystal. Resolve or explicitly link that account first.';
+                } elseif ($owners !== []) {
+                    try {
+                        $provider->verifyAddonDomain($website->hostingServer, $website->hostingAccount, $domain);
+                    } catch (\RuntimeException $exception) {
+                        $issues[] = $exception->getMessage();
+                    }
+                }
+            }
         }
 
         return response()->json(['data' => ['ready' => $issues === [], 'issues' => $issues, 'development_domain' => $website->development_domain ?: $website->domain, 'expected_ip' => $website->hostingAccount?->assigned_ip]]);
@@ -59,7 +70,17 @@ class WebsiteLaunchController extends Controller
             $query->where('domain', $domain)->orWhere('current_domain', $domain)->orWhere('development_domain', $domain)->orWhere('production_domain', $domain);
         })->exists();
         if ($conflict) throw ValidationException::withMessages(['production_domain' => ['This domain is already used by another CRM website.']]);
-        if ($provider->domainOwners($website->hostingServer, $domain) !== []) throw ValidationException::withMessages(['production_domain' => ['This domain already exists on Krystal. Resolve or explicitly link that account first.']]);
+        $owners = $provider->domainOwners($website->hostingServer, $domain);
+        if ($owners !== []) {
+            if (count($owners) !== 1 || strtolower((string) ($owners[0]['username'] ?? '')) !== strtolower($website->hostingAccount->username)) {
+                throw ValidationException::withMessages(['production_domain' => ['This domain already exists on Krystal. Resolve or explicitly link that account first.']]);
+            }
+            try {
+                $provider->verifyAddonDomain($website->hostingServer, $website->hostingAccount, $domain);
+            } catch (\RuntimeException $exception) {
+                throw ValidationException::withMessages(['production_domain' => [$exception->getMessage()]]);
+            }
+        }
 
         $run = DB::transaction(function () use ($website, $domain, $data, $request) {
             if ($existing = WebsiteLaunchRun::where('idempotency_key', $data['idempotency_key'])->lockForUpdate()->first()) return $existing;
@@ -71,7 +92,7 @@ class WebsiteLaunchController extends Controller
                 'development_domain' => $website->development_domain ?: $website->domain, 'production_domain' => $domain,
                 'options' => ['enable_indexing' => (bool) ($data['enable_indexing'] ?? false), 'dns_override' => (bool) ($data['dns_override'] ?? false)],
             ]);
-            foreach (['preflight', 'check_dns', 'change_primary_domain', 'reconcile_account', 'migrate_wordpress', 'trigger_autossl', 'check_ssl', 'verify_production'] as $step) $run->steps()->create(['step' => $step]);
+            foreach (['preflight', 'attach_production_domain', 'verify_production_domain', 'check_dns', 'trigger_autossl', 'check_ssl', 'migrate_wordpress', 'verify_production', 'redirect_development_domain'] as $step) $run->steps()->create(['step' => $step]);
             return $run;
         });
 
@@ -98,6 +119,15 @@ class WebsiteLaunchController extends Controller
     private function present(WebsiteLaunchRun $run): array
     {
         $run->loadMissing(['website:id,name,domain,development_domain,production_domain,current_domain,environment', 'account:id,username,primary_domain,assigned_ip,status', 'steps']);
-        return ['id' => $run->id, 'public_id' => $run->public_id, 'state' => $run->state, 'development_domain' => $run->development_domain, 'production_domain' => $run->production_domain, 'expected_ip' => $run->expected_ip, 'dns_status' => $run->dns_status, 'ssl_status' => $run->ssl_status, 'safe_error' => $run->safe_error, 'next_check_at' => $run->next_check_at, 'website' => $run->website, 'account' => $run->account, 'steps' => $run->steps];
+        $steps = $run->steps->map(function ($step) {
+            $data = $step->toArray();
+            $data['step'] = match ($data['step']) {
+                'change_primary_domain' => 'attach_production_domain',
+                'reconcile_account' => 'verify_production_domain',
+                default => $data['step'],
+            };
+            return $data;
+        })->values();
+        return ['id' => $run->id, 'public_id' => $run->public_id, 'state' => $run->state, 'development_domain' => $run->development_domain, 'production_domain' => $run->production_domain, 'expected_ip' => $run->expected_ip, 'dns_status' => $run->dns_status, 'ssl_status' => $run->ssl_status, 'safe_error' => $run->safe_error, 'next_check_at' => $run->next_check_at, 'website' => $run->website, 'account' => $run->account, 'steps' => $steps];
     }
 }

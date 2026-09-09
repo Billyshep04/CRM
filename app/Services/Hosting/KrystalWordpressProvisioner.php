@@ -238,6 +238,43 @@ class KrystalWordpressProvisioner
         return ['migrated' => true, 'from_url' => $fromUrl, 'to_url' => $toUrl, 'indexing_enabled' => $allowIndexing];
     }
 
+    public function redirectDevelopmentDomain(HostingServer $server, HostingAccount $account, string $password, string $developmentDomain, string $productionDomain): array
+    {
+        $developmentDomain = strtolower(rtrim(trim($developmentDomain), '.'));
+        $productionDomain = strtolower(rtrim(trim($productionDomain), '.'));
+        foreach ([$developmentDomain, $productionDomain] as $domain) {
+            if (! preg_match('/^(?!-)(?:[a-z0-9-]{1,63}\.)+[a-z]{2,63}$/', $domain)) {
+                throw new RuntimeException('The development redirect contains an invalid domain.');
+            }
+        }
+
+        $escapedDevelopment = preg_quote($developmentDomain, '/');
+        $block = "# BEGIN WebStamp Development Redirect\n"
+            ."RewriteEngine On\n"
+            ."RewriteCond %{HTTP_HOST} ^{$escapedDevelopment}$ [NC]\n"
+            ."RewriteRule ^ https://{$productionDomain}%{REQUEST_URI} [R=301,L,NE]\n"
+            ."# END WebStamp Development Redirect\n";
+        $encoded = base64_encode($block);
+        $script = '$path=getcwd()."/.htaccess";'
+            .'$contents=is_file($path)?file_get_contents($path):"";'
+            .'$contents=preg_replace("/# BEGIN WebStamp Development Redirect.*?# END WebStamp Development Redirect\\R?/s","",$contents);'
+            .'$block=base64_decode("'.$encoded.'",true);'
+            .'if($block===false||file_put_contents($path,$block.$contents)===false){exit(1);}'
+            .'echo "__WEBSTAMP_REDIRECT_READY__";';
+        $output = trim($this->execute(
+            $server,
+            $account,
+            $password,
+            'cd ~/public_html && php -r '.$this->shellArgument($script),
+            'The development-domain redirect could not be configured.'
+        ));
+        if ($output !== '__WEBSTAMP_REDIRECT_READY__') {
+            throw new RuntimeException('The development-domain redirect could not be verified.');
+        }
+
+        return ['redirected' => true, 'from_domain' => $developmentDomain, 'to_domain' => $productionDomain];
+    }
+
     public function wpCliCommand(array $arguments): string
     {
         $safe = collect($arguments)->map(fn ($argument) => $this->shellArgument((string) $argument))->implode(' ');

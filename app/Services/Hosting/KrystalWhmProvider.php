@@ -421,6 +421,116 @@ class KrystalWhmProvider implements HostingProviderInterface
         return $match;
     }
 
+    public function ensureAddonDomain(HostingServer $server, HostingAccount $account, string $domain): array
+    {
+        $domain = strtolower(rtrim(trim($domain), '.'));
+        $owners = $this->domainOwners($server, $domain);
+
+        if ($owners !== []) {
+            if (count($owners) !== 1 || strtolower((string) ($owners[0]['username'] ?? '')) !== strtolower($account->username)) {
+                $owner = (string) ($owners[0]['username'] ?? 'another account');
+                throw new RuntimeException("The production domain already belongs to cPanel account \"{$owner}\". Launch stopped for safety.");
+            }
+
+            return $this->verifyAddonDomain($server, $account, $domain);
+        }
+
+        $payload = $this->call($server, 'cpanel', [
+            'cpanel_jsonapi_user' => strtolower($account->username),
+            'cpanel_jsonapi_apiversion' => 2,
+            'cpanel_jsonapi_module' => 'AddonDomain',
+            'cpanel_jsonapi_func' => 'addaddondomain',
+            'newdomain' => $domain,
+            'dir' => 'public_html',
+            'subdomain' => 'ws'.substr(hash('sha256', $domain), 0, 10),
+            'ftp_is_optional' => 1,
+        ], 120);
+        $this->requireCpanelApi2Success($payload, 'cPanel could not add the production domain to this hosting account.');
+
+        Log::info('Production addon domain creation succeeded.', [
+            'hosting_account_id' => $account->id,
+            'username' => $account->username,
+            'domain' => $domain,
+            'document_root' => 'public_html',
+        ]);
+
+        return $this->verifyAddonDomain($server, $account, $domain);
+    }
+
+    public function verifyAddonDomain(HostingServer $server, HostingAccount $account, string $domain): array
+    {
+        $domain = strtolower(rtrim(trim($domain), '.'));
+        $payload = $this->call($server, 'cpanel', [
+            'cpanel_jsonapi_user' => strtolower($account->username),
+            'cpanel_jsonapi_apiversion' => 2,
+            'cpanel_jsonapi_module' => 'AddonDomain',
+            'cpanel_jsonapi_func' => 'listaddondomains',
+        ]);
+        $result = $this->requireCpanelApi2Success($payload, 'cPanel could not verify the production addon domain.');
+        $matches = collect($result['data'] ?? [])
+            ->filter(fn ($item) => is_array($item) && strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $domain)
+            ->values();
+
+        if ($matches->count() !== 1) {
+            throw new RuntimeException('The production addon domain is not visible on the expected cPanel account yet. Retry this launch shortly.');
+        }
+
+        $item = $matches->first();
+        $basedir = trim((string) ($item['basedir'] ?? ''), '/');
+        $reldir = trim((string) ($item['reldir'] ?? ''));
+        $absolute = rtrim((string) ($item['dir'] ?? ''), '/');
+        $expectedAbsolute = '/home/'.strtolower($account->username).'/public_html';
+        $sameDocumentRoot = $basedir === 'public_html'
+            || $reldir === 'home:public_html'
+            || strtolower($absolute) === strtolower($expectedAbsolute);
+
+        if (! $sameDocumentRoot) {
+            Log::warning('Production addon domain uses an unexpected document root.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+                'domain' => $domain,
+                'basedir' => $basedir,
+            ]);
+            throw new RuntimeException('The production domain exists on this cPanel account but does not use the development website document root. Launch stopped for safety.');
+        }
+
+        return [
+            'domain' => $domain,
+            'username' => $account->username,
+            'type' => 'addon',
+            'document_root' => 'public_html',
+        ];
+    }
+
+    private function requireCpanelApi2Success(array $payload, string $fallback): array
+    {
+        $result = data_get($payload, 'data.cpanelresult')
+            ?? data_get($payload, 'data.result')
+            ?? data_get($payload, 'cpanelresult');
+
+        if (! is_array($result)) {
+            Log::warning('WHM returned a malformed cPanel API 2 response.', [
+                'top_level_keys' => array_values(array_map('strval', array_keys($payload))),
+                'metadata_result' => data_get($payload, 'metadata.result'),
+                'has_data' => array_key_exists('data', $payload),
+            ]);
+            throw new RuntimeException($fallback);
+        }
+
+        if ((int) data_get($result, 'event.result', 0) !== 1) {
+            $reason = collect($result['data'] ?? [])
+                ->filter(fn ($item) => is_array($item))
+                ->pluck('reason')
+                ->filter(fn ($value) => is_scalar($value))
+                ->map(fn ($value) => Str::limit(trim(strip_tags((string) $value)), 240))
+                ->filter()
+                ->first();
+            throw new RuntimeException($reason ?: $fallback);
+        }
+
+        return $result;
+    }
+
     private function isDisabledShell(string $shell): bool
     {
         $shell = strtolower(trim($shell));
