@@ -87,7 +87,7 @@ class WebsiteLaunchService
             $run->update(['expected_ip' => $verified['assigned_ip'] ?? $account->assigned_ip, 'recovery_encrypted' => ['original_domain' => $run->development_domain, 'original_username' => $account->username]]);
             $result = ['ready' => true, 'account' => $account->username, 'expected_ip' => $verified['assigned_ip'] ?? $account->assigned_ip];
         } elseif ($step->step === 'attach_production_domain') {
-            $result = $provider->ensureAddonDomain($server, $account, $run->production_domain);
+            $result = $provider->ensureAddonDomain($server, $account, $run->production_domain, $run->development_domain);
             $domains = collect($account->domains ?? [])
                 ->filter(fn ($item) => is_array($item) && ! empty($item['domain']))
                 ->push(['domain' => $run->development_domain, 'type' => 'primary'])

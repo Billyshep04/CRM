@@ -420,6 +420,8 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
 
         Http::fake(function ($request) {
             if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
             if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') return Http::response([
                 'metadata' => ['result' => 1, 'reason' => 'OK'],
                 'data' => ['cpanelresult' => [
@@ -444,7 +446,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             $this->assertStringContainsString('[REDACTED]', $exception->getMessage());
         }
         Log::shouldHaveReceived('warning')->with('cPanel API 2 addon-domain operation failed.', \Mockery::on(fn ($context) => ! str_contains(json_encode($context) ?: '', 'private-whm-token')))->once();
-        Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+        $this->assertSame(1, collect(Http::recorded())->filter(fn ($record) => ($record[0]['cpanel_jsonapi_func'] ?? null) === 'listaddondomains')->count());
     }
 
     public function test_genuine_addon_creation_requires_api_success_then_verifies_the_shared_document_root(): void
@@ -455,13 +457,18 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
 
         Http::fake(function ($request) use (&$created) {
             if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
             if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $created = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1, 'reason' => 'Domain created']]]]]); }
             if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $created ? [['domain' => 'live.example.test', 'basedir' => 'public_html', 'reldir' => 'home:public_html', 'dir' => '/home/devusr/public_html', 'status' => 0]] : []]]]);
             return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => $created ? ['live.example.test'] : []]]]]);
         });
 
         $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
-        $this->assertSame(['domain' => 'live.example.test', 'username' => 'devusr', 'type' => 'addon', 'document_root' => 'public_html'], $result);
+        $this->assertSame('live.example.test', $result['domain']);
+        $this->assertSame('devusr', $result['username']);
+        $this->assertSame('addon', $result['type']);
+        $this->assertSame('public_html', $result['document_root']);
+        $this->assertFalse($result['residue_cleaned']);
         Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain'
             && $request['cpanel_jsonapi_user'] === 'devusr'
             && $request['newdomain'] === 'live.example.test'
@@ -476,6 +483,8 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
 
         Http::fake(function ($request) {
             if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
             if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 0, 'reason' => 'The API dispatcher rejected the addon operation.'], 'errors' => ['The Domains feature is unavailable.'], 'messages' => ['Contact the hosting provider.'], 'data' => []]]]);
             return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
         });
@@ -488,7 +497,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             $this->assertStringContainsString('The Domains feature is unavailable.', $exception->getMessage());
             $this->assertStringContainsString('Contact the hosting provider.', $exception->getMessage());
         }
-        Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+        $this->assertSame(1, collect(Http::recorded())->filter(fn ($record) => ($record[0]['cpanel_jsonapi_func'] ?? null) === 'listaddondomains')->count());
     }
 
     public function test_existing_correct_addon_domain_is_verified_without_creating_a_duplicate(): void
@@ -521,6 +530,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
 
         Http::fake(function ($request) use (&$created, &$visible, &$createCalls) {
             if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
             if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $createCalls++; $created = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]); }
             if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $visible ? [['domain' => 'live.example.test', 'basedir' => 'public_html']] : []]]]);
             return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => ($created && $visible) ? ['live.example.test'] : []]]]]);
@@ -536,6 +546,214 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
         $this->assertSame('live.example.test', $result['domain']);
         $this->assertSame(1, $createCalls);
+    }
+
+    public function test_owned_residual_internal_subdomain_is_safely_deleted_before_addon_creation(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+        $subdomains = [['domain' => $internal, 'rootdomain' => 'dev.example.test', 'subdomain' => $label, 'basedir' => 'public_html', 'reldir' => 'home:public_html', 'dir' => '/home/devusr/public_html']];
+        $addonCreated = false;
+        $calls = [];
+
+        Http::fake(function ($request) use (&$subdomains, &$addonCreated, &$calls, $internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') { $calls[] = 'inspect'; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $subdomains]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'delsubdomain') { $calls[] = 'delete'; $this->assertSame($internal, $request['domain']); $this->assertSame('devusr', $request['cpanel_jsonapi_user']); $subdomains = []; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1, 'reason' => 'Removed']]]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $calls[] = 'create'; $addonCreated = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1]]]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') { $calls[] = 'verify'; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $addonCreated ? [['domain' => 'live.example.test', 'basedir' => 'public_html']] : []]]]); }
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+
+        $this->assertTrue($result['residue_cleaned']);
+        $this->assertSame($internal, $result['internal_subdomain']);
+        $this->assertSame(['verify', 'inspect', 'delete', 'create', 'verify'], $calls);
+    }
+
+    public function test_dns_entry_conflict_reconciles_owned_residue_and_retries_creation_once(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+        $subdomains = [];
+        $createCalls = 0;
+        $deleteCalls = 0;
+
+        Http::fake(function ($request) use (&$subdomains, &$createCalls, &$deleteCalls, $label, $internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $subdomains]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'delsubdomain') { $deleteCalls++; $subdomains = []; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1]]]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') {
+                $createCalls++;
+                if ($createCalls === 1) {
+                    $subdomains = [['domain' => $internal, 'rootdomain' => 'dev.example.test', 'subdomain' => $label, 'basedir' => 'public_html']];
+                    return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 0, 'reason' => "A DNS entry for the domain \"{$internal}\" already exists."]]]]]);
+                }
+                return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1]]]]]);
+            }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $createCalls >= 2 ? [['domain' => 'live.example.test', 'basedir' => 'public_html']] : []]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+
+        $this->assertTrue($result['residue_cleaned']);
+        $this->assertSame(2, $createCalls);
+        $this->assertSame(1, $deleteCalls);
+    }
+
+    public function test_unrelated_similar_subdomain_is_never_deleted(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $deleteCalls = 0;
+        $addonCreated = false;
+
+        Http::fake(function ($request) use (&$deleteCalls, &$addonCreated, $label) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $addonCreated ? [['domain' => 'live.example.test', 'basedir' => 'public_html']] : []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['domain' => $label.'x.dev.example.test', 'rootdomain' => 'dev.example.test', 'subdomain' => $label.'x', 'basedir' => 'public_html']]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'delsubdomain') { $deleteCalls++; return Http::response([], 500); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $addonCreated = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1]]]]]); }
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+
+        $this->assertSame(0, $deleteCalls);
+    }
+
+    public function test_unproven_residue_requires_manual_review_without_deletion_or_creation(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+
+        Http::fake(function ($request) use ($label, $internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['domain' => $internal, 'rootdomain' => 'other.example.test', 'subdomain' => $label, 'basedir' => 'public_html']]]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cannot prove it is owned residue');
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+        } finally {
+            Http::assertNotSent(fn ($request) => in_array(($request['cpanel_jsonapi_func'] ?? null), ['delsubdomain', 'addaddondomain'], true));
+        }
+    }
+
+    public function test_residual_subdomain_without_go_live_identity_is_never_deleted(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+
+        Http::fake(function ($request) use ($label, $internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['domain' => $internal, 'rootdomain' => 'dev.example.test', 'subdomain' => $label, 'basedir' => 'public_html']]]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('no launch identity was supplied');
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+        } finally {
+            Http::assertNotSent(fn ($request) => in_array(($request['cpanel_jsonapi_func'] ?? null), ['delsubdomain', 'addaddondomain'], true));
+        }
+    }
+
+    public function test_dns_conflict_on_another_account_is_not_cleaned(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+
+        Http::fake(function ($request) use ($internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 0, 'reason' => "A DNS entry for the domain \"{$internal}\" already exists."]]]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('could not prove it is owned residue');
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+        } finally {
+            Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'delsubdomain');
+            Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains' && $request['cpanel_jsonapi_user'] === 'devusr');
+        }
+    }
+
+    public function test_development_domain_mismatch_stops_before_any_cleanup_target_is_touched(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('does not match the cPanel primary domain');
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'different.example.test');
+        } finally {
+            Http::assertNotSent(fn ($request) => in_array(($request['cpanel_jsonapi_func'] ?? null), ['delsubdomain', 'addaddondomain'], true));
+        }
+    }
+
+    public function test_cleanup_succeeds_but_single_retry_surfaces_real_sanitized_cpanel_error(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'private-token']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $label = 'ws'.substr(hash('sha256', 'live.example.test'), 0, 10);
+        $internal = $label.'.dev.example.test';
+        $subdomains = [];
+        $createCalls = 0;
+
+        Http::fake(function ($request) use (&$subdomains, &$createCalls, $label, $internal) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listsubdomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $subdomains]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'delsubdomain') { $subdomains = []; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1]]]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') {
+                $createCalls++;
+                if ($createCalls === 1) {
+                    $subdomains = [['domain' => $internal, 'rootdomain' => 'dev.example.test', 'subdomain' => $label, 'basedir' => 'public_html']];
+                    return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 0, 'reason' => "A DNS entry for the domain \"{$internal}\" already exists."]]]]]);
+                }
+                return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 0, 'reason' => 'Addon domain creation denied. private-token']]]]]);
+            }
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test', 'dev.example.test');
+            $this->fail('Expected the bounded retry to fail.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Addon domain creation denied.', $exception->getMessage());
+            $this->assertStringNotContainsString('private-token', $exception->getMessage());
+            $this->assertStringContainsString('[REDACTED]', $exception->getMessage());
+        }
+        $this->assertSame(2, $createCalls);
     }
 
     public function test_existing_addon_domain_with_a_different_document_root_is_rejected(): void

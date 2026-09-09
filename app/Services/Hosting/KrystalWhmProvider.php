@@ -421,9 +421,13 @@ class KrystalWhmProvider implements HostingProviderInterface
         return $match;
     }
 
-    public function ensureAddonDomain(HostingServer $server, HostingAccount $account, string $domain): array
+    public function ensureAddonDomain(HostingServer $server, HostingAccount $account, string $domain, ?string $developmentDomain = null): array
     {
         $domain = strtolower(rtrim(trim($domain), '.'));
+        $hasLaunchIdentity = is_string($developmentDomain) && trim($developmentDomain) !== '';
+        $developmentDomain = strtolower(rtrim(trim((string) ($developmentDomain ?: $account->primary_domain)), '.'));
+        $internalLabel = $this->addonInternalSubdomainLabel($domain);
+        $internalDomain = $internalLabel.'.'.$developmentDomain;
         $owners = $this->domainOwners($server, $domain);
 
         if ($owners !== []) {
@@ -432,8 +436,31 @@ class KrystalWhmProvider implements HostingProviderInterface
                 throw new RuntimeException("The production domain already belongs to cPanel account \"{$owner}\". Launch stopped for safety.");
             }
 
-            return $this->verifyAddonDomain($server, $account, $domain);
+            return [
+                ...$this->verifyAddonDomain($server, $account, $domain),
+                'internal_subdomain' => $internalDomain,
+                'residue_cleaned' => false,
+            ];
         }
+
+        $existingAddon = $this->addonDomainOnAccount($server, $account, $domain);
+        if ($existingAddon !== null) {
+            return [
+                ...$existingAddon,
+                'internal_subdomain' => $internalDomain,
+                'residue_cleaned' => false,
+            ];
+        }
+
+        $residueCleaned = $this->cleanupOwnedAddonResidue(
+            $server,
+            $account,
+            $domain,
+            $developmentDomain,
+            $internalLabel,
+            $internalDomain,
+            $hasLaunchIdentity
+        );
 
         $payload = $this->call($server, 'cpanel', [
             'cpanel_jsonapi_user' => strtolower($account->username),
@@ -442,16 +469,65 @@ class KrystalWhmProvider implements HostingProviderInterface
             'cpanel_jsonapi_func' => 'addaddondomain',
             'newdomain' => $domain,
             'dir' => 'public_html',
-            'subdomain' => 'ws'.substr(hash('sha256', $domain), 0, 10),
+            'subdomain' => $internalLabel,
             'ftp_is_optional' => 1,
         ], 120);
-        $this->requireCpanelApi2Success(
-            $server,
-            $payload,
-            'addaddondomain',
-            'cPanel could not add the production domain to this hosting account.',
-            ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain]
-        );
+        try {
+            $this->requireCpanelApi2Success(
+                $server,
+                $payload,
+                'addaddondomain',
+                'cPanel could not add the production domain to this hosting account.',
+                ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain]
+            );
+        } catch (RuntimeException $exception) {
+            if (! $this->isInternalSubdomainDnsConflict($exception, $internalDomain)) {
+                throw $exception;
+            }
+
+            $existingAddon = $this->addonDomainOnAccount($server, $account, $domain);
+            if ($existingAddon !== null) {
+                return [
+                    ...$existingAddon,
+                    'internal_subdomain' => $internalDomain,
+                    'residue_cleaned' => $residueCleaned,
+                ];
+            }
+
+            $cleanedAfterFailure = $this->cleanupOwnedAddonResidue(
+                $server,
+                $account,
+                $domain,
+                $developmentDomain,
+                $internalLabel,
+                $internalDomain,
+                $hasLaunchIdentity
+            );
+            if (! $cleanedAfterFailure) {
+                throw new RuntimeException(
+                    "cPanel reports that the internal domain \"{$internalDomain}\" already exists, but the CRM could not prove it is owned residue from this launch. Manual review is required; nothing was deleted."
+                );
+            }
+
+            $residueCleaned = true;
+            $retryPayload = $this->call($server, 'cpanel', [
+                'cpanel_jsonapi_user' => strtolower($account->username),
+                'cpanel_jsonapi_apiversion' => 2,
+                'cpanel_jsonapi_module' => 'AddonDomain',
+                'cpanel_jsonapi_func' => 'addaddondomain',
+                'newdomain' => $domain,
+                'dir' => 'public_html',
+                'subdomain' => $internalLabel,
+                'ftp_is_optional' => 1,
+            ], 120);
+            $this->requireCpanelApi2Success(
+                $server,
+                $retryPayload,
+                'addaddondomain',
+                'cPanel could not add the production domain after safely removing its residual internal subdomain.',
+                ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain, 'retry' => true]
+            );
+        }
 
         Log::info('Production addon domain creation succeeded.', [
             'hosting_account_id' => $account->id,
@@ -460,12 +536,143 @@ class KrystalWhmProvider implements HostingProviderInterface
             'document_root' => 'public_html',
         ]);
 
-        return $this->verifyAddonDomain($server, $account, $domain);
+        return [
+            ...$this->verifyAddonDomain($server, $account, $domain),
+            'internal_subdomain' => $internalDomain,
+            'residue_cleaned' => $residueCleaned,
+        ];
+    }
+
+    private function addonInternalSubdomainLabel(string $domain): string
+    {
+        return 'ws'.substr(hash('sha256', strtolower(rtrim(trim($domain), '.'))), 0, 10);
+    }
+
+    private function cleanupOwnedAddonResidue(
+        HostingServer $server,
+        HostingAccount $account,
+        string $productionDomain,
+        string $developmentDomain,
+        string $internalLabel,
+        string $internalDomain,
+        bool $hasLaunchIdentity
+    ): bool {
+        $primaryDomain = strtolower(rtrim(trim((string) $account->primary_domain), '.'));
+        if ($developmentDomain === '' || $primaryDomain !== $developmentDomain) {
+            throw new RuntimeException('The CRM cannot safely reconcile the internal addon-domain state because the launch development domain does not match the cPanel primary domain. Manual review is required; nothing was deleted.');
+        }
+        if ($internalDomain === $developmentDomain || $internalDomain === $productionDomain) {
+            throw new RuntimeException('The CRM refused to clean up an unsafe addon-domain target. Manual review is required; nothing was deleted.');
+        }
+
+        $matches = $this->subdomains($server, $account)
+            ->filter(fn ($item) => strtolower(rtrim(trim((string) ($item['domain'] ?? '')), '.')) === $internalDomain)
+            ->values();
+        if ($matches->isEmpty()) {
+            return false;
+        }
+        if (! $hasLaunchIdentity) {
+            throw new RuntimeException("The internal domain \"{$internalDomain}\" exists, but no launch identity was supplied to prove it belongs to this Go Live run. Manual review is required; nothing was deleted.");
+        }
+        if ($matches->count() !== 1) {
+            throw new RuntimeException("The internal domain \"{$internalDomain}\" has ambiguous cPanel state. Manual review is required; nothing was deleted.");
+        }
+
+        $item = $matches->first();
+        $rootDomain = strtolower(rtrim(trim((string) ($item['rootdomain'] ?? '')), '.'));
+        $subdomain = strtolower(trim((string) ($item['subdomain'] ?? '')));
+        $basedir = trim((string) ($item['basedir'] ?? ''), '/');
+        $reldir = trim((string) ($item['reldir'] ?? ''));
+        $absolute = rtrim((string) ($item['dir'] ?? ''), '/');
+        $expectedAbsolute = '/home/'.strtolower($account->username).'/public_html';
+        $sameDocumentRoot = $basedir === 'public_html'
+            || $reldir === 'home:public_html'
+            || strtolower($absolute) === strtolower($expectedAbsolute);
+        $ownedResidue = $rootDomain === $developmentDomain
+            && $subdomain === $internalLabel
+            && $sameDocumentRoot;
+
+        if (! $ownedResidue) {
+            Log::warning('Addon-domain residue ownership could not be proven.', [
+                'hosting_account_id' => $account->id,
+                'username' => $account->username,
+                'production_domain' => $productionDomain,
+                'development_domain' => $developmentDomain,
+                'internal_domain' => $internalDomain,
+                'reported_root_domain' => $rootDomain,
+                'reported_subdomain' => $subdomain,
+                'reported_basedir' => $basedir,
+            ]);
+            throw new RuntimeException("The internal domain \"{$internalDomain}\" exists, but the CRM cannot prove it is owned residue from this launch. Manual review is required; nothing was deleted.");
+        }
+
+        $payload = $this->call($server, 'cpanel', [
+            'cpanel_jsonapi_user' => strtolower($account->username),
+            'cpanel_jsonapi_apiversion' => 2,
+            'cpanel_jsonapi_module' => 'SubDomain',
+            'cpanel_jsonapi_func' => 'delsubdomain',
+            'domain' => $internalDomain,
+        ], 120);
+        $this->requireCpanelApi2Success(
+            $server,
+            $payload,
+            'delsubdomain',
+            'cPanel could not safely remove the residual internal subdomain.',
+            ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $internalDomain]
+        );
+
+        Log::info('Safely removed owned addon-domain residue.', [
+            'hosting_account_id' => $account->id,
+            'username' => $account->username,
+            'production_domain' => $productionDomain,
+            'development_domain' => $developmentDomain,
+            'internal_domain' => $internalDomain,
+        ]);
+
+        return true;
+    }
+
+    private function subdomains(HostingServer $server, HostingAccount $account): \Illuminate\Support\Collection
+    {
+        $payload = $this->call($server, 'cpanel', [
+            'cpanel_jsonapi_user' => strtolower($account->username),
+            'cpanel_jsonapi_apiversion' => 2,
+            'cpanel_jsonapi_module' => 'SubDomain',
+            'cpanel_jsonapi_func' => 'listsubdomains',
+        ]);
+        $result = $this->requireCpanelApi2Success(
+            $server,
+            $payload,
+            'listsubdomains',
+            'cPanel could not inspect internal subdomains before adding the production domain.',
+            ['hosting_account_id' => $account->id, 'username' => $account->username]
+        );
+
+        return collect($result['data'] ?? [])->filter(fn ($item) => is_array($item))->values();
+    }
+
+    private function isInternalSubdomainDnsConflict(RuntimeException $exception, string $internalDomain): bool
+    {
+        $message = strtolower($exception->getMessage());
+
+        return str_contains($message, 'dns entry for the domain')
+            && str_contains($message, 'already exists')
+            && str_contains($message, strtolower($internalDomain));
     }
 
     public function verifyAddonDomain(HostingServer $server, HostingAccount $account, string $domain): array
     {
         $domain = strtolower(rtrim(trim($domain), '.'));
+        $match = $this->addonDomainOnAccount($server, $account, $domain);
+        if ($match === null) {
+            throw new RuntimeException('The production addon domain is not visible on the expected cPanel account yet. Retry this launch shortly.');
+        }
+
+        return $match;
+    }
+
+    private function addonDomainOnAccount(HostingServer $server, HostingAccount $account, string $domain): ?array
+    {
         $payload = $this->call($server, 'cpanel', [
             'cpanel_jsonapi_user' => strtolower($account->username),
             'cpanel_jsonapi_apiversion' => 2,
@@ -483,8 +690,11 @@ class KrystalWhmProvider implements HostingProviderInterface
             ->filter(fn ($item) => is_array($item) && strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $domain)
             ->values();
 
+        if ($matches->isEmpty()) {
+            return null;
+        }
         if ($matches->count() !== 1) {
-            throw new RuntimeException('The production addon domain is not visible on the expected cPanel account yet. Retry this launch shortly.');
+            throw new RuntimeException('cPanel returned ambiguous addon-domain records for the production domain. Manual review is required.');
         }
 
         $item = $matches->first();
