@@ -445,7 +445,13 @@ class KrystalWhmProvider implements HostingProviderInterface
             'subdomain' => 'ws'.substr(hash('sha256', $domain), 0, 10),
             'ftp_is_optional' => 1,
         ], 120);
-        $this->requireCpanelApi2Success($payload, 'cPanel could not add the production domain to this hosting account.');
+        $this->requireCpanelApi2Success(
+            $server,
+            $payload,
+            'addaddondomain',
+            'cPanel could not add the production domain to this hosting account.',
+            ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain]
+        );
 
         Log::info('Production addon domain creation succeeded.', [
             'hosting_account_id' => $account->id,
@@ -466,7 +472,13 @@ class KrystalWhmProvider implements HostingProviderInterface
             'cpanel_jsonapi_module' => 'AddonDomain',
             'cpanel_jsonapi_func' => 'listaddondomains',
         ]);
-        $result = $this->requireCpanelApi2Success($payload, 'cPanel could not verify the production addon domain.');
+        $result = $this->requireCpanelApi2Success(
+            $server,
+            $payload,
+            'listaddondomains',
+            'cPanel could not verify the production addon domain.',
+            ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain]
+        );
         $matches = collect($result['data'] ?? [])
             ->filter(fn ($item) => is_array($item) && strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $domain)
             ->values();
@@ -502,14 +514,20 @@ class KrystalWhmProvider implements HostingProviderInterface
         ];
     }
 
-    private function requireCpanelApi2Success(array $payload, string $fallback): array
+    private function requireCpanelApi2Success(HostingServer $server, array $payload, string $function, string $fallback, array $context = []): array
     {
-        $result = data_get($payload, 'data.cpanelresult')
-            ?? data_get($payload, 'data.result')
-            ?? data_get($payload, 'cpanelresult');
+        [$result, $resultPath] = match (true) {
+            is_array(data_get($payload, 'data.cpanelresult')) => [data_get($payload, 'data.cpanelresult'), 'data.cpanelresult'],
+            is_array(data_get($payload, 'data.result')) => [data_get($payload, 'data.result'), 'data.result'],
+            is_array(data_get($payload, 'cpanelresult')) => [data_get($payload, 'cpanelresult'), 'cpanelresult'],
+            is_array(data_get($payload, 'data')) && array_key_exists('event', $payload['data']) => [$payload['data'], 'data'],
+            default => [null, null],
+        };
 
         if (! is_array($result)) {
             Log::warning('WHM returned a malformed cPanel API 2 response.', [
+                ...$context,
+                'function' => $function,
                 'top_level_keys' => array_values(array_map('strval', array_keys($payload))),
                 'metadata_result' => data_get($payload, 'metadata.result'),
                 'has_data' => array_key_exists('data', $payload),
@@ -517,18 +535,109 @@ class KrystalWhmProvider implements HostingProviderInterface
             throw new RuntimeException($fallback);
         }
 
-        if ((int) data_get($result, 'event.result', 0) !== 1) {
-            $reason = collect($result['data'] ?? [])
-                ->filter(fn ($item) => is_array($item))
-                ->pluck('reason')
-                ->filter(fn ($value) => is_scalar($value))
-                ->map(fn ($value) => Str::limit(trim(strip_tags((string) $value)), 240))
-                ->filter()
-                ->first();
-            throw new RuntimeException($reason ?: $fallback);
+        $data = $result['data'] ?? [];
+        $items = is_array($data) ? (array_is_list($data) ? $data : [$data]) : [];
+        $eventResult = data_get($result, 'event.result');
+        $functionResults = collect($items)
+            ->filter(fn ($item) => is_array($item) && array_key_exists('result', $item))
+            ->pluck('result')
+            ->values();
+        $statuses = $function === 'addaddondomain'
+            ? collect($items)
+                ->filter(fn ($item) => is_array($item) && array_key_exists('status', $item))
+                ->pluck('status')
+                ->values()
+            : collect();
+        $messages = $this->safeCpanelApi2Messages($server, $result, $items);
+        $failed = (int) data_get($payload, 'metadata.result', 0) !== 1
+            || (int) $eventResult !== 1
+            || $functionResults->contains(fn ($value) => (int) $value !== 1)
+            || $statuses->contains(fn ($value) => (int) $value !== 1)
+            || $this->hasCpanelApi2Errors($result, $items);
+
+        if ($failed) {
+            Log::warning('cPanel API 2 addon-domain operation failed.', [
+                ...$context,
+                'function' => $function,
+                'result_path' => $resultPath,
+                'metadata_result' => data_get($payload, 'metadata.result'),
+                'event_result' => $eventResult,
+                'function_results' => $functionResults->map(fn ($value) => is_scalar($value) ? (string) $value : get_debug_type($value))->all(),
+                'statuses' => $statuses->map(fn ($value) => is_scalar($value) ? (string) $value : get_debug_type($value))->all(),
+                'messages' => $messages,
+                'data_type' => get_debug_type($data),
+                'data_count' => is_array($data) ? count($data) : null,
+            ]);
+            throw new RuntimeException($messages === [] ? $fallback : $fallback.' '.implode(' ', $messages));
         }
 
         return $result;
+    }
+
+    private function hasCpanelApi2Errors(array $result, array $items): bool
+    {
+        $event = is_array($result['event'] ?? null) ? $result['event'] : [];
+        $values = [
+            $result['errors'] ?? null,
+            $result['error'] ?? null,
+            $event['errors'] ?? null,
+            $event['error'] ?? null,
+        ];
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $values[] = $item['errors'] ?? null;
+            $values[] = $item['error'] ?? null;
+        }
+
+        return collect($values)->flatten()->contains(fn ($value) => is_scalar($value) && trim((string) $value) !== '');
+    }
+
+    private function safeCpanelApi2Messages(HostingServer $server, array $result, array $items): array
+    {
+        $event = is_array($result['event'] ?? null) ? $result['event'] : [];
+        $values = [
+            $result['reason'] ?? null,
+            $result['errors'] ?? null,
+            $result['error'] ?? null,
+            $result['messages'] ?? null,
+            $event['reason'] ?? null,
+            $event['errors'] ?? null,
+            $event['error'] ?? null,
+            $event['messages'] ?? null,
+            $event['message'] ?? null,
+        ];
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            foreach (['reason', 'errors', 'error', 'messages', 'message'] as $key) {
+                $values[] = $item[$key] ?? null;
+            }
+        }
+        $credentials = $server->credentials ?? [];
+        $secrets = collect([$credentials['token'] ?? null, $credentials['password'] ?? null])
+            ->filter(fn ($value) => is_string($value) && $value !== '');
+
+        return collect($values)
+            ->flatten()
+            ->filter(fn ($value) => is_scalar($value) && trim((string) $value) !== '')
+            ->map(function ($value) use ($secrets) {
+                $message = trim(strip_tags((string) $value));
+
+                foreach ($secrets as $secret) {
+                    $message = str_replace($secret, '[REDACTED]', $message);
+                }
+
+                return Str::limit(preg_replace('/[\x00-\x1F\x7F]/u', ' ', $message) ?? '', 300);
+            })
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
     }
 
     private function isDisabledShell(string $shell): bool

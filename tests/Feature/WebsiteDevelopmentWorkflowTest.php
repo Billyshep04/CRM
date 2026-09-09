@@ -17,6 +17,7 @@ use App\Services\Hosting\WebsiteLaunchService;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
@@ -409,6 +410,132 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             $this->assertStringContainsString('already belongs to cPanel account "otherusr"', $exception->getMessage());
         }
         Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain' || str_contains($request->url(), '/modifyacct'));
+    }
+
+    public function test_http_success_with_api_level_addon_failure_surfaces_the_sanitized_cpanel_error(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'private-whm-token']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        Log::spy();
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') return Http::response([
+                'metadata' => ['result' => 1, 'reason' => 'OK'],
+                'data' => ['cpanelresult' => [
+                    'event' => ['result' => 1],
+                    'data' => [[
+                        'result' => 0,
+                        'reason' => 'Addon domains are disabled. private-whm-token',
+                        'errors' => ['Web Server feature unavailable'],
+                    ]],
+                ]],
+            ]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+            $this->fail('Expected cPanel API-level failure.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Addon domains are disabled.', $exception->getMessage());
+            $this->assertStringContainsString('Web Server feature unavailable', $exception->getMessage());
+            $this->assertStringNotContainsString('private-whm-token', $exception->getMessage());
+            $this->assertStringContainsString('[REDACTED]', $exception->getMessage());
+        }
+        Log::shouldHaveReceived('warning')->with('cPanel API 2 addon-domain operation failed.', \Mockery::on(fn ($context) => ! str_contains(json_encode($context) ?: '', 'private-whm-token')))->once();
+        Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+    }
+
+    public function test_genuine_addon_creation_requires_api_success_then_verifies_the_shared_document_root(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $created = false;
+
+        Http::fake(function ($request) use (&$created) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $created = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['result' => 1, 'reason' => 'Domain created']]]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $created ? [['domain' => 'live.example.test', 'basedir' => 'public_html', 'reldir' => 'home:public_html', 'dir' => '/home/devusr/public_html', 'status' => 0]] : []]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => $created ? ['live.example.test'] : []]]]]);
+        });
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+        $this->assertSame(['domain' => 'live.example.test', 'username' => 'devusr', 'type' => 'addon', 'document_root' => 'public_html'], $result);
+        Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain'
+            && $request['cpanel_jsonapi_user'] === 'devusr'
+            && $request['newdomain'] === 'live.example.test'
+            && $request['dir'] === 'public_html');
+        Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+    }
+
+    public function test_cpanel_event_failure_surfaces_errors_and_never_runs_verification(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 0, 'reason' => 'The API dispatcher rejected the addon operation.'], 'errors' => ['The Domains feature is unavailable.'], 'messages' => ['Contact the hosting provider.'], 'data' => []]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => []]]]]);
+        });
+
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+            $this->fail('Expected cPanel event failure.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('The API dispatcher rejected the addon operation.', $exception->getMessage());
+            $this->assertStringContainsString('The Domains feature is unavailable.', $exception->getMessage());
+            $this->assertStringContainsString('Contact the hosting provider.', $exception->getMessage());
+        }
+        Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+    }
+
+    public function test_existing_correct_addon_domain_is_verified_without_creating_a_duplicate(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => [['domain' => 'live.example.test', 'basedir' => 'public_html']]]]]);
+
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => ['live.example.test']]]]]);
+        });
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+
+        $this->assertSame('live.example.test', $result['domain']);
+        $this->assertSame('public_html', $result['document_root']);
+        Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain');
+        Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+    }
+
+    public function test_delayed_addon_visibility_retries_without_creating_a_duplicate_domain(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+        $created = false;
+        $visible = false;
+        $createCalls = 0;
+
+        Http::fake(function ($request) use (&$created, &$visible, &$createCalls) {
+            if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'dev.example.test', 'suspended' => 0]]]]);
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain') { $createCalls++; $created = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]); }
+            if (($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains') return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $visible ? [['domain' => 'live.example.test', 'basedir' => 'public_html']] : []]]]);
+            return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'dev.example.test', 'addon_domains' => ($created && $visible) ? ['live.example.test'] : []]]]]);
+        });
+
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+            $this->fail('Expected delayed verification to stop the first attempt.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('not visible', $exception->getMessage());
+        }
+        $visible = true;
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->ensureAddonDomain($server, $account, 'live.example.test');
+        $this->assertSame('live.example.test', $result['domain']);
+        $this->assertSame(1, $createCalls);
     }
 
     public function test_existing_addon_domain_with_a_different_document_root_is_rejected(): void
