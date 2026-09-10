@@ -27,6 +27,7 @@ class Invoice extends Model
         'subtotal',
         'tax_amount',
         'total',
+        'payment_link',
         'pdf_file_id',
         'sent_at',
         'paid_at',

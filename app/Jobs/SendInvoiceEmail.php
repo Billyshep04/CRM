@@ -79,6 +79,10 @@ class SendInvoiceEmail implements ShouldQueue
             'invoice' => $invoice,
             'customer' => $invoice->customer,
         ])->render();
+        $textBody = View::make('emails.invoice-text', [
+            'invoice' => $invoice,
+            'customer' => $invoice->customer,
+        ])->render();
 
         $payload = [
             'api_key' => $apiKey,
@@ -86,7 +90,7 @@ class SendInvoiceEmail implements ShouldQueue
             'to' => [$toAddress],
             'subject' => "Invoice {$invoice->invoice_number}",
             'html_body' => $htmlBody,
-            'text_body' => "Invoice {$invoice->invoice_number}\nPlease see the attached PDF.",
+            'text_body' => $textBody,
         ];
 
         if (

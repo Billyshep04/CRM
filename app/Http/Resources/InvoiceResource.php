@@ -27,6 +27,10 @@ class InvoiceResource extends JsonResource
             'subtotal' => $this->subtotal,
             'tax_amount' => $this->tax_amount,
             'total' => $this->total,
+            'payment_link' => $this->when(
+                $request->user()?->hasAnyRole(['admin', 'staff']) === true,
+                $this->payment_link
+            ),
             'sent_at' => $this->sent_at,
             'paid_at' => $this->paid_at,
             'archived_at' => $this->archived_at,

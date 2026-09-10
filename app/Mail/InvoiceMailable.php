@@ -23,6 +23,10 @@ class InvoiceMailable extends Mailable
             ->view('emails.invoice', [
                 'invoice' => $this->invoice,
                 'customer' => $this->invoice->customer,
+            ])
+            ->text('emails.invoice-text', [
+                'invoice' => $this->invoice,
+                'customer' => $this->invoice->customer,
             ]);
 
         if (
