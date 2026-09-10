@@ -77,6 +77,7 @@ class InvoiceController extends Controller
         InvoiceJobStatusSyncService $invoiceJobStatusSync
     )
     {
+        $this->normalizePaymentLinkInput($request);
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:customers,id'],
             'invoice_number' => ['nullable', 'string', 'max:64'],
@@ -84,6 +85,7 @@ class InvoiceController extends Controller
             'due_date' => ['required', 'date', 'after_or_equal:issue_date'],
             'status' => ['nullable', Rule::in(['draft', 'sent', 'paid', 'overdue'])],
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
+            'payment_link' => ['nullable', 'url:http,https', 'max:2048'],
             'line_items' => ['required', 'array', 'min:1'],
             'line_items.*.description' => ['required', 'string'],
             'line_items.*.quantity' => $this->quantityRules('required'),
@@ -118,6 +120,7 @@ class InvoiceController extends Controller
                 'subtotal' => $subtotal,
                 'tax_amount' => $taxAmount,
                 'total' => $total,
+                'payment_link' => $validated['payment_link'] ?? null,
             ]);
 
             $this->syncLineItems($invoice, $lineItems);
@@ -152,6 +155,7 @@ class InvoiceController extends Controller
         InvoiceJobStatusSyncService $invoiceJobStatusSync
     )
     {
+        $this->normalizePaymentLinkInput($request);
         $validated = $request->validate([
             'customer_id' => ['sometimes', 'integer', 'exists:customers,id'],
             'invoice_number' => ['sometimes', 'string', 'max:64'],
@@ -159,6 +163,7 @@ class InvoiceController extends Controller
             'due_date' => ['sometimes', 'date'],
             'status' => ['sometimes', Rule::in(['draft', 'sent', 'paid', 'overdue'])],
             'tax_amount' => ['nullable', 'numeric', 'min:0'],
+            'payment_link' => ['sometimes', 'nullable', 'url:http,https', 'max:2048'],
             'line_items' => ['sometimes', 'array', 'min:1'],
             'line_items.*.description' => ['required_with:line_items', 'string'],
             'line_items.*.quantity' => $this->quantityRules('required_with:line_items'),
@@ -424,6 +429,19 @@ class InvoiceController extends Controller
                 }
             },
         ];
+    }
+
+    private function normalizePaymentLinkInput(Request $request): void
+    {
+        if (! $request->exists('payment_link')) {
+            return;
+        }
+
+        $value = $request->input('payment_link');
+        if (is_string($value)) {
+            $value = trim($value);
+            $request->merge(['payment_link' => $value === '' ? null : $value]);
+        }
     }
 
     /**

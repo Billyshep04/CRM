@@ -1534,6 +1534,11 @@
                                         <option value="overdue">Overdue</option>
                                     </select>
                                 </label>
+                                <label class="field">
+                                    <span>Payment Link</span>
+                                    <input type="url" name="payment_link" inputmode="url" autocomplete="off" placeholder="https://pay.monzo.com/…">
+                                    <small>Optional payment URL included in the invoice email. This will not be printed on the invoice.</small>
+                                </label>
 
                                 <div class="line-items">
                                     <div class="line-items-header">

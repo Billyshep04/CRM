@@ -7297,8 +7297,11 @@ function renderInvoices() {
         const displayStatus = invoice.effective_status || invoice.status || 'draft';
         const nextStatus = isPaid ? 'unpaid' : 'paid';
         const paymentActionLabel = isPaid ? 'Mark unpaid' : 'Mark paid';
+        const paymentLinkActions = invoice.payment_link ? `
+                <a class="btn btn-outline btn-small" href="${escapeHtml(invoice.payment_link)}" target="_blank" rel="noopener noreferrer">Open payment link</a>
+                <button class="btn btn-outline btn-small" data-action="copy-payment-link" data-id="${invoice.id}">Copy payment link</button>` : '';
         row.innerHTML = `
-            <span>#${escapeHtml(invoice.invoice_number)}</span>
+            <span>#${escapeHtml(invoice.invoice_number)}${invoice.payment_link ? `<small class="invoice-payment-url" title="${escapeHtml(invoice.payment_link)}">${escapeHtml(invoice.payment_link)}</small>` : ''}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
             <span>${formatCurrency(Number(invoice.total))}</span>
             <span>${escapeHtml(displayStatus)}</span>
@@ -7308,6 +7311,7 @@ function renderInvoices() {
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${invoice.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="send" data-id="${invoice.id}">Send</button>
                 <button class="btn btn-outline btn-small" data-action="download" data-id="${invoice.id}">Download</button>
+                ${paymentLinkActions}
                 <button class="btn btn-outline btn-small" data-action="delete" data-id="${invoice.id}">Delete</button>
             </div>
         `;
@@ -7356,6 +7360,7 @@ async function handleInvoiceSubmit(event) {
         due_date: formData.get('due_date'),
         tax_amount: formData.get('tax_amount') ? Number(formData.get('tax_amount')) : 0,
         status: formData.get('status') || 'draft',
+        payment_link: String(formData.get('payment_link') || '').trim() || null,
         line_items: lineItems,
     };
 
@@ -7407,6 +7412,7 @@ async function handleInvoiceAction(event) {
         dom.invoiceForm.querySelector('input[name="due_date"]').value = invoice.due_date || '';
         dom.invoiceForm.querySelector('input[name="tax_amount"]').value = invoice.tax_amount || 0;
         dom.invoiceForm.querySelector('select[name="status"]').value = invoice.status || 'draft';
+        dom.invoiceForm.querySelector('input[name="payment_link"]').value = invoice.payment_link || '';
         clearInvoiceLineItems();
         (invoice.line_items || []).forEach((item) => {
             addInvoiceLineItem({
@@ -7471,6 +7477,15 @@ async function handleInvoiceAction(event) {
 
     if (action === 'download' && invoice) {
         await downloadInvoice(id, `Invoice-${invoice.invoice_number}.pdf`);
+    }
+
+    if (action === 'copy-payment-link' && invoice?.payment_link) {
+        try {
+            await navigator.clipboard.writeText(invoice.payment_link);
+            showToast('Payment link copied');
+        } catch {
+            showToast('Unable to copy payment link', true);
+        }
     }
 
     if (action === 'delete' && id) {
