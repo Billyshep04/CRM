@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Website;
 use App\Models\WebsiteHealthCheck;
 use App\Services\Websites\WebsiteIncidentManager;
+use App\Services\Websites\WebsiteMonitor;
 use Database\Seeders\RolePermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
@@ -150,6 +151,58 @@ class WebsiteHostingManagementTest extends TestCase
         $this->actingAs($admin)->getJson('/api/websites')->assertJsonPath('data.0.id', $website->id)->assertJsonPath('data.0.agent_connected', false);
         $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertJsonCount(0, 'data');
         Http::assertSent(fn ($request) => $request->url() === 'https://example.com/wp-json/webstamp/v1/status');
+    }
+
+    public function test_agent_check_uses_canonical_rest_route_when_pretty_permalink_route_is_unavailable(): void
+    {
+        config(['website-audits.enforce_public_networks' => false]);
+        Http::fake(function ($request) {
+            if ($request->url() === 'https://production.example/wp-json/webstamp/v1/status') return Http::response(['code' => 'rest_no_route'], 404);
+            if ($request->url() === 'https://production.example/?rest_route=/webstamp/v1/status') {
+                $this->assertSame('Bearer valid-token', $request->header('Authorization')[0] ?? null);
+                $this->assertSame('valid-token', $request->header('X-WebStamp-Token')[0] ?? null);
+                return Http::response(['wordpress_version' => '6.9', 'plugin_count' => 2, 'plugin_updates' => 0]);
+            }
+            return Http::response('OK', 200);
+        });
+        $website = $this->website($this->customer(), [
+            'domain' => 'production.example',
+            'login_url' => 'https://production.example/wp-admin/',
+            'wordpress_enabled' => true,
+            'agent_token_hash' => hash('sha256', 'valid-token'),
+            'agent_token_encrypted' => 'valid-token',
+        ]);
+
+        $check = app(WebsiteMonitor::class)->check($website, 'manual');
+
+        $this->assertNotNull($check->wordpress_checked_at);
+        $this->assertSame('canonical', data_get($check->metrics, 'agent_endpoint'));
+        $this->assertNotNull($website->fresh()->agent_last_seen_at);
+    }
+
+    public function test_agent_check_rejects_missing_routes_on_production_even_when_development_route_works(): void
+    {
+        config(['website-audits.enforce_public_networks' => false]);
+        Http::fake(function ($request) {
+            if (str_contains($request->url(), 'development.example')) return Http::response(['wordpress_version' => '6.9']);
+            if (str_contains($request->url(), 'webstamp/v1/status')) return Http::response(['code' => 'rest_no_route'], 404);
+            return Http::response('OK', 200);
+        });
+        $website = $this->website($this->customer(), [
+            'domain' => 'production.example',
+            'development_domain' => 'development.example',
+            'login_url' => 'https://production.example/wp-admin/',
+            'wordpress_enabled' => true,
+            'agent_token_hash' => hash('sha256', 'valid-token'),
+            'agent_token_encrypted' => 'valid-token',
+            'agent_last_seen_at' => now(),
+        ]);
+
+        $check = app(WebsiteMonitor::class)->check($website, 'manual');
+
+        $this->assertNull($check->wordpress_checked_at);
+        $this->assertNotNull($website->fresh()->agent_last_failed_at);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'development.example'));
     }
 
     public function test_failed_manual_agent_check_immediately_reports_monitoring_offline(): void

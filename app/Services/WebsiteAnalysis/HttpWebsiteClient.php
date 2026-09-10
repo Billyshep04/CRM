@@ -69,12 +69,16 @@ class HttpWebsiteClient
     public function fetchJson(string $url, string $bearerToken): array
     {
         $this->guard->assertSafe($url);
-        $response = Http::withToken($bearerToken)->acceptJson()
+        $response = Http::withToken($bearerToken)->withHeaders(['X-WebStamp-Token' => $bearerToken])->acceptJson()
             ->timeout((int) config('website-audits.timeout_seconds', 15))
             ->connectTimeout((int) config('website-audits.connect_timeout_seconds', 5))
             ->withOptions(['allow_redirects' => false, 'verify' => true])->get($url);
+        if (in_array($response->status(), [401, 403], true)) throw new RuntimeException('The website agent rejected the monitoring identity.');
+        if ($response->status() === 404) throw new RuntimeException('The website agent route is unavailable.');
         if (!$response->successful()) throw new RuntimeException('The authenticated website agent did not return a successful response.');
-        return $response->json() ?: [];
+        $payload = $response->json();
+        if (! is_array($payload)) throw new RuntimeException('The website agent returned an invalid response.');
+        return $payload;
     }
 
     private function request(string $method, string $url): Response

@@ -134,6 +134,8 @@ class WebsiteLaunchService
                 if ($website->agent_token_encrypted && ! $check->wordpress_checked_at) throw new RuntimeException('The website is live, but the monitoring plugin has not reconnected on the production domain yet.');
                 $result = [...$result, 'monitoring' => $agent, 'monitoring_verified' => true];
             }
+            $rewrites = $this->wordpress->ensureWordpressRewriteRules($server, $account, $password);
+            $result = [...$result, 'wordpress_rewrites' => $rewrites];
         } elseif ($step->step === 'redirect_development_domain') {
             $result = $this->wordpress->redirectDevelopmentDomain($server, $account, $password, $run->development_domain, $run->production_domain);
         }

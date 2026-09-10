@@ -156,6 +156,9 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             public function run(HostingServer $server, HostingAccount $account, string $password, string $command, int $timeout = 60): array {
                 if (str_contains($command, "__WEBSTAMP_CONNECTED__")) $output = '__WEBSTAMP_CONNECTED__';
                 elseif (str_contains($command, '__WEBSTAMP_TOOLS_READY__')) $output = '__WEBSTAMP_TOOLS_READY__';
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS__')) $output = '__WEBSTAMP_HTACCESS__'.base64_encode("# php -- BEGIN cPanel-generated handler\nAddHandler application/x-httpd-ea-php83 .php\n# php -- END cPanel-generated handler\n");
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS_UPDATED__')) $output = '__WEBSTAMP_HTACCESS_UPDATED__';
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS_VERIFIED__')) $output = '__WEBSTAMP_HTACCESS_VERIFIED__';
                 elseif (str_contains($command, '__WEBSTAMP_REDIRECT_READY__')) $output = '__WEBSTAMP_REDIRECT_READY__';
                 elseif (str_contains($command, "'search-replace'") && ! str_contains($command, '--dry-run')) { $this->migrated = true; $output = 'Success'; }
                 elseif (str_contains($command, "'option' 'get' 'siteurl'") || str_contains($command, "'option' 'get' 'home'")) $output = $this->migrated ? 'https://site.test' : 'https://site-ab12.dev.web-stamp.co.uk';
@@ -283,6 +286,9 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
                 $this->commands[] = $command;
                 if (str_contains($command, '__WEBSTAMP_CONNECTED__')) $output = '__WEBSTAMP_CONNECTED__';
                 elseif (str_contains($command, '__WEBSTAMP_TOOLS_READY__')) $output = '__WEBSTAMP_TOOLS_READY__';
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS__')) $output = '__WEBSTAMP_HTACCESS__'.base64_encode("# php -- BEGIN cPanel-generated handler\nAddHandler application/x-httpd-ea-php83 .php\n# php -- END cPanel-generated handler\n");
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS_UPDATED__')) $output = '__WEBSTAMP_HTACCESS_UPDATED__';
+                elseif (str_contains($command, '__WEBSTAMP_HTACCESS_VERIFIED__')) $output = '__WEBSTAMP_HTACCESS_VERIFIED__';
                 elseif (str_contains($command, '__WEBSTAMP_REDIRECT_READY__')) { preg_match('/base64_decode\("([A-Za-z0-9+\/=]+)"/', $command, $match); $this->redirectBlock = base64_decode($match[1] ?? '', true) ?: ''; $output = '__WEBSTAMP_REDIRECT_READY__'; }
                 elseif ($command === 'test -f public_html/wp-load.php') return ['exit_code' => $this->wordpress ? 0 : 1, 'stdout' => '', 'stderr' => ''];
                 elseif ($command === 'test -f public_html/wp-config.php') return ['exit_code' => $this->wpConfig ? 0 : 1, 'stdout' => '', 'stderr' => ''];
@@ -1083,6 +1089,7 @@ class LaunchMonitoringSshRunner implements SshCommandRunner
 {
     public array $commands = [];
     private bool $pluginInstalled = false;
+    private string $htaccess = "# php -- BEGIN cPanel-generated handler\nAddHandler application/x-httpd-ea-php83 .php\n# php -- END cPanel-generated handler\n";
 
     public function __construct(private string $productionUrl) {}
 
@@ -1092,6 +1099,9 @@ class LaunchMonitoringSshRunner implements SshCommandRunner
         if (str_contains($command, "'option' 'get' 'siteurl'") || str_contains($command, "'option' 'get' 'home'")) $output = $this->productionUrl;
         elseif (str_contains($command, "'db' 'tables'")) $output = 'wp_options';
         elseif (str_contains($command, "'plugin' 'is-installed'")) return ['exit_code' => $this->pluginInstalled ? 0 : 1, 'stdout' => '', 'stderr' => ''];
+        elseif (str_contains($command, '__WEBSTAMP_HTACCESS__')) $output = '__WEBSTAMP_HTACCESS__'.base64_encode($this->htaccess);
+        elseif (str_contains($command, '__WEBSTAMP_HTACCESS_UPDATED__')) $output = '__WEBSTAMP_HTACCESS_UPDATED__';
+        elseif (str_contains($command, '__WEBSTAMP_HTACCESS_VERIFIED__')) $output = '__WEBSTAMP_HTACCESS_VERIFIED__';
         elseif (str_contains($command, '__WEBSTAMP_AGENT_INSTALLED__')) { $this->pluginInstalled = true; $output = '__WEBSTAMP_AGENT_INSTALLED__'; }
         elseif (str_contains($command, '__WEBSTAMP_REDIRECT_READY__')) $output = '__WEBSTAMP_REDIRECT_READY__';
         else $output = 'Success';

@@ -246,6 +246,89 @@ class KrystalWordpressProvisioningTest extends TestCase
         Log::shouldNotHaveReceived('warning');
     }
 
+    public function test_wordpress_rewrite_block_is_added_without_changing_existing_handlers_or_rules(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
+        $original = "# php -- BEGIN cPanel-generated handler\nAddHandler application/x-httpd-ea-php83 .php\n# php -- END cPanel-generated handler\n\nRewriteRule ^private - [L]\n";
+
+        $merged = $service->mergeWordpressRewriteBlock($original);
+
+        $this->assertStringContainsString($original, $merged);
+        $this->assertStringContainsString('# BEGIN WordPress', $merged);
+        $this->assertStringContainsString('RewriteRule . /index.php [L]', $merged);
+        $this->assertSame(1, substr_count($merged, '# BEGIN WordPress'));
+        $this->assertSame($merged, $service->mergeWordpressRewriteBlock($merged));
+    }
+
+    public function test_existing_wordpress_rewrite_block_is_updated_once_and_unrelated_rules_are_preserved(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
+        $original = "Header set X-Test yes\n# BEGIN WordPress\nRewriteEngine Off\n# END WordPress\nDeny from 192.0.2.1\n";
+
+        $merged = $service->mergeWordpressRewriteBlock($original);
+
+        $this->assertStringContainsString('Header set X-Test yes', $merged);
+        $this->assertStringContainsString('Deny from 192.0.2.1', $merged);
+        $this->assertStringNotContainsString('RewriteEngine Off', $merged);
+        $this->assertSame(1, substr_count($merged, '# BEGIN WordPress'));
+        $this->assertSame(1, substr_count($merged, '# END WordPress'));
+    }
+
+    public function test_malformed_wordpress_rewrite_markers_stop_without_modifying_content(): void
+    {
+        $service = new KrystalWordpressProvisioner(new RecordingSshRunner, new RecordingCpanelUapiClient);
+
+        foreach ([
+            "# cPanel handler\n# BEGIN WordPress\nRewriteEngine On\n",
+            "# END WordPress\nRewriteEngine On\n# BEGIN WordPress\n",
+        ] as $contents) {
+            try {
+                $service->mergeWordpressRewriteBlock($contents);
+                $this->fail('Expected malformed rewrite markers to stop repair.');
+            } catch (RuntimeException $exception) {
+                $this->assertStringContainsString('rewrite markers are malformed', $exception->getMessage());
+            }
+        }
+    }
+
+    public function test_non_writable_htaccess_fails_with_a_safe_error(): void
+    {
+        $runner = new RecordingSshRunner([
+            '__WEBSTAMP_HTACCESS__' => ['exit_code' => 2, 'stdout' => '', 'stderr' => 'Permission denied /home/customerone/public_html/.htaccess'],
+        ]);
+
+        try {
+            (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+                ->ensureWordpressRewriteRules($this->server(), $this->account(), 'cpanel-secret');
+            $this->fail('Expected the non-writable file to stop repair.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The WordPress .htaccess file is not readable and writable by the cPanel account.', $exception->getMessage());
+            $this->assertStringNotContainsString('/home/customerone', $exception->getMessage());
+            $this->assertStringNotContainsString('cpanel-secret', $exception->getMessage());
+        }
+    }
+
+    public function test_htaccess_repair_creates_one_backup_writes_atomically_and_is_idempotent(): void
+    {
+        $original = "# php -- BEGIN cPanel-generated handler\nAddHandler application/x-httpd-ea-php83 .php\n# php -- END cPanel-generated handler\n\nRewriteRule ^private - [L]\n";
+        $runner = new StatefulHtaccessSshRunner($original);
+        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
+
+        $first = $service->ensureWordpressRewriteRules($this->server(), $this->account(), 'cpanel-secret');
+        $second = $service->ensureWordpressRewriteRules($this->server(), $this->account(), 'cpanel-secret');
+
+        $this->assertSame(['ready' => true, 'updated' => true, 'backup' => true], $first);
+        $this->assertSame(['ready' => true, 'updated' => false, 'backup' => false], $second);
+        $this->assertSame($original, $runner->backup);
+        $this->assertStringStartsWith($original, $runner->contents);
+        $this->assertSame(1, substr_count($runner->contents, '# BEGIN WordPress'));
+        $this->assertSame(1, $runner->writes);
+        $writeCommand = collect($runner->commands)->first(fn ($command) => str_contains($command, '__WEBSTAMP_HTACCESS_UPDATED__'));
+        $this->assertStringContainsString('.webstamp-backup', $writeCommand);
+        $this->assertStringContainsString('.webstamp-tmp', $writeCommand);
+        $this->assertStringContainsString('rename($temporary,$path)', $writeCommand);
+    }
+
     public function test_temporary_wordpress_verification_diagnostic_is_removed(): void
     {
         $source = file_get_contents(app_path('Services/Hosting/KrystalWordpressProvisioner.php'));
@@ -369,6 +452,37 @@ class RecordingSshRunner implements SshCommandRunner
         if (str_contains($command, '__WEBSTAMP_TOOLS_READY__')) {
             return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_TOOLS_READY__', 'stderr' => ''];
         }
+        return ['exit_code' => 0, 'stdout' => '', 'stderr' => ''];
+    }
+}
+
+class StatefulHtaccessSshRunner implements SshCommandRunner
+{
+    public array $commands = [];
+    public ?string $backup = null;
+    public int $writes = 0;
+
+    public function __construct(public string $contents) {}
+
+    public function run(HostingServer $server, HostingAccount $account, string $password, string $command, int $timeout = 60): array
+    {
+        $this->commands[] = $command;
+        if (str_contains($command, '__WEBSTAMP_HTACCESS_UPDATED__')) {
+            preg_match('/base64_decode\("([A-Za-z0-9+\/=]+)"/', $command, $match);
+            $updated = base64_decode($match[1] ?? '', true);
+            if (! is_string($updated)) return ['exit_code' => 6, 'stdout' => '', 'stderr' => ''];
+            $this->backup ??= $this->contents;
+            $this->contents = $updated;
+            $this->writes++;
+            return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_HTACCESS_UPDATED__', 'stderr' => ''];
+        }
+        if (str_contains($command, '__WEBSTAMP_HTACCESS_VERIFIED__')) {
+            return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_HTACCESS_VERIFIED__', 'stderr' => ''];
+        }
+        if (str_contains($command, '__WEBSTAMP_HTACCESS__')) {
+            return ['exit_code' => 0, 'stdout' => '__WEBSTAMP_HTACCESS__'.base64_encode($this->contents), 'stderr' => ''];
+        }
+
         return ['exit_code' => 0, 'stdout' => '', 'stderr' => ''];
     }
 }

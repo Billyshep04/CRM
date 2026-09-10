@@ -278,6 +278,112 @@ class KrystalWordpressProvisioner
         return ['installed' => true, 'new_installation' => ! $installed, 'active' => true, 'identity' => 'retained'];
     }
 
+    public function ensureWordpressRewriteRules(HostingServer $server, HostingAccount $account, string $password): array
+    {
+        $readScript = '$path=getcwd()."/.htaccess";'
+            .'if((is_file($path)&&(!is_readable($path)||!is_writable($path)))||(!is_file($path)&&!is_writable(getcwd()))){exit(2);}'
+            .'$contents=is_file($path)?file_get_contents($path):"";'
+            .'if($contents===false||strlen($contents)>1048576){exit(3);}'
+            .'echo "__WEBSTAMP_HTACCESS__".base64_encode($contents);';
+        $encodedCurrent = $this->execute(
+            $server,
+            $account,
+            $password,
+            'cd ~/public_html && php -r '.$this->shellArgument($readScript),
+            'The WordPress .htaccess file is not readable and writable by the cPanel account.'
+        );
+        if (! str_starts_with($encodedCurrent, '__WEBSTAMP_HTACCESS__')) {
+            throw new RuntimeException('The WordPress .htaccess file could not be inspected safely.');
+        }
+        $current = base64_decode(substr($encodedCurrent, strlen('__WEBSTAMP_HTACCESS__')), true);
+        if (! is_string($current)) {
+            throw new RuntimeException('The WordPress .htaccess file could not be inspected safely.');
+        }
+
+        $updated = $this->mergeWordpressRewriteBlock($current);
+        $changed = ! hash_equals($current, $updated);
+        if ($changed) {
+            $expectedHash = hash('sha256', $current);
+            $encodedUpdated = base64_encode($updated);
+            $writeScript = '$path=getcwd()."/.htaccess";'
+                .'$current=is_file($path)?file_get_contents($path):"";'
+                .'if($current===false||!hash_equals("'.$expectedHash.'",hash("sha256",$current))){exit(4);}'
+                .'if((is_file($path)&&!is_writable($path))||(!is_file($path)&&!is_writable(getcwd()))){exit(2);}'
+                .'$backup=$path.".webstamp-backup";'
+                .'if(is_file($path)&&!is_file($backup)&&!copy($path,$backup)){exit(5);}'
+                .'$contents=base64_decode("'.$encodedUpdated.'",true);'
+                .'$temporary=$path.".webstamp-tmp";'
+                .'if($contents===false||file_put_contents($temporary,$contents,LOCK_EX)===false){exit(6);}'
+                .'if(is_file($path)){chmod($temporary,fileperms($path)&0777);}'
+                .'if(!rename($temporary,$path)){@unlink($temporary);exit(7);}'
+                .'echo "__WEBSTAMP_HTACCESS_UPDATED__";';
+            $written = trim($this->execute(
+                $server,
+                $account,
+                $password,
+                'cd ~/public_html && php -r '.$this->shellArgument($writeScript),
+                'The WordPress rewrite block could not be updated safely.'
+            ));
+            if ($written !== '__WEBSTAMP_HTACCESS_UPDATED__') {
+                throw new RuntimeException('The WordPress rewrite block update could not be verified.');
+            }
+        }
+
+        $verifyHash = hash('sha256', $updated);
+        $verifyScript = '$path=getcwd()."/.htaccess";$contents=is_file($path)?file_get_contents($path):false;'
+            .'if(!is_string($contents)||!hash_equals("'.$verifyHash.'",hash("sha256",$contents))){exit(8);}'
+            .'echo "__WEBSTAMP_HTACCESS_VERIFIED__";';
+        $verified = trim($this->execute(
+            $server,
+            $account,
+            $password,
+            'cd ~/public_html && php -r '.$this->shellArgument($verifyScript),
+            'The WordPress rewrite block could not be verified.'
+        ));
+        if ($verified !== '__WEBSTAMP_HTACCESS_VERIFIED__') {
+            throw new RuntimeException('The WordPress rewrite block could not be verified.');
+        }
+
+        return ['ready' => true, 'updated' => $changed, 'backup' => $changed && $current !== ''];
+    }
+
+    public function mergeWordpressRewriteBlock(string $contents): string
+    {
+        $begin = substr_count($contents, '# BEGIN WordPress');
+        $end = substr_count($contents, '# END WordPress');
+        if ($begin !== $end || $begin > 1) {
+            throw new RuntimeException('The existing WordPress rewrite markers are malformed. Review .htaccess manually before retrying.');
+        }
+
+        $block = "# BEGIN WordPress\n"
+            ."<IfModule mod_rewrite.c>\n"
+            ."RewriteEngine On\n"
+            ."RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]\n"
+            ."RewriteBase /\n"
+            ."RewriteRule ^index\\.php$ - [L]\n"
+            ."RewriteCond %{REQUEST_FILENAME} !-f\n"
+            ."RewriteCond %{REQUEST_FILENAME} !-d\n"
+            ."RewriteRule . /index.php [L]\n"
+            ."</IfModule>\n"
+            ."# END WordPress";
+
+        if ($begin === 1) {
+            $replacements = 0;
+            $merged = preg_replace('/# BEGIN WordPress\R.*?# END WordPress/s', $block, $contents, 1, $replacements);
+            if (! is_string($merged) || $replacements !== 1) {
+                throw new RuntimeException('The existing WordPress rewrite markers are malformed. Review .htaccess manually before retrying.');
+            }
+
+            return $merged;
+        }
+
+        if ($contents === '') {
+            return $block."\n";
+        }
+
+        return $contents.(str_ends_with($contents, "\n") ? "\n" : "\n\n").$block."\n";
+    }
+
     public function redirectDevelopmentDomain(HostingServer $server, HostingAccount $account, string $password, string $developmentDomain, string $productionDomain): array
     {
         $developmentDomain = strtolower(rtrim(trim($developmentDomain), '.'));

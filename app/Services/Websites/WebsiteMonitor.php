@@ -42,14 +42,27 @@ class WebsiteMonitor
         $agentAttempted = false;
         if (in_array($type, ['full', 'manual'], true) && $website->wordpress_enabled && $website->agent_token_encrypted) {
             $agentAttempted = true;
-            try {
-                $agent = $this->client->fetchJson($this->publicUrl($website).'/wp-json/webstamp/v1/status', $website->agent_token_encrypted);
+            foreach ([$this->publicUrl($website).'/wp-json/webstamp/v1/status', $this->publicUrl($website).'/?rest_route=/webstamp/v1/status'] as $index => $agentUrl) {
+                try {
+                    $agent = $this->client->fetchJson($agentUrl, $website->agent_token_encrypted);
+                    if (! is_string($agent['wordpress_version'] ?? null) || trim($agent['wordpress_version']) === '') {
+                        throw new \RuntimeException('The website agent response did not contain its WordPress identity.');
+                    }
+                    $detailMetrics['agent_endpoint'] = $index === 0 ? 'pretty' : 'canonical';
+                    $agentReached = true;
+                    break;
+                } catch (Throwable) {
+                    // The canonical rest_route endpoint remains valid when the host cannot serve pretty permalinks.
+                }
+            }
+            if ($agentReached) {
                 $allowed = ['wordpress_version', 'php_version', 'plugin_count', 'plugin_updates', 'theme_updates', 'database_size_bytes', 'site_health_status', 'last_successful_backup_at', 'backup_status'];
                 $metrics = [...$metrics, ...array_intersect_key($agent, array_flip($allowed))];
                 $detailMetrics = [...$detailMetrics, ...array_intersect_key($agent, array_flip(['active_theme', 'active_theme_version', 'active_plugin_count', 'inactive_plugin_count', 'core_updates', 'wp_cron_status', 'maintenance_mode', 'backup_source']))];
                 if (array_key_exists('performance_score', $agent)) $detailMetrics['agent_reported_performance_score'] = $agent['performance_score'];
-                $agentReached = true;
-            } catch (Throwable) { $errors[] = 'WordPress agent status is unavailable.'; }
+            } else {
+                $errors[] = 'WordPress agent status is unavailable.';
+            }
         }
 
         $hostingSynced = false;
