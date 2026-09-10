@@ -238,6 +238,46 @@ class KrystalWordpressProvisioner
         return ['migrated' => true, 'from_url' => $fromUrl, 'to_url' => $toUrl, 'indexing_enabled' => $allowIndexing];
     }
 
+    public function ensureMonitoringAgent(HostingServer $server, HostingAccount $account, string $password, string $agentToken): array
+    {
+        if ($agentToken === '') {
+            throw new RuntimeException('The monitoring connection does not have a valid CRM identity token.');
+        }
+
+        $plugin = $this->run($server, $account, $password, $this->wpCliCommand(['plugin', 'is-installed', 'webstamp-site-agent']));
+        $installed = $plugin['exit_code'] === 0;
+        if (! $installed) {
+            $source = file_get_contents(base_path('wordpress-plugin/webstamp-site-agent/webstamp-site-agent.php'));
+            if (! is_string($source) || $source === '') {
+                throw new RuntimeException('The WebStamp monitoring plugin package is unavailable on the CRM server.');
+            }
+
+            $encoded = base64_encode($source);
+            $script = '$dir=getcwd()."/wp-content/plugins/webstamp-site-agent";'
+                .'if(!is_dir($dir)&&!mkdir($dir,0755,true)){exit(1);}'
+                .'$source=base64_decode("'.$encoded.'",true);'
+                .'if($source===false||file_put_contents($dir."/webstamp-site-agent.php",$source,LOCK_EX)===false){exit(1);}'
+                .'echo "__WEBSTAMP_AGENT_INSTALLED__";';
+            $output = trim($this->execute(
+                $server,
+                $account,
+                $password,
+                'cd ~/public_html && php -r '.$this->shellArgument($script),
+                'The WebStamp monitoring plugin could not be installed.'
+            ));
+            if ($output !== '__WEBSTAMP_AGENT_INSTALLED__') {
+                throw new RuntimeException('The WebStamp monitoring plugin installation could not be verified.');
+            }
+        }
+
+        $this->execute($server, $account, $password, $this->wpCliCommand(['plugin', 'activate', 'webstamp-site-agent']), 'The WebStamp monitoring plugin could not be activated.');
+        $this->execute($server, $account, $password, $this->wpCliCommand(['option', 'update', 'webstamp_agent_token', $agentToken]), 'The WebStamp monitoring identity could not be configured.');
+        $this->execute($server, $account, $password, $this->wpCliCommand(['rewrite', 'flush', '--hard']), 'The WebStamp monitoring endpoint could not be enabled.');
+        $this->execute($server, $account, $password, $this->wpCliCommand(['plugin', 'is-active', 'webstamp-site-agent']), 'The WebStamp monitoring plugin is not active.');
+
+        return ['installed' => true, 'new_installation' => ! $installed, 'active' => true, 'identity' => 'retained'];
+    }
+
     public function redirectDevelopmentDomain(HostingServer $server, HostingAccount $account, string $password, string $developmentDomain, string $productionDomain): array
     {
         $developmentDomain = strtolower(rtrim(trim($developmentDomain), '.'));

@@ -125,8 +125,14 @@ class WebsiteLaunchService
             $result = $this->http->inspect($run->production_domain);
             $website->update(['domain' => $run->production_domain, 'current_domain' => $run->production_domain, 'login_url' => 'https://'.$run->production_domain.'/wp-admin/']);
             if ($website->monitoring_enabled) {
+                $agentToken = (string) $website->agent_token_encrypted;
+                if ($agentToken === '' || ! is_string($website->agent_token_hash) || ! hash_equals($website->agent_token_hash, hash('sha256', $agentToken))) {
+                    throw new RuntimeException('The website monitoring identity is unavailable or invalid. Reconnect monitoring before completing Go Live.');
+                }
+                $agent = $this->wordpress->ensureMonitoringAgent($server, $account, $password, $agentToken);
                 $check = $this->monitor->check($website->fresh(['hostingServer', 'hostingAccount']), 'manual');
                 if ($website->agent_token_encrypted && ! $check->wordpress_checked_at) throw new RuntimeException('The website is live, but the monitoring plugin has not reconnected on the production domain yet.');
+                $result = [...$result, 'monitoring' => $agent, 'monitoring_verified' => true];
             }
         } elseif ($step->step === 'redirect_development_domain') {
             $result = $this->wordpress->redirectDevelopmentDomain($server, $account, $password, $run->development_domain, $run->production_domain);

@@ -14,6 +14,7 @@ use App\Services\Hosting\ProvisioningDnsService;
 use App\Services\Hosting\ProvisioningSslService;
 use App\Services\Hosting\ProvisioningHttpService;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -200,6 +201,49 @@ class KrystalWordpressProvisioningTest extends TestCase
         $this->expectExceptionMessage('installed home URL does not match');
         (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
             ->verify($this->server(), $this->account(), 'not-logged', 'https://example.test');
+    }
+
+    public function test_monitoring_agent_is_installed_activated_and_configured_idempotently(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'plugin' 'is-installed' 'webstamp-site-agent'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => ''],
+            '__WEBSTAMP_AGENT_INSTALLED__' => ['exit_code' => 0, 'stdout' => '__WEBSTAMP_AGENT_INSTALLED__', 'stderr' => ''],
+        ]);
+        $service = new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient);
+
+        $result = $service->ensureMonitoringAgent($this->server(), $this->account(), 'cpanel-secret', 'existing-agent-token');
+
+        $this->assertTrue($result['installed']);
+        $this->assertTrue($result['new_installation']);
+        $this->assertTrue($result['active']);
+        $this->assertSame('retained', $result['identity']);
+        $commands = implode("\n", $runner->commands);
+        $this->assertStringContainsString('__WEBSTAMP_AGENT_INSTALLED__', $commands);
+        $this->assertStringContainsString("'plugin' 'activate' 'webstamp-site-agent'", $commands);
+        $this->assertStringContainsString("'option' 'update' 'webstamp_agent_token'", $commands);
+        $this->assertStringContainsString("'rewrite' 'flush' '--hard'", $commands);
+        $this->assertStringContainsString("'plugin' 'is-active' 'webstamp-site-agent'", $commands);
+        $this->assertArrayNotHasKey('token', $result);
+    }
+
+    public function test_monitoring_agent_failure_exposes_only_the_safe_error(): void
+    {
+        Log::spy();
+        $runner = new RecordingSshRunner([
+            "'plugin' 'is-installed' 'webstamp-site-agent'" => ['exit_code' => 0, 'stdout' => '', 'stderr' => ''],
+            "'plugin' 'activate' 'webstamp-site-agent'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'private-agent-token'],
+        ]);
+
+        try {
+            (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+                ->ensureMonitoringAgent($this->server(), $this->account(), 'cpanel-secret', 'private-agent-token');
+            $this->fail('Expected monitoring activation to fail.');
+        } catch (RuntimeException $exception) {
+            $this->assertSame('The WebStamp monitoring plugin could not be activated.', $exception->getMessage());
+            $this->assertStringNotContainsString('private-agent-token', $exception->getMessage());
+            $this->assertStringNotContainsString('cpanel-secret', $exception->getMessage());
+        }
+        Log::shouldNotHaveReceived('warning');
     }
 
     public function test_temporary_wordpress_verification_diagnostic_is_removed(): void

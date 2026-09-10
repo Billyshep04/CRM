@@ -389,6 +389,93 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         $this->assertFalse($current->fresh()->provider_missing);
     }
 
+    public function test_verify_production_restores_and_authenticates_monitoring_on_the_production_domain(): void
+    {
+        [$run, $website] = $this->monitoringLaunchFixture();
+        $ssh = new LaunchMonitoringSshRunner('https://copperingots.uk');
+        $this->app->instance(SshCommandRunner::class, $ssh);
+        $this->app->instance(SslInspector::class, new FakeLaunchSslInspector);
+        config(['website-audits.enforce_public_networks' => false]);
+
+        Http::fake(function ($request) {
+            if ($request->url() === 'https://copperingots.uk/wp-json/webstamp/v1/status') {
+                $this->assertSame('Bearer existing-agent-token', $request->header('Authorization')[0] ?? null);
+                return Http::response(['wordpress_version' => '6.9', 'plugin_count' => 4, 'plugin_updates' => 0]);
+            }
+            if (str_starts_with($request->url(), 'http://')) return Http::response('', 301, ['Location' => preg_replace('/^http:/', 'https:', $request->url())]);
+            return Http::response('', 200);
+        });
+
+        $result = app(WebsiteLaunchService::class)->process($run);
+
+        $this->assertSame('complete', $result->state, (string) $result->safe_error);
+        $website->refresh();
+        $this->assertSame(hash('sha256', 'existing-agent-token'), $website->agent_token_hash);
+        $this->assertSame('existing-agent-token', $website->agent_token_encrypted);
+        $this->assertNotNull($website->agent_last_seen_at);
+        $this->assertSame('copperingots.uk', $website->current_domain);
+        $this->assertSame('test2-wzaz.sites.web-stamp.co.uk', $website->development_domain);
+        $this->assertTrue(collect($ssh->commands)->contains(fn ($command) => str_contains($command, "'option' 'update' 'webstamp_agent_token' 'existing-agent-token'")));
+        Http::assertSent(fn ($request) => $request->url() === 'https://copperingots.uk/wp-json/webstamp/v1/status');
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), 'test2-wzaz.sites.web-stamp.co.uk/wp-json'));
+
+        $commandCount = count($ssh->commands);
+        $verifyAttempts = $run->steps()->where('step', 'verify_production')->value('attempts');
+        app(WebsiteLaunchService::class)->process($run->fresh());
+        $this->assertSame($commandCount, count($ssh->commands));
+        $this->assertSame($verifyAttempts, $run->steps()->where('step', 'verify_production')->value('attempts'));
+        $this->assertSame(1, $run->steps()->where('step', 'attach_production_domain')->value('attempts'));
+    }
+
+    public function test_wrong_monitoring_identity_is_rejected_without_exposing_secrets(): void
+    {
+        [$run] = $this->monitoringLaunchFixture(['agent_token_hash' => hash('sha256', 'different-website-token')]);
+        $ssh = new LaunchMonitoringSshRunner('https://copperingots.uk');
+        $this->app->instance(SshCommandRunner::class, $ssh);
+        $this->app->instance(SslInspector::class, new FakeLaunchSslInspector);
+        config(['website-audits.enforce_public_networks' => false]);
+        Http::fake(function ($request) {
+            if (str_starts_with($request->url(), 'http://')) return Http::response('', 301, ['Location' => preg_replace('/^http:/', 'https:', $request->url())]);
+            return Http::response('', 200);
+        });
+
+        $result = app(WebsiteLaunchService::class)->process($run);
+
+        $this->assertSame('failed', $result->state);
+        $this->assertSame('verify_production', $result->failed_step);
+        $this->assertStringContainsString('monitoring identity is unavailable or invalid', $result->safe_error);
+        $this->assertStringNotContainsString('existing-agent-token', $result->safe_error);
+        $this->assertStringNotContainsString('different-website-token', $result->safe_error);
+        $this->assertFalse(collect($ssh->commands)->contains(fn ($command) => str_contains($command, 'webstamp_agent_token')));
+    }
+
+    public function test_stale_development_monitoring_cannot_complete_launch_when_production_endpoint_rejects_identity(): void
+    {
+        [$run, $website] = $this->monitoringLaunchFixture(['agent_last_seen_at' => now()]);
+        $ssh = new LaunchMonitoringSshRunner('https://copperingots.uk');
+        $this->app->instance(SshCommandRunner::class, $ssh);
+        $this->app->instance(SslInspector::class, new FakeLaunchSslInspector);
+        config(['website-audits.enforce_public_networks' => false]);
+
+        Http::fake(function ($request) {
+            if ($request->url() === 'https://copperingots.uk/wp-json/webstamp/v1/status') return Http::response(['message' => 'Unauthorized'], 401);
+            if ($request->url() === 'https://test2-wzaz.sites.web-stamp.co.uk/wp-json/webstamp/v1/status') return Http::response(['wordpress_version' => '6.9']);
+            if (str_starts_with($request->url(), 'http://')) return Http::response('', 301, ['Location' => preg_replace('/^http:/', 'https:', $request->url())]);
+            return Http::response('', 200);
+        });
+
+        $result = app(WebsiteLaunchService::class)->process($run);
+
+        $this->assertSame('failed', $result->state);
+        $this->assertSame('verify_production', $result->failed_step);
+        $this->assertSame('The website is live, but the monitoring plugin has not reconnected on the production domain yet.', $result->safe_error);
+        $this->assertNotNull($website->fresh()->agent_last_failed_at);
+        $this->assertStringNotContainsString('existing-agent-token', $result->safe_error);
+        $this->assertSame(1, $run->steps()->where('step', 'attach_production_domain')->value('attempts'));
+        Http::assertSent(fn ($request) => $request->url() === 'https://copperingots.uk/wp-json/webstamp/v1/status');
+        Http::assertNotSent(fn ($request) => $request->url() === 'https://test2-wzaz.sites.web-stamp.co.uk/wp-json/webstamp/v1/status');
+    }
+
     public function test_addon_domain_conflict_on_another_account_is_rejected_without_changes(): void
     {
         $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
@@ -936,10 +1023,87 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         return [$admin, $customer, $server, $package];
     }
 
+    private function monitoringLaunchFixture(array $websiteOverrides = []): array
+    {
+        $admin = $this->user('admin');
+        $customer = Customer::create(['name' => 'Client', 'email' => fake()->unique()->safeEmail(), 'billing_address' => '1 Test Road']);
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'whm-secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'assigned_ip' => '192.0.2.10', 'status' => 'active', 'last_synced_at' => now(), 'automation_password_encrypted' => 'cpanel-secret']);
+        $website = Website::create([...[
+            'customer_id' => $customer->id,
+            'hosting_server_id' => $server->id,
+            'hosting_account_id' => $account->id,
+            'name' => 'Copper Ingots',
+            'domain' => 'test2-wzaz.sites.web-stamp.co.uk',
+            'current_domain' => 'test2-wzaz.sites.web-stamp.co.uk',
+            'development_domain' => 'test2-wzaz.sites.web-stamp.co.uk',
+            'production_domain' => 'copperingots.uk',
+            'environment' => 'development',
+            'login_url' => 'https://test2-wzaz.sites.web-stamp.co.uk/wp-admin/',
+            'hosting_enabled' => true,
+            'wordpress_enabled' => true,
+            'monitoring_enabled' => true,
+            'agent_token_hash' => hash('sha256', 'existing-agent-token'),
+            'agent_token_encrypted' => 'existing-agent-token',
+        ], ...$websiteOverrides]);
+        $run = WebsiteLaunchRun::create([
+            'public_id' => (string) Str::uuid(),
+            'website_id' => $website->id,
+            'hosting_account_id' => $account->id,
+            'initiated_by_user_id' => $admin->id,
+            'idempotency_key' => 'monitoring-launch-'.Str::random(8),
+            'development_domain' => 'test2-wzaz.sites.web-stamp.co.uk',
+            'production_domain' => 'copperingots.uk',
+            'expected_ip' => '192.0.2.10',
+            'state' => 'failed',
+            'failed_step' => 'verify_production',
+            'safe_error' => 'The monitoring plugin has not reconnected.',
+        ]);
+        foreach (['preflight', 'attach_production_domain', 'verify_production_domain', 'check_dns', 'trigger_autossl', 'check_ssl', 'migrate_wordpress', 'verify_production', 'redirect_development_domain'] as $name) {
+            $run->steps()->create([
+                'step' => $name,
+                'status' => $name === 'verify_production' ? 'failed' : ($name === 'redirect_development_domain' ? 'pending' : 'complete'),
+                'attempts' => $name === 'verify_production' ? 1 : ($name === 'redirect_development_domain' ? 0 : 1),
+                'completed_at' => $name === 'redirect_development_domain' ? null : now(),
+            ]);
+        }
+
+        return [$run, $website, $account];
+    }
+
     private function user(string $role): User
     {
         $user = User::factory()->create();
         $user->roles()->attach(Role::where('slug', $role)->firstOrFail());
         return $user;
+    }
+}
+
+class LaunchMonitoringSshRunner implements SshCommandRunner
+{
+    public array $commands = [];
+    private bool $pluginInstalled = false;
+
+    public function __construct(private string $productionUrl) {}
+
+    public function run(HostingServer $server, HostingAccount $account, string $password, string $command, int $timeout = 60): array
+    {
+        $this->commands[] = $command;
+        if (str_contains($command, "'option' 'get' 'siteurl'") || str_contains($command, "'option' 'get' 'home'")) $output = $this->productionUrl;
+        elseif (str_contains($command, "'db' 'tables'")) $output = 'wp_options';
+        elseif (str_contains($command, "'plugin' 'is-installed'")) return ['exit_code' => $this->pluginInstalled ? 0 : 1, 'stdout' => '', 'stderr' => ''];
+        elseif (str_contains($command, '__WEBSTAMP_AGENT_INSTALLED__')) { $this->pluginInstalled = true; $output = '__WEBSTAMP_AGENT_INSTALLED__'; }
+        elseif (str_contains($command, '__WEBSTAMP_REDIRECT_READY__')) $output = '__WEBSTAMP_REDIRECT_READY__';
+        else $output = 'Success';
+
+        return ['exit_code' => 0, 'stdout' => $output, 'stderr' => ''];
+    }
+}
+
+class FakeLaunchSslInspector implements SslInspector
+{
+    public function inspect(string $domain): array
+    {
+        return ['valid' => true, 'hostname_match' => true, 'status' => 'active', 'issuer' => 'Test CA', 'expires_at' => now()->addMonth()->toIso8601String()];
     }
 }
