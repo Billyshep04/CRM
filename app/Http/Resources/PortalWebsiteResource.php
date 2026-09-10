@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\Website;
+use App\Services\Analytics\WebsiteAnalyticsReportBuilder;
 use App\Services\Websites\WebsiteStatusSnapshot;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -36,6 +37,7 @@ class PortalWebsiteResource extends JsonResource
             'maintenance' => $visibility['maintenance'] ? $maintenance : null,
             'hosting_usage' => $visibility['hosting_usage'] ? ['disk_used_bytes' => $this->hostingAccount?->disk_used_bytes, 'disk_limit_bytes' => $this->hostingAccount?->disk_limit_bytes] : null,
             'technical_details' => $visibility['technical_details'] ? ['wordpress_version' => $this->latestAgentCheck()?->wordpress_version, 'php_version' => $this->latestAgentCheck()?->php_version] : null,
+            'analytics' => $visibility['analytics'] && $this->resource->analyticsConfigured() ? $this->analyticsPanel() : null,
             'activities' => $this->activities->map(fn ($activity) => ['title' => $activity->title, 'description' => $activity->description, 'performed_at' => $activity->performed_at]),
         ], static fn ($value) => $value !== null);
     }
@@ -43,6 +45,29 @@ class PortalWebsiteResource extends JsonResource
     private function latestAgentCheck()
     {
         return $this->healthChecks()->whereNotNull('wordpress_checked_at')->latest('wordpress_checked_at')->first();
+    }
+
+    /**
+     * A trimmed traffic dashboard for the customer portal. Stored data only,
+     * and never the property id, raw payloads or sync error detail.
+     *
+     * @return array<string, mixed>
+     */
+    private function analyticsPanel(): array
+    {
+        $report = app(WebsiteAnalyticsReportBuilder::class)->build($this->resource, '28d');
+
+        return [
+            'range' => $report['range'] ?? null,
+            'last_updated' => $this->google_analytics_last_synced_at,
+            'totals' => $report['totals'] ?? [],
+            'deltas' => $report['deltas'] ?? [],
+            'secondary' => $report['secondary'] ?? null,
+            'series' => $report['series'] ?? [],
+            'top_pages' => array_slice($report['breakdowns']['page_path'] ?? [], 0, 5),
+            'channels' => array_slice($report['breakdowns']['session_default_channel_group'] ?? [], 0, 5),
+            'key_events' => $report['key_events'] ?? [],
+        ];
     }
 
     private function publicUrl(): string

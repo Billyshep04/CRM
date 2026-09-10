@@ -32,6 +32,12 @@ Schedule::command('follow-ups:process')
 Schedule::command('websites:monitor --type=http')->everyTenMinutes()->withoutOverlapping()->onOneServer();
 Schedule::command('websites:monitor --type=full')->everyFourHours()->withoutOverlapping()->onOneServer();
 
+Schedule::command('analytics:sync-websites --mode=recent')
+    ->dailyAt('05:30')
+    ->timezone('Europe/London')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Artisan::command('websites:resume-provisioning', function (): void {
     WebsiteProvisioningRun::query()
         ->whereIn('state', ['waiting_for_dns', 'waiting_for_ssl'])

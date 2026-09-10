@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Contracts\AnalyticsProvider;
 use App\Contracts\LeadDiscoveryProvider;
 use App\Contracts\LeadScoreRepository;
 use App\Contracts\LeadScoringEngine;
@@ -13,6 +14,8 @@ use App\Contracts\WebsiteAnalyzer;
 use App\Contracts\WebsiteAuditRepository;
 use App\Repositories\EloquentLeadScoreRepository;
 use App\Repositories\EloquentWebsiteAuditRepository;
+use App\Services\Analytics\GoogleAnalyticsDataProvider;
+use App\Services\Analytics\MockAnalyticsProvider;
 use App\Services\LeadDiscovery\GooglePlacesLeadDiscoveryProvider;
 use App\Services\LeadScoring\WeightedLeadScoringEngine;
 use App\Services\Hosting\NativeDnsResolver;
@@ -34,6 +37,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(LeadScoringEngine::class, WeightedLeadScoringEngine::class);
         $this->app->bind(LeadScoreRepository::class, EloquentLeadScoreRepository::class);
         $this->app->bind(LeadDiscoveryProvider::class, GooglePlacesLeadDiscoveryProvider::class);
+        $this->app->bind(AnalyticsProvider::class, fn () => config('analytics.driver') === 'google'
+            ? $this->app->make(GoogleAnalyticsDataProvider::class)
+            : $this->app->make(MockAnalyticsProvider::class));
         $this->app->bind(SshCommandRunner::class, PhpseclibSshCommandRunner::class);
         $this->app->bind(CpanelUapiClient::class, WhmCpanelUapiClient::class);
         $this->app->bind(DnsResolver::class, NativeDnsResolver::class);
