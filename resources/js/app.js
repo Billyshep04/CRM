@@ -278,6 +278,18 @@ const dom = {
     websiteAnalyticsForm: document.getElementById('website-analytics-form'),
     websiteAnalyticsStatus: document.getElementById('website-analytics-status'),
     websiteAnalyticsOpen: document.getElementById('website-analytics-open'),
+    websiteAnalyticsDisconnect: document.getElementById('website-analytics-disconnect'),
+    websiteAnalyticsRange: document.getElementById('website-analytics-range'),
+    websiteAnalyticsSync: document.getElementById('website-analytics-sync'),
+    websiteAnalyticsPanelStatus: document.getElementById('website-analytics-panel-status'),
+    websiteAnalyticsTiles: document.getElementById('website-analytics-tiles'),
+    websiteAnalyticsChart: document.getElementById('website-analytics-chart'),
+    websiteAnalyticsBreakdowns: document.getElementById('website-analytics-breakdowns'),
+    portalWebsiteAnalyticsCard: document.getElementById('portal-website-detail-analytics-card'),
+    portalWebsiteAnalyticsSubtitle: document.getElementById('portal-website-analytics-subtitle'),
+    portalWebsiteAnalyticsTiles: document.getElementById('portal-website-analytics-tiles'),
+    portalWebsiteAnalyticsChart: document.getElementById('portal-website-analytics-chart'),
+    portalWebsiteAnalyticsBreakdowns: document.getElementById('portal-website-analytics-breakdowns'),
     portalProfileForm: document.getElementById('portal-profile-form'),
     portalProfileStatus: document.getElementById('portal-profile-status'),
     portalProfileName: document.getElementById('portal-profile-name'),
@@ -499,6 +511,7 @@ const state = {
     view: 'dashboard',
     role: 'guest',
     user: null,
+    analyticsRange: '28d',
     customers: [],
     customerOptions: [],
     jobs: [],
@@ -2208,6 +2221,7 @@ function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteDetailCare) dom.portalWebsiteDetailCare.innerHTML = care.length ? care.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(note)}</div></div>`).join('') : '<div class="table-empty">No additional website-care information is currently available.</div>';
     const activities = site.activities || [];
     if (dom.portalWebsiteDetailActivities) dom.portalWebsiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No recent customer-visible activity.</div>';
+    renderPortalWebsiteAnalytics(site);
 }
 
 async function loadPortalWebsiteDetail(websiteId) {
@@ -2467,12 +2481,182 @@ function renderWebsiteDetail(site) {
     if (dom.websiteAnalyticsForm) {
         dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
         dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
-        setFormStatus(dom.websiteAnalyticsStatus, site.google_analytics_property_id ? 'GA4 property linked.' : 'No Analytics property linked yet.');
+        setFormStatus(dom.websiteAnalyticsStatus, analyticsLinkStatusMessage(site.analytics, site.google_analytics_property_id), site.analytics?.status === 'no_access' || site.analytics?.status === 'error');
     }
+    if (dom.websiteAnalyticsDisconnect) dom.websiteAnalyticsDisconnect.hidden = !site.analytics?.enabled;
     if (dom.websiteAnalyticsOpen) {
         dom.websiteAnalyticsOpen.hidden = !site.google_analytics_dashboard_url;
         dom.websiteAnalyticsOpen.href = site.google_analytics_dashboard_url || '#';
     }
+    loadWebsiteAnalytics(site.id);
+}
+
+function analyticsLinkStatusMessage(analytics, propertyId) {
+    if (!propertyId) return 'No Analytics property linked yet.';
+    switch (analytics?.status) {
+        case 'connected': return `GA4 property linked${analytics.last_synced_at ? ` · last synced ${formatDate(analytics.last_synced_at)}` : ''}.`;
+        case 'no_access': return analytics.last_error || 'The reporting service account cannot read this property. Add it as a Viewer in GA4.';
+        case 'error': return analytics.last_error || 'The last analytics sync failed.';
+        default: return 'GA4 property saved. Waiting for the first sync.';
+    }
+}
+
+function formatCount(value) {
+    const number = Number(value || 0);
+    if (number >= 1000000) return `${(number / 1000000).toFixed(number >= 10000000 ? 0 : 1)}M`;
+    if (number >= 10000) return `${Math.round(number / 1000)}k`;
+    if (number >= 1000) return `${(number / 1000).toFixed(1)}k`;
+    return String(number);
+}
+
+function formatDuration(seconds) {
+    const total = Math.max(0, Math.round(Number(seconds || 0)));
+    const mins = Math.floor(total / 60);
+    const secs = total % 60;
+    return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+}
+
+function analyticsDeltaMarkup(delta) {
+    if (!delta || (delta.value === 0 && delta.percent === null)) return '<span class="analytics-delta flat">—</span>';
+    const direction = delta.value > 0 ? 'up' : delta.value < 0 ? 'down' : 'flat';
+    const arrow = direction === 'up' ? '▲' : direction === 'down' ? '▼' : '–';
+    const pct = delta.percent === null ? 'new' : `${delta.percent > 0 ? '+' : ''}${delta.percent}%`;
+    return `<span class="analytics-delta ${direction}">${arrow} ${escapeHtml(pct)}</span>`;
+}
+
+function analyticsSparkline(series, key = 'sessions') {
+    const values = (series || []).map((row) => Math.max(Number(row?.[key] ?? 0), 0));
+    if (values.length < 2) return '<div class="analytics-chart-empty">Not enough data to chart yet.</div>';
+    const width = 900;
+    const height = 200;
+    const pad = { top: 12, right: 12, bottom: 22, left: 12 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const max = Math.max(...values, 1);
+    const bottom = pad.top + plotH;
+    const points = values.map((value, index) => {
+        const x = values.length > 1 ? pad.left + (index * plotW) / (values.length - 1) : pad.left + plotW / 2;
+        const y = bottom - (value / max) * plotH;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const area = `${pad.left},${bottom} ${points.join(' ')} ${(pad.left + plotW).toFixed(1)},${bottom}`;
+    return `
+        <svg class="analytics-chart-svg" viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily ${escapeHtml(key.replaceAll('_', ' '))}">
+            <line class="analytics-chart-baseline" x1="${pad.left}" y1="${bottom}" x2="${width - pad.right}" y2="${bottom}"></line>
+            <polygon class="analytics-chart-area" points="${area}"></polygon>
+            <polyline class="analytics-chart-line" points="${points.join(' ')}"></polyline>
+        </svg>
+        <div class="analytics-chart-axis"><span>${escapeHtml(formatDate(series[0]?.date))}</span><span>Peak ${escapeHtml(formatCount(max))}</span><span>${escapeHtml(formatDate(series[series.length - 1]?.date))}</span></div>
+    `;
+}
+
+const ANALYTICS_TILES = [
+    ['sessions', 'Sessions'],
+    ['total_users', 'Users'],
+    ['screen_page_views', 'Pageviews'],
+    ['conversions', 'Key events'],
+];
+
+function renderAnalyticsTiles(container, data) {
+    if (!container) return;
+    const totals = data.totals || {};
+    const deltas = data.deltas || {};
+    const tiles = ANALYTICS_TILES.map(([key, label]) => `
+        <div class="analytics-tile">
+            <span class="analytics-tile-label">${escapeHtml(label)}</span>
+            <strong class="analytics-tile-value">${escapeHtml(formatCount(totals[key]))}</strong>
+            ${analyticsDeltaMarkup(deltas[key])}
+        </div>
+    `);
+    const secondary = data.secondary;
+    if (secondary) {
+        tiles.push(`
+            <div class="analytics-tile analytics-tile-muted">
+                <span class="analytics-tile-label">Engagement rate</span>
+                <strong class="analytics-tile-value">${escapeHtml(`${Math.round((secondary.engagement_rate || 0) * 100)}%`)}</strong>
+                <span class="analytics-delta flat">Avg ${escapeHtml(formatDuration(secondary.avg_engagement_time_seconds))}</span>
+            </div>
+        `);
+    }
+    container.innerHTML = tiles.join('');
+}
+
+const ANALYTICS_BREAKDOWN_META = [
+    ['page_path', 'Top pages', 'screen_page_views', 'Views'],
+    ['session_default_channel_group', 'Channels', 'sessions', 'Sessions'],
+    ['country', 'Countries', 'sessions', 'Sessions'],
+    ['device_category', 'Devices', 'sessions', 'Sessions'],
+];
+
+function renderAnalyticsBreakdowns(container, data, { compact = false } = {}) {
+    if (!container) return;
+    const breakdowns = data.breakdowns || {};
+    const meta = compact ? ANALYTICS_BREAKDOWN_META.slice(0, 2) : ANALYTICS_BREAKDOWN_META;
+    const blocks = meta.map(([key, label, metric, metricLabel]) => {
+        const rows = (breakdowns[key] || []).slice(0, compact ? 5 : 10);
+        if (!rows.length) return '';
+        const body = rows.map((row) => `<tr><td title="${escapeHtml(row.value)}">${escapeHtml(truncate(row.value, 46))}</td><td>${escapeHtml(formatCount(row[metric]))}</td></tr>`).join('');
+        return `<div class="analytics-breakdown"><div class="analytics-breakdown-title">${escapeHtml(label)}</div><table class="analytics-breakdown-table"><thead><tr><th>${escapeHtml(label === 'Top pages' ? 'Page' : 'Name')}</th><th>${escapeHtml(metricLabel)}</th></tr></thead><tbody>${body}</tbody></table></div>`;
+    });
+    const events = Object.entries(data.key_events || {});
+    if (!compact && events.length) {
+        const body = events.slice(0, 10).map(([name, count]) => `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(formatCount(count))}</td></tr>`).join('');
+        blocks.push(`<div class="analytics-breakdown"><div class="analytics-breakdown-title">Key events</div><table class="analytics-breakdown-table"><thead><tr><th>Event</th><th>Count</th></tr></thead><tbody>${body}</tbody></table></div>`);
+    }
+    const rendered = blocks.filter(Boolean).join('');
+    container.innerHTML = rendered || '<div class="table-empty">No breakdown data for this period yet.</div>';
+}
+
+function syncAnalyticsRangeButtons() {
+    dom.websiteAnalyticsRange?.querySelectorAll('[data-analytics-range]').forEach((button) => {
+        const active = button.dataset.analyticsRange === state.analyticsRange;
+        button.classList.toggle('btn-primary', active);
+        button.classList.toggle('btn-outline', !active);
+    });
+}
+
+async function loadWebsiteAnalytics(websiteId) {
+    if (!dom.websiteAnalyticsTiles || !websiteId) return;
+    syncAnalyticsRangeButtons();
+    setFormStatus(dom.websiteAnalyticsPanelStatus, 'Loading traffic…');
+    dom.websiteAnalyticsChart.innerHTML = '';
+    dom.websiteAnalyticsTiles.innerHTML = '';
+    dom.websiteAnalyticsBreakdowns.innerHTML = '';
+    try {
+        const response = await api.get(`/api/websites/${websiteId}/analytics`, { params: { range: state.analyticsRange } });
+        const data = response?.data?.data || {};
+        if (data.status === 'unconfigured') {
+            setFormStatus(dom.websiteAnalyticsPanelStatus, 'Link a GA4 property in Settings to see traffic here.');
+            return;
+        }
+        const statusNote = data.status === 'no_access'
+            ? (data.last_error || 'The reporting service account cannot read this property.')
+            : data.status === 'error'
+                ? (data.last_error || 'The last sync failed. Showing the most recent stored data.')
+                : `${data.range?.label || ''} · ${data.last_synced_at ? `synced ${formatDate(data.last_synced_at)}` : 'first sync pending'}`;
+        setFormStatus(dom.websiteAnalyticsPanelStatus, statusNote, data.status === 'no_access' || data.status === 'error');
+        renderAnalyticsTiles(dom.websiteAnalyticsTiles, data);
+        dom.websiteAnalyticsChart.innerHTML = analyticsSparkline(data.series, 'sessions');
+        renderAnalyticsBreakdowns(dom.websiteAnalyticsBreakdowns, data);
+    } catch (error) {
+        setFormStatus(dom.websiteAnalyticsPanelStatus, getErrorMessage(error, 'Unable to load traffic.'), true);
+    }
+}
+
+function renderPortalWebsiteAnalytics(site) {
+    const panel = site.analytics;
+    if (!dom.portalWebsiteAnalyticsCard) return;
+    if (!panel) {
+        dom.portalWebsiteAnalyticsCard.hidden = true;
+        return;
+    }
+    dom.portalWebsiteAnalyticsCard.hidden = false;
+    if (dom.portalWebsiteAnalyticsSubtitle) {
+        dom.portalWebsiteAnalyticsSubtitle.textContent = `${panel.range?.label || 'Recent traffic'}${panel.last_updated ? ` · updated ${formatDate(panel.last_updated)}` : ''}`;
+    }
+    renderAnalyticsTiles(dom.portalWebsiteAnalyticsTiles, panel);
+    if (dom.portalWebsiteAnalyticsChart) dom.portalWebsiteAnalyticsChart.innerHTML = analyticsSparkline(panel.series, 'sessions');
+    renderAnalyticsBreakdowns(dom.portalWebsiteAnalyticsBreakdowns, { breakdowns: { page_path: panel.top_pages || [], session_default_channel_group: panel.channels || [] } }, { compact: true });
 }
 
 function wordpressLoginActions(login, websiteId) {
@@ -8802,13 +8986,48 @@ if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit'
     event.preventDefault();
     if (!state.currentWebsite?.id) return;
     const formData = new FormData(dom.websiteAnalyticsForm);
-    const payload = {
-        google_analytics_property_id: String(formData.get('google_analytics_property_id') || '').trim() || null,
-        google_analytics_dashboard_url: String(formData.get('google_analytics_dashboard_url') || '').trim() || null,
-    };
-    setFormStatus(dom.websiteAnalyticsStatus, 'Saving…');
-    try { await api.put(`/api/websites/${state.currentWebsite.id}`, payload); await loadWebsiteDetail(state.currentWebsite.id); setFormStatus(dom.websiteAnalyticsStatus, 'Google Analytics link saved.'); }
-    catch (error) { setFormStatus(dom.websiteAnalyticsStatus, getErrorMessage(error, 'Unable to save Analytics link.'), true); }
+    const propertyId = String(formData.get('google_analytics_property_id') || '').trim();
+    const dashboardUrl = String(formData.get('google_analytics_dashboard_url') || '').trim() || null;
+    if (!propertyId) {
+        setFormStatus(dom.websiteAnalyticsStatus, 'Enter a GA4 property ID first.', true);
+        return;
+    }
+    setFormStatus(dom.websiteAnalyticsStatus, 'Saving and verifying access…');
+    try {
+        const response = await api.post(`/api/websites/${state.currentWebsite.id}/analytics/connect`, {
+            property_id: propertyId,
+            dashboard_url: dashboardUrl,
+        });
+        const result = response?.data?.data || {};
+        setFormStatus(dom.websiteAnalyticsStatus, result.connected ? 'Connected. Backfilling traffic history…' : (result.last_error || 'Saved, but access could not be confirmed.'), !result.connected);
+        await loadWebsiteDetail(state.currentWebsite.id);
+    } catch (error) {
+        setFormStatus(dom.websiteAnalyticsStatus, getErrorMessage(error, 'Unable to save Analytics link.'), true);
+    }
+});
+if (dom.websiteAnalyticsDisconnect) dom.websiteAnalyticsDisconnect.addEventListener('click', async () => {
+    if (!state.currentWebsite?.id || !window.confirm('Stop syncing Google Analytics for this website? Stored history is kept.')) return;
+    try {
+        await api.delete(`/api/websites/${state.currentWebsite.id}/analytics`);
+        await loadWebsiteDetail(state.currentWebsite.id);
+    } catch (error) { showToast(getErrorMessage(error, 'Unable to disconnect Analytics.'), true); }
+});
+dom.websiteAnalyticsRange?.querySelectorAll('[data-analytics-range]').forEach((button) => button.addEventListener('click', () => {
+    state.analyticsRange = button.dataset.analyticsRange;
+    if (state.currentWebsite?.id) loadWebsiteAnalytics(state.currentWebsite.id);
+}));
+if (dom.websiteAnalyticsSync) dom.websiteAnalyticsSync.addEventListener('click', async () => {
+    if (!state.currentWebsite?.id) return;
+    dom.websiteAnalyticsSync.disabled = true;
+    try {
+        await api.post(`/api/websites/${state.currentWebsite.id}/analytics/sync`);
+        showToast('Analytics sync queued. This can take a minute.');
+        window.setTimeout(() => { if (state.currentWebsite?.id) loadWebsiteAnalytics(state.currentWebsite.id); }, 6000);
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Could not queue the sync.'), true);
+    } finally {
+        dom.websiteAnalyticsSync.disabled = false;
+    }
 });
 if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', async (event) => {
     event.preventDefault(); setFormStatus(dom.managedWebsiteStatus, 'Saving…');

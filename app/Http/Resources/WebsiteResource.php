@@ -31,6 +31,12 @@ class WebsiteResource extends JsonResource
             'id' => $this->id, 'customer_id' => $this->customer_id, 'hosting_server_id' => $this->hosting_server_id, 'hosting_account_id' => $this->hosting_account_id, 'subscription_id' => $this->subscription_id,
             'name' => $this->name, 'domain' => $this->domain, 'development_domain' => $this->development_domain, 'production_domain' => $this->production_domain, 'current_domain' => $this->current_domain ?: $this->domain, 'went_live_at' => $this->went_live_at, 'login_url' => $this->login_url, 'environment' => $this->environment,
             'google_analytics_property_id' => $this->google_analytics_property_id, 'google_analytics_dashboard_url' => $this->google_analytics_dashboard_url,
+            'analytics' => [
+                'enabled' => (bool) $this->google_analytics_enabled,
+                'status' => $this->google_analytics_status ?? ($this->google_analytics_property_id ? 'unconfigured' : null),
+                'last_synced_at' => $this->google_analytics_last_synced_at,
+                'last_error' => $this->google_analytics_last_error,
+            ],
             'cpanel_username' => $this->cpanel_username, 'wordpress_enabled' => $this->wordpress_enabled, 'management_enabled' => $this->management_enabled, 'monitoring_enabled' => $this->monitoring_enabled,
             'hosting_enabled' => $this->hosting_enabled, 'status' => $this->status,
             'hosting_connected' => $this->resource->hasVerifiedHostingConnection(),

@@ -33,6 +33,10 @@ class Website extends Model
         'cpanel_username',
         'google_analytics_property_id',
         'google_analytics_dashboard_url',
+        'google_analytics_enabled',
+        'google_analytics_status',
+        'google_analytics_last_synced_at',
+        'google_analytics_last_error',
         'wordpress_enabled',
         'management_enabled',
         'monitoring_enabled',
@@ -55,6 +59,7 @@ class Website extends Model
 
     protected $casts = [
         'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
+        'google_analytics_enabled' => 'boolean', 'google_analytics_last_synced_at' => 'datetime',
         'agent_last_seen_at' => 'datetime', 'agent_last_failed_at' => 'datetime', 'last_checked_at' => 'datetime', 'went_live_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
         'agent_token_encrypted' => 'encrypted',
     ];
@@ -109,11 +114,21 @@ class Website extends Model
 
     public static function defaultPortalVisibility(): array
     {
-        return ['status' => true, 'uptime' => true, 'ssl' => true, 'backup' => true, 'performance' => true, 'maintenance' => true, 'hosting_usage' => false, 'technical_details' => false];
+        return ['status' => true, 'uptime' => true, 'ssl' => true, 'backup' => true, 'performance' => true, 'maintenance' => true, 'hosting_usage' => false, 'technical_details' => false, 'analytics' => false];
     }
 
     public function audits(): HasMany
     {
         return $this->hasMany(WebsiteAudit::class);
+    }
+
+    public function analyticsSnapshots(): HasMany
+    {
+        return $this->hasMany(WebsiteAnalyticsSnapshot::class)->orderByDesc('period_start');
+    }
+
+    public function analyticsConfigured(): bool
+    {
+        return $this->google_analytics_enabled && trim((string) $this->google_analytics_property_id) !== '';
     }
 }
