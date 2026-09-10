@@ -687,7 +687,7 @@ class KrystalWhmProvider implements HostingProviderInterface
             ['hosting_account_id' => $account->id, 'username' => $account->username, 'domain' => $domain]
         );
         $matches = collect($result['data'] ?? [])
-            ->filter(fn ($item) => is_array($item) && strtolower(rtrim((string) ($item['domain'] ?? ''), '.')) === $domain)
+            ->filter(fn ($item) => is_array($item) && $this->normalizeDomain((string) ($item['domain'] ?? '')) === $domain)
             ->values();
 
         if ($matches->isEmpty()) {
@@ -698,20 +698,17 @@ class KrystalWhmProvider implements HostingProviderInterface
         }
 
         $item = $matches->first();
-        $basedir = trim((string) ($item['basedir'] ?? ''), '/');
-        $reldir = trim((string) ($item['reldir'] ?? ''));
-        $absolute = rtrim((string) ($item['dir'] ?? ''), '/');
-        $expectedAbsolute = '/home/'.strtolower($account->username).'/public_html';
-        $sameDocumentRoot = $basedir === 'public_html'
-            || $reldir === 'home:public_html'
-            || strtolower($absolute) === strtolower($expectedAbsolute);
+        $documentRoots = collect(['basedir', 'reldir', 'dir'])
+            ->map(fn ($key) => $this->normalizeDocumentRoot((string) ($item[$key] ?? ''), $account->username))
+            ->filter();
+        $sameDocumentRoot = $documentRoots->contains('public_html');
 
         if (! $sameDocumentRoot) {
             Log::warning('Production addon domain uses an unexpected document root.', [
                 'hosting_account_id' => $account->id,
                 'username' => $account->username,
                 'domain' => $domain,
-                'basedir' => $basedir,
+                'document_roots' => $documentRoots->values()->all(),
             ]);
             throw new RuntimeException('The production domain exists on this cPanel account but does not use the development website document root. Launch stopped for safety.');
         }
@@ -728,8 +725,9 @@ class KrystalWhmProvider implements HostingProviderInterface
     {
         [$result, $resultPath] = match (true) {
             is_array(data_get($payload, 'data.cpanelresult')) => [data_get($payload, 'data.cpanelresult'), 'data.cpanelresult'],
-            is_array(data_get($payload, 'data.result')) => [data_get($payload, 'data.result'), 'data.result'],
+            is_array(data_get($payload, 'data.result.cpanelresult')) => [data_get($payload, 'data.result.cpanelresult'), 'data.result.cpanelresult'],
             is_array(data_get($payload, 'cpanelresult')) => [data_get($payload, 'cpanelresult'), 'cpanelresult'],
+            is_array(data_get($payload, 'data.result')) && array_key_exists('event', data_get($payload, 'data.result')) => [data_get($payload, 'data.result'), 'data.result'],
             is_array(data_get($payload, 'data')) && array_key_exists('event', $payload['data']) => [$payload['data'], 'data'],
             default => [null, null],
         };
@@ -746,7 +744,7 @@ class KrystalWhmProvider implements HostingProviderInterface
         }
 
         $data = $result['data'] ?? [];
-        $items = is_array($data) ? (array_is_list($data) ? $data : [$data]) : [];
+        $items = $this->cpanelApi2Items($data);
         $eventResult = data_get($result, 'event.result');
         $functionResults = collect($items)
             ->filter(fn ($item) => is_array($item) && array_key_exists('result', $item))
@@ -759,7 +757,9 @@ class KrystalWhmProvider implements HostingProviderInterface
                 ->values()
             : collect();
         $messages = $this->safeCpanelApi2Messages($server, $result, $items);
-        $failed = (int) data_get($payload, 'metadata.result', 0) !== 1
+        $hasWhmMetadata = array_key_exists('metadata', $payload);
+        $metadataResult = data_get($payload, 'metadata.result');
+        $failed = ($hasWhmMetadata && (int) $metadataResult !== 1)
             || (int) $eventResult !== 1
             || $functionResults->contains(fn ($value) => (int) $value !== 1)
             || $statuses->contains(fn ($value) => (int) $value !== 1)
@@ -770,7 +770,8 @@ class KrystalWhmProvider implements HostingProviderInterface
                 ...$context,
                 'function' => $function,
                 'result_path' => $resultPath,
-                'metadata_result' => data_get($payload, 'metadata.result'),
+                'has_whm_metadata' => $hasWhmMetadata,
+                'metadata_result' => $metadataResult,
                 'event_result' => $eventResult,
                 'function_results' => $functionResults->map(fn ($value) => is_scalar($value) ? (string) $value : get_debug_type($value))->all(),
                 'statuses' => $statuses->map(fn ($value) => is_scalar($value) ? (string) $value : get_debug_type($value))->all(),
@@ -782,6 +783,46 @@ class KrystalWhmProvider implements HostingProviderInterface
         }
 
         return $result;
+    }
+
+    private function cpanelApi2Items(mixed $data): array
+    {
+        if (! is_array($data) || $data === []) {
+            return [];
+        }
+        if (array_is_list($data)) {
+            return array_values(array_filter($data, 'is_array'));
+        }
+        if (collect(['domain', 'reason', 'result', 'status'])->contains(fn ($key) => array_key_exists($key, $data))) {
+            return [$data];
+        }
+
+        return array_values(array_filter($data, 'is_array'));
+    }
+
+    private function normalizeDomain(string $domain): string
+    {
+        return strtolower(rtrim(trim($domain), '.'));
+    }
+
+    private function normalizeDocumentRoot(string $path, string $username): string
+    {
+        $path = trim(str_replace('\\', '/', $path));
+        if ($path === '') {
+            return '';
+        }
+
+        $path = preg_replace('#/+#', '/', $path) ?? $path;
+        if (str_starts_with(strtolower($path), 'home:')) {
+            $path = substr($path, 5);
+        }
+
+        $homePrefix = '/home/'.strtolower(trim($username)).'/';
+        if (str_starts_with(strtolower($path), $homePrefix)) {
+            $path = substr($path, strlen($homePrefix));
+        }
+
+        return strtolower(trim($path, '/'));
     }
 
     private function hasCpanelApi2Errors(array $result, array $items): bool

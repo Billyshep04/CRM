@@ -136,7 +136,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         Http::fake(function ($request) use (&$addon) {
             if (str_contains($request->url(), '/listaccts')) return Http::response(['metadata' => ['result' => 1], 'data' => ['acct' => [['user' => 'devusr', 'domain' => 'site-ab12.dev.web-stamp.co.uk', 'ip' => '192.0.2.10', 'plan' => 'Standard', 'suspended' => 0]]]]);
             if (str_contains($request->url(), '/cpanel') && (int) $request['cpanel_jsonapi_apiversion'] === 2 && $request['cpanel_jsonapi_func'] === 'addaddondomain') { $addon = true; return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => []]]]); }
-            if (str_contains($request->url(), '/cpanel') && (int) $request['cpanel_jsonapi_apiversion'] === 2) return Http::response(['metadata' => ['result' => 1], 'data' => ['cpanelresult' => ['event' => ['result' => 1], 'data' => $addon ? [['domain' => 'site.test', 'basedir' => 'public_html', 'reldir' => 'home:public_html', 'dir' => '/home/devusr/public_html']] : []]]]);
+            if (str_contains($request->url(), '/cpanel') && (int) $request['cpanel_jsonapi_apiversion'] === 2) return Http::response(['cpanelresult' => ['event' => ['result' => 1], 'data' => $addon ? [['domain' => 'site.test', 'dir' => '/public_html']] : []]]);
             if (str_contains($request->url(), '/cpanel')) return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'site-ab12.dev.web-stamp.co.uk', 'addon_domains' => $addon ? ['site.test'] : []]]]]);
             if (str_contains($request->url(), '/uapi_cpanel')) return Http::response(['metadata' => ['result' => 1], 'data' => ['uapi' => ['status' => 1, 'errors' => null, 'messages' => null, 'data' => null]]]);
             return Http::response('ok', 200);
@@ -518,6 +518,161 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         $this->assertSame('public_html', $result['document_root']);
         Http::assertNotSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'addaddondomain');
         Http::assertSent(fn ($request) => ($request['cpanel_jsonapi_func'] ?? null) === 'listaddondomains');
+    }
+
+    public function test_actual_production_addon_state_in_top_level_api2_response_verifies_and_resumes_go_live(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create([
+            'hosting_server_id' => $server->id,
+            'external_id' => 'wstest2whawu',
+            'username' => 'wstest2whawu',
+            'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk',
+            'status' => 'active',
+        ]);
+
+        Http::fake(fn ($request) => Http::response([
+            'cpanelresult' => [
+                'apiversion' => 2,
+                'func' => 'listaddondomains',
+                'data' => [[
+                    'domain' => "  COPPERINGOTS.UK. \n",
+                    'dir' => '/public_html',
+                    'reldir' => 'home:/public_html/',
+                    'basedir' => '/public_html/',
+                    'subdomain' => 'ws5e61073be5',
+                    'rootdomain' => 'test2-wzaz.sites.web-stamp.co.uk',
+                ]],
+                'event' => ['result' => 1],
+                'module' => 'AddonDomain',
+            ],
+        ]));
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+
+        $this->assertSame('copperingots.uk', $result['domain']);
+        $this->assertSame('wstest2whawu', $result['username']);
+        $this->assertSame('public_html', $result['document_root']);
+        Http::assertSent(fn ($request) => $request['cpanel_jsonapi_user'] === 'wstest2whawu'
+            && $request['cpanel_jsonapi_apiversion'] === 2
+            && $request['cpanel_jsonapi_module'] === 'AddonDomain'
+            && $request['cpanel_jsonapi_func'] === 'listaddondomains');
+    }
+
+    public function test_nested_whm_api2_wrapper_and_keyed_addon_data_are_supported(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'dev.example.test', 'status' => 'active']);
+
+        Http::fake(fn ($request) => Http::response([
+            'metadata' => ['result' => 1],
+            'data' => ['result' => ['cpanelresult' => [
+                'event' => ['result' => '1'],
+                'data' => ['addon_key' => [
+                    'domain' => 'LIVE.EXAMPLE.TEST.',
+                    'dir' => '/home/devusr/public_html/',
+                ]],
+            ]]],
+        ]));
+
+        $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'live.example.test');
+
+        $this->assertSame('live.example.test', $result['domain']);
+        $this->assertSame('public_html', $result['document_root']);
+    }
+
+    public function test_all_supported_public_html_document_root_forms_are_accepted(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'status' => 'active']);
+        $documentRoot = 'public_html';
+
+        Http::fake(function () use (&$documentRoot) {
+            return Http::response([
+                'metadata' => ['result' => 1],
+                'data' => ['cpanelresult' => [
+                    'event' => ['result' => 1],
+                    'data' => [['domain' => 'copperingots.uk', 'dir' => $documentRoot]],
+                ]],
+            ]);
+        });
+
+        foreach (['public_html', '/public_html', '/home/wstest2whawu/public_html'] as $root) {
+            $documentRoot = $root;
+            $result = app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+            $this->assertSame('public_html', $result['document_root']);
+        }
+    }
+
+    public function test_different_addon_domain_never_matches_requested_domain(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'status' => 'active']);
+
+        Http::fake(fn () => Http::response([
+            'cpanelresult' => [
+                'event' => ['result' => 1],
+                'data' => [['domain' => 'not-copperingots.uk', 'dir' => '/public_html']],
+            ],
+        ]));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('not visible on the expected cPanel account');
+        app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+    }
+
+    public function test_malformed_addon_domain_list_response_is_safely_rejected(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'status' => 'active']);
+
+        Http::fake(fn () => Http::response(['unexpected' => ['shape' => true]]));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cPanel could not verify the production addon domain.');
+        app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+    }
+
+    public function test_whm_metadata_wrapper_requires_explicit_metadata_success(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'status' => 'active']);
+
+        Http::fake(fn () => Http::response([
+            'metadata' => ['reason' => 'Unexpected wrapper'],
+            'data' => ['cpanelresult' => [
+                'event' => ['result' => 1],
+                'data' => [['domain' => 'copperingots.uk', 'dir' => '/public_html']],
+            ]],
+        ]));
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('cPanel could not verify the production addon domain.');
+        app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+    }
+
+    public function test_direct_api2_addon_list_failure_surfaces_only_sanitized_details(): void
+    {
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'private-whm-token']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'wstest2whawu', 'username' => 'wstest2whawu', 'primary_domain' => 'test2-wzaz.sites.web-stamp.co.uk', 'status' => 'active']);
+
+        Http::fake(fn () => Http::response([
+            'cpanelresult' => [
+                'event' => ['result' => 0, 'reason' => 'Addon domain listing denied. private-whm-token'],
+                'errors' => ['Domains feature unavailable.'],
+                'data' => [],
+            ],
+        ]));
+
+        try {
+            app(\App\Services\Hosting\KrystalWhmProvider::class)->verifyAddonDomain($server, $account, 'copperingots.uk');
+            $this->fail('Expected the API2 list failure to stop verification.');
+        } catch (\RuntimeException $exception) {
+            $this->assertStringContainsString('Addon domain listing denied.', $exception->getMessage());
+            $this->assertStringContainsString('Domains feature unavailable.', $exception->getMessage());
+            $this->assertStringContainsString('[REDACTED]', $exception->getMessage());
+            $this->assertStringNotContainsString('private-whm-token', $exception->getMessage());
+        }
     }
 
     public function test_delayed_addon_visibility_retries_without_creating_a_duplicate_domain(): void
