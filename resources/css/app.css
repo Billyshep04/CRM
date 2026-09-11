@@ -2205,3 +2205,17 @@ body[data-role="staff"] .staff-member-only {
 .analytics-breakdown-table th { text-align:left; color:var(--text-muted, #667085); font-weight:500; padding:.3rem .4rem; border-bottom:1px solid var(--border, #e7eaf0); }
 .analytics-breakdown-table td { padding:.3rem .4rem; border-bottom:1px solid var(--border, #eef1f5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:220px; }
 .analytics-breakdown-table td:last-child, .analytics-breakdown-table th:last-child { text-align:right; width:70px; }
+
+/* Portal website detail: health band + layout */
+.view[data-view="portal-website-detail"] .content-grid.portal-website-layout { grid-template-columns: 1fr; }
+.portal-site-headline { margin: 14px 0 0; color: var(--text-muted); font-size: .92rem; }
+.portal-detail-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; }
+@media (max-width: 900px) { .portal-detail-columns { grid-template-columns: 1fr; } }
+.health-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 6px; }
+.health-tile { display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 12px; background: var(--surface-muted, rgba(148,163,184,.06)); }
+.health-tile.good { border-left-color: #0f9d58; }
+.health-tile.warn { border-left-color: #f4b400; }
+.health-tile.bad { border-left-color: #c5221f; }
+.health-tile-label { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+.health-tile-value { font-size: 1.15rem; font-weight: 700; }
+.health-tile-note { font-size: .8rem; color: var(--text-muted); }

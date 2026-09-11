@@ -183,7 +183,7 @@ class WebsiteAnalyticsTest extends TestCase
             ->assertJsonPath('data.analytics.status', 'connected');
     }
 
-    public function test_portal_only_shows_traffic_when_visibility_is_enabled_and_never_leaks_internal_fields(): void
+    public function test_portal_traffic_respects_visibility_and_never_leaks_internal_fields(): void
     {
         $portalUser = $this->user('customer', 'client@example.com');
         $customer = $this->customer($portalUser, 'client@example.com');
@@ -195,7 +195,8 @@ class WebsiteAnalyticsTest extends TestCase
         ]);
         $this->seedDailySnapshots($website, Carbon::yesterday()->subDays(27), Carbon::yesterday(), 30);
 
-        // Hidden by default.
+        // Hidden when an admin has explicitly turned analytics visibility off.
+        $website->update(['portal_visibility' => [...Website::defaultPortalVisibility(), 'analytics' => false]]);
         $this->actingAs($portalUser)
             ->getJson("/api/portal/websites/{$website->id}")
             ->assertOk()

@@ -201,6 +201,9 @@ const dom = {
     portalWebsitesRefresh: document.getElementById('portal-websites-refresh'),
     portalWebsiteDetailTitle: document.getElementById('portal-website-detail-title'),
     portalWebsiteDetailDomain: document.getElementById('portal-website-detail-domain'),
+    portalWebsiteHeadline: document.getElementById('portal-website-headline'),
+    portalWebsiteHealth: document.getElementById('portal-website-health'),
+    portalWebsiteExtrasCard: document.getElementById('portal-website-extras-card'),
     portalWebsiteDetailSummary: document.getElementById('portal-website-detail-summary'),
     portalWebsiteDetailCare: document.getElementById('portal-website-detail-care'),
     portalWebsiteDetailActivities: document.getElementById('portal-website-detail-activities'),
@@ -245,6 +248,7 @@ const dom = {
     hostingAccountsList: document.getElementById('hosting-accounts-list'),
     websiteDetailTitle: document.getElementById('website-detail-title'),
     websiteDetailDomain: document.getElementById('website-detail-domain'),
+    websiteDetailHealth: document.getElementById('website-detail-health'),
     websiteDetailSummary: document.getElementById('website-detail-summary'),
     websiteDetailOverview: document.getElementById('website-detail-overview'),
     websiteDetailDataSources: document.getElementById('website-detail-data-sources'),
@@ -2204,23 +2208,131 @@ async function loadPortalWebsites() {
     }
 }
 
+const PORTAL_ACTIVITY_LABELS = {
+    'website went live': 'Website went live',
+    'website added': 'Added to your account',
+    'website details updated': 'Website settings updated',
+    'install wordpress': 'WordPress installed',
+    'check ssl': 'SSL certificate issued',
+    'check dns': 'DNS connected',
+    'create cpanel account': 'Hosting account created',
+    'provision hosting': 'Hosting set up',
+    'google analytics connected': 'Traffic reporting connected',
+    'google analytics reporting active': 'Traffic reporting active',
+};
+
+function prettifyPortalActivity(title) {
+    const key = String(title || '').trim().toLowerCase();
+    if (PORTAL_ACTIVITY_LABELS[key]) return PORTAL_ACTIVITY_LABELS[key];
+    const cleaned = key.replace(/_/g, ' ');
+    return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'Update';
+}
+
+function healthTile(label, value, note, tone) {
+    return `<div class="health-tile ${tone || 'idle'}">
+        <span class="health-tile-label">${escapeHtml(label)}</span>
+        <span class="health-tile-value">${escapeHtml(String(value))}</span>
+        <span class="health-tile-note">${escapeHtml(String(note || ''))}</span>
+    </div>`;
+}
+
+function responseBand(ms) {
+    if (ms == null) return 'Response time pending';
+    if (ms < 800) return 'Loading quickly';
+    if (ms < 2000) return 'Typical loading speed';
+    return 'Slower than we would like';
+}
+
+/**
+ * Shared colour-coded health tiles for both the staff Overview tab and the
+ * customer portal. `availabilityLabel` is a plain string; everything else
+ * takes the objects WebsiteStatusSnapshot / PortalWebsiteResource already
+ * expose (ssl, maintenance, performance, uptimePercent).
+ */
+function buildHealthBand({ availabilityLabel, availabilityDetail, uptimePercent, ssl, maintenance, performance }) {
+    const tiles = [];
+
+    const availTone = availabilityLabel === 'Online' ? 'good' : availabilityLabel === 'Degraded' ? 'warn' : availabilityLabel === 'Offline' ? 'bad' : 'idle';
+    const availNote = uptimePercent != null
+        ? `${uptimePercent}% uptime over 30 days`
+        : (availabilityDetail?.response_time_ms ? `${availabilityDetail.response_time_ms} ms response` : 'Monitoring in progress');
+    tiles.push(healthTile('Availability', availabilityLabel || 'Checking…', availNote, availTone));
+
+    if (ssl) {
+        const days = ssl.days_remaining;
+        const tone = ssl.label === 'Secure' ? 'good' : /attention/i.test(ssl.label || '') ? 'warn' : /problem/i.test(ssl.label || '') ? 'bad' : 'idle';
+        tiles.push(healthTile('Security', ssl.label || 'Checking…', days != null ? `Certificate renews in ${days} days` : 'HTTPS certificate active', tone));
+    }
+
+    if (maintenance) {
+        const updates = (maintenance.plugin_updates ?? 0) + (maintenance.theme_updates ?? 0);
+        const tone = /attention/i.test(maintenance.label || '') ? 'bad' : /scheduled/i.test(maintenance.label || '') ? 'warn' : maintenance.label === 'Up to date' ? 'good' : 'idle';
+        const note = maintenance.plugin_count == null ? 'Waiting for site data' : `${maintenance.plugin_count} plugins · ${updates} update${updates === 1 ? '' : 's'} pending`;
+        tiles.push(healthTile('Maintenance', maintenance.label || 'Checking…', note, tone));
+    }
+
+    if (performance) {
+        if (performance.scoring_enabled) {
+            tiles.push(healthTile('Performance', `${performance.score}/100`, performance.label, performance.score >= 70 ? 'good' : performance.score >= 50 ? 'warn' : 'bad'));
+        } else if (performance.response_time_ms != null) {
+            tiles.push(healthTile('Performance', `${performance.response_time_ms} ms`, responseBand(performance.response_time_ms), performance.response_time_ms < 800 ? 'good' : performance.response_time_ms < 2000 ? 'warn' : 'bad'));
+        } else {
+            tiles.push(healthTile('Performance', 'Pending', 'Speed monitoring starting', 'idle'));
+        }
+    }
+
+    return tiles.join('');
+}
+
+function portalHealthBand(site) {
+    return buildHealthBand({
+        availabilityLabel: site.availability,
+        availabilityDetail: site.availability_detail,
+        uptimePercent: site.uptime_percent,
+        ssl: site.ssl,
+        maintenance: site.maintenance,
+        performance: site.performance,
+    });
+}
+
+function portalHeadline(site) {
+    const word = { healthy: 'is looking healthy', attention: 'needs a little attention', critical: 'has an issue our team is on' }[site.status] || 'is being monitored';
+    const checked = site.last_monitored_at ? ` · last checked ${formatDate(site.last_monitored_at)}` : '';
+    const project = site.project_status && site.project_status !== 'Website online' ? ` · ${site.project_status}` : '';
+    return `${escapeHtml(site.name || 'Your website')} ${escapeHtml(word)}${escapeHtml(project)}${escapeHtml(checked)}`;
+}
+
 function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteDetailTitle) dom.portalWebsiteDetailTitle.textContent = site.name || 'Website';
     if (dom.portalWebsiteDetailDomain) dom.portalWebsiteDetailDomain.innerHTML = `${escapeHtml(site.domain || site.public_url || '')} <span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
     if (dom.portalWebsiteVisit) dom.portalWebsiteVisit.href = site.public_url || site.login_url || '#';
-    if (dom.portalWebsiteDetailSummary) dom.portalWebsiteDetailSummary.innerHTML = [
-        ['Status', site.status ? site.status.replaceAll('_', ' ') : 'Not available'], ['Project', site.project_status || 'Active'], ['Availability', site.availability || 'Status temporarily unavailable'], ['30-day uptime', site.uptime?.label || 'Monitoring pending'], ['Last monitored', site.last_monitored_at ? formatDate(site.last_monitored_at) : 'Monitoring pending'],
-    ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
-    const care = [];
-    if (site.ssl) care.push(['SSL certificate', site.ssl.label, site.ssl.days_remaining !== null && site.ssl.days_remaining !== undefined ? `Expires in ${site.ssl.days_remaining} days` : (site.ssl.status === 'expired' ? 'Certificate expired' : 'Certificate information unavailable')]);
-    if (site.backups) care.push(['Backups', site.backups.label, site.backups.last_successful_at ? `Last backup ${formatDate(site.backups.last_successful_at)}` : 'Backup information is not currently supplied by an integration']);
-    if (site.performance) care.push(['Performance', site.performance.label, site.performance.scoring_enabled ? `${site.performance.score}/100 · ${site.performance.response_time_ms ?? '—'} ms response` : (site.performance.response_time_ms ? `${site.performance.response_time_ms} ms response · Detailed scoring not enabled` : 'Detailed performance scoring not enabled')]);
-    if (site.maintenance) care.push(['Maintenance', site.maintenance.label, site.maintenance.plugin_count === null || site.maintenance.plugin_count === undefined ? 'Waiting for current Site Agent data' : `${site.maintenance.plugin_count} plugins installed · ${site.maintenance.plugin_updates ?? 0} plugin updates · ${site.maintenance.theme_updates ?? 0} theme updates`]);
-    if (site.hosting_usage) care.push(['Hosting usage', site.hosting_usage.disk_used_bytes ? `${site.hosting_usage.disk_used_bytes} bytes used` : 'Usage unavailable', '']);
-    if (site.technical_details) care.push(['Technical details', `WordPress ${site.technical_details.wordpress_version || 'unknown'}`, `PHP ${site.technical_details.php_version || 'unknown'}`]);
-    if (dom.portalWebsiteDetailCare) dom.portalWebsiteDetailCare.innerHTML = care.length ? care.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(note)}</div></div>`).join('') : '<div class="table-empty">No additional website-care information is currently available.</div>';
+    if (dom.portalWebsiteHeadline) dom.portalWebsiteHeadline.innerHTML = portalHeadline(site);
+    if (dom.portalWebsiteHealth) dom.portalWebsiteHealth.innerHTML = portalHealthBand(site) || '<div class="table-empty">Monitoring is still starting up for this website.</div>';
+
+    // "Good to know" holds only details that are not already in the health band.
+    const extras = [];
+    if (site.backups && site.backups.label !== 'Information unavailable') {
+        extras.push(['Backups', site.backups.label, site.backups.last_successful_at ? `Last backup ${formatDate(site.backups.last_successful_at)}` : '']);
+    }
+    if (site.hosting_usage && site.hosting_usage.disk_used_bytes != null) {
+        const limit = site.hosting_usage.disk_limit_bytes;
+        extras.push(['Hosting usage', `${formatBytes(site.hosting_usage.disk_used_bytes)}${limit ? ` of ${formatBytes(limit)}` : ''} used`, '']);
+    }
+    if (site.technical_details) {
+        extras.push(['Technical details', `WordPress ${site.technical_details.wordpress_version || 'unknown'}`, `PHP ${site.technical_details.php_version || 'unknown'}`]);
+    }
+    if (dom.portalWebsiteExtrasCard) dom.portalWebsiteExtrasCard.hidden = extras.length === 0;
+    if (dom.portalWebsiteDetailCare) {
+        dom.portalWebsiteDetailCare.innerHTML = extras.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(String(note || ''))}</div></div>`).join('');
+    }
+
     const activities = site.activities || [];
-    if (dom.portalWebsiteDetailActivities) dom.portalWebsiteDetailActivities.innerHTML = activities.length ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(activity.title)}</div><div class="site-url">${escapeHtml(activity.description || '')} · ${formatDate(activity.performed_at)}</div></div></div>`).join('') : '<div class="table-empty">No recent customer-visible activity.</div>';
+    if (dom.portalWebsiteDetailActivities) {
+        dom.portalWebsiteDetailActivities.innerHTML = activities.length
+            ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(prettifyPortalActivity(activity.title))}</div><div class="site-url">${escapeHtml(activity.description || formatDate(activity.performed_at))}${activity.description ? ` · ${escapeHtml(formatDate(activity.performed_at))}` : ''}</div></div></div>`).join('')
+            : '<div class="table-empty">No recent updates on this website.</div>';
+    }
+
     renderPortalWebsiteAnalytics(site);
 }
 
@@ -2443,8 +2555,18 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
     if (dom.websiteDetailDomain) dom.websiteDetailDomain.innerHTML = `${escapeHtml(site.current_domain || site.domain || site.login_url || '')} <span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
     if (dom.websiteGoLiveOpen) dom.websiteGoLiveOpen.hidden = !site.go_live?.available;
+    if (dom.websiteDetailHealth) {
+        dom.websiteDetailHealth.innerHTML = buildHealthBand({
+            availabilityLabel: customerSnapshot.availability?.label,
+            availabilityDetail: customerSnapshot.availability,
+            uptimePercent: customerSnapshot.uptime?.percent_30d,
+            ssl: customerSnapshot.ssl,
+            maintenance: customerSnapshot.maintenance,
+            performance: customerSnapshot.performance,
+        }) || '<div class="table-empty">Monitoring has not run for this website yet.</div>';
+    }
     if (dom.websiteDetailSummary) dom.websiteDetailSummary.innerHTML = [
-        ['Overall status', customerSnapshot.overall_status || site.status || 'unknown'], ['Availability', customerSnapshot.availability?.label || 'not checked'], ['WordPress', maintenanceSnapshot.wordpress_version || 'unknown'], ['Plugins', maintenanceSnapshot.plugin_count ?? 'unknown'], ['Out-of-date plugins', maintenanceSnapshot.plugin_updates ?? 'unknown'], ['Response time', customerSnapshot.availability?.response_time_ms ? `${customerSnapshot.availability.response_time_ms} ms` : '—'], ['SSL', customerSnapshot.ssl?.label || 'unknown'],
+        ['Overall status', customerSnapshot.overall_status || site.status || 'unknown'], ['WordPress', maintenanceSnapshot.wordpress_version || 'unknown'], ['Plugins', maintenanceSnapshot.plugin_count ?? 'unknown'], ['Out-of-date plugins', maintenanceSnapshot.plugin_updates ?? 'unknown'],
     ].map(([label, value]) => `<div class="stat-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(String(value))}</strong></div>`).join('');
     if (dom.websiteDetailOverview) dom.websiteDetailOverview.innerHTML = [
         ['Customer', site.customer?.name || '—'], ['Current URL', `https://${site.current_domain || site.domain}`], ['Development domain', site.development_domain || '—'], ['Production domain', site.production_domain || 'Not launched'], ['Went live', formatDate(site.went_live_at)], ['Environment', site.environment || 'production'], ...(site.environment === 'development' ? [['Go Live', site.go_live?.available ? 'Ready' : (site.go_live?.issues || []).join(' ')]] : []), ['WordPress', site.wordpress_enabled ? 'Enabled' : 'No'], ['Management', site.management_enabled ? 'Enabled' : 'No'], ['Hosting', site.hosting_connected ? (site.hosting_server?.name || 'Krystal') : (site.hosting_enabled ? 'Setup not verified' : 'External')], ['Agent', site.agent_connected ? `Connected ${formatDate(site.agent_last_seen_at)}` : 'Not connected'], ['Subscription', site.subscription?.description || '—'], ['Internal notes', site.notes || '—'],
@@ -2557,13 +2679,13 @@ const ANALYTICS_TILES = [
     ['conversions', 'Key events'],
 ];
 
-function renderAnalyticsTiles(container, data) {
+function renderAnalyticsTiles(container, data, { labels = {}, skip = [] } = {}) {
     if (!container) return;
     const totals = data.totals || {};
     const deltas = data.deltas || {};
-    const tiles = ANALYTICS_TILES.map(([key, label]) => `
+    const tiles = ANALYTICS_TILES.filter(([key]) => !skip.includes(key)).map(([key, label]) => `
         <div class="analytics-tile">
-            <span class="analytics-tile-label">${escapeHtml(label)}</span>
+            <span class="analytics-tile-label">${escapeHtml(labels[key] || label)}</span>
             <strong class="analytics-tile-value">${escapeHtml(formatCount(totals[key]))}</strong>
             ${analyticsDeltaMarkup(deltas[key])}
         </div>
@@ -2588,15 +2710,16 @@ const ANALYTICS_BREAKDOWN_META = [
     ['device_category', 'Devices', 'sessions', 'Sessions'],
 ];
 
-function renderAnalyticsBreakdowns(container, data, { compact = false } = {}) {
+function renderAnalyticsBreakdowns(container, data, { compact = false, titles = {} } = {}) {
     if (!container) return;
     const breakdowns = data.breakdowns || {};
     const meta = compact ? ANALYTICS_BREAKDOWN_META.slice(0, 2) : ANALYTICS_BREAKDOWN_META;
     const blocks = meta.map(([key, label, metric, metricLabel]) => {
         const rows = (breakdowns[key] || []).slice(0, compact ? 5 : 10);
         if (!rows.length) return '';
+        const heading = titles[key] || label;
         const body = rows.map((row) => `<tr><td title="${escapeHtml(row.value)}">${escapeHtml(truncate(row.value, 46))}</td><td>${escapeHtml(formatCount(row[metric]))}</td></tr>`).join('');
-        return `<div class="analytics-breakdown"><div class="analytics-breakdown-title">${escapeHtml(label)}</div><table class="analytics-breakdown-table"><thead><tr><th>${escapeHtml(label === 'Top pages' ? 'Page' : 'Name')}</th><th>${escapeHtml(metricLabel)}</th></tr></thead><tbody>${body}</tbody></table></div>`;
+        return `<div class="analytics-breakdown"><div class="analytics-breakdown-title">${escapeHtml(heading)}</div><table class="analytics-breakdown-table"><thead><tr><th>${escapeHtml(key === 'page_path' ? 'Page' : 'Name')}</th><th>${escapeHtml(metricLabel)}</th></tr></thead><tbody>${body}</tbody></table></div>`;
     });
     const events = Object.entries(data.key_events || {});
     if (!compact && events.length) {
@@ -2654,9 +2777,15 @@ function renderPortalWebsiteAnalytics(site) {
     if (dom.portalWebsiteAnalyticsSubtitle) {
         dom.portalWebsiteAnalyticsSubtitle.textContent = `${panel.range?.label || 'Recent traffic'}${panel.last_updated ? ` · updated ${formatDate(panel.last_updated)}` : ''}`;
     }
-    renderAnalyticsTiles(dom.portalWebsiteAnalyticsTiles, panel);
+    const labels = { sessions: 'Visits', total_users: 'Visitors', screen_page_views: 'Page views', conversions: 'Enquiries' };
+    const skip = panel.totals?.conversions ? [] : ['conversions'];
+    renderAnalyticsTiles(dom.portalWebsiteAnalyticsTiles, panel, { labels, skip });
     if (dom.portalWebsiteAnalyticsChart) dom.portalWebsiteAnalyticsChart.innerHTML = analyticsSparkline(panel.series, 'sessions');
-    renderAnalyticsBreakdowns(dom.portalWebsiteAnalyticsBreakdowns, { breakdowns: { page_path: panel.top_pages || [], session_default_channel_group: panel.channels || [] } }, { compact: true });
+    renderAnalyticsBreakdowns(
+        dom.portalWebsiteAnalyticsBreakdowns,
+        { breakdowns: { page_path: panel.top_pages || [], session_default_channel_group: panel.channels || [] } },
+        { compact: true, titles: { page_path: 'Most visited pages', session_default_channel_group: 'How people find you' } },
+    );
 }
 
 function wordpressLoginActions(login, websiteId) {
