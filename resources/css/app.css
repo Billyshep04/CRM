@@ -2209,8 +2209,6 @@ body[data-role="staff"] .staff-member-only {
 /* Portal website detail: health band + layout */
 .view[data-view="portal-website-detail"] .content-grid.portal-website-layout { grid-template-columns: 1fr; }
 .portal-site-headline { margin: 14px 0 0; color: var(--text-muted); font-size: .92rem; }
-.portal-detail-columns { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; }
-@media (max-width: 900px) { .portal-detail-columns { grid-template-columns: 1fr; } }
 .health-band { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 6px; }
 .health-tile { display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 12px; background: var(--surface-muted, rgba(148,163,184,.06)); }
 .health-tile.good { border-left-color: #0f9d58; }
