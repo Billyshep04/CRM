@@ -206,7 +206,6 @@ const dom = {
     portalWebsiteExtrasCard: document.getElementById('portal-website-extras-card'),
     portalWebsiteDetailSummary: document.getElementById('portal-website-detail-summary'),
     portalWebsiteDetailCare: document.getElementById('portal-website-detail-care'),
-    portalWebsiteDetailActivities: document.getElementById('portal-website-detail-activities'),
     portalWebsiteDetailBack: document.getElementById('portal-website-detail-back'),
     portalWebsiteVisit: document.getElementById('portal-website-visit'),
     websitesList: document.getElementById('websites-list'),
@@ -248,7 +247,7 @@ const dom = {
     hostingAccountsList: document.getElementById('hosting-accounts-list'),
     websiteDetailTitle: document.getElementById('website-detail-title'),
     websiteDetailDomain: document.getElementById('website-detail-domain'),
-    websiteDetailHealth: document.getElementById('website-detail-health'),
+    websiteDetailStatusBand: document.getElementById('website-detail-status-band'),
     websiteDetailSummary: document.getElementById('website-detail-summary'),
     websiteDetailOverview: document.getElementById('website-detail-overview'),
     websiteDetailDataSources: document.getElementById('website-detail-data-sources'),
@@ -2208,26 +2207,6 @@ async function loadPortalWebsites() {
     }
 }
 
-const PORTAL_ACTIVITY_LABELS = {
-    'website went live': 'Website went live',
-    'website added': 'Added to your account',
-    'website details updated': 'Website settings updated',
-    'install wordpress': 'WordPress installed',
-    'check ssl': 'SSL certificate issued',
-    'check dns': 'DNS connected',
-    'create cpanel account': 'Hosting account created',
-    'provision hosting': 'Hosting set up',
-    'google analytics connected': 'Traffic reporting connected',
-    'google analytics reporting active': 'Traffic reporting active',
-};
-
-function prettifyPortalActivity(title) {
-    const key = String(title || '').trim().toLowerCase();
-    if (PORTAL_ACTIVITY_LABELS[key]) return PORTAL_ACTIVITY_LABELS[key];
-    const cleaned = key.replace(/_/g, ' ');
-    return cleaned ? cleaned.charAt(0).toUpperCase() + cleaned.slice(1) : 'Update';
-}
-
 function healthTile(label, value, note, tone) {
     return `<div class="health-tile ${tone || 'idle'}">
         <span class="health-tile-label">${escapeHtml(label)}</span>
@@ -2324,13 +2303,6 @@ function renderPortalWebsiteDetail(site) {
     if (dom.portalWebsiteExtrasCard) dom.portalWebsiteExtrasCard.hidden = extras.length === 0;
     if (dom.portalWebsiteDetailCare) {
         dom.portalWebsiteDetailCare.innerHTML = extras.map(([label, value, note]) => `<div><div class="card-label">${escapeHtml(label)}</div><div class="site-name">${escapeHtml(String(value))}</div><div class="site-url">${escapeHtml(String(note || ''))}</div></div>`).join('');
-    }
-
-    const activities = site.activities || [];
-    if (dom.portalWebsiteDetailActivities) {
-        dom.portalWebsiteDetailActivities.innerHTML = activities.length
-            ? activities.map((activity) => `<div class="site-card"><div><div class="site-name">${escapeHtml(prettifyPortalActivity(activity.title))}</div><div class="site-url">${escapeHtml(activity.description || formatDate(activity.performed_at))}${activity.description ? ` · ${escapeHtml(formatDate(activity.performed_at))}` : ''}</div></div></div>`).join('')
-            : '<div class="table-empty">No recent updates on this website.</div>';
     }
 
     renderPortalWebsiteAnalytics(site);
@@ -2555,8 +2527,8 @@ function renderWebsiteDetail(site) {
     if (dom.websiteDetailTitle) dom.websiteDetailTitle.textContent = site.name || 'Website';
     if (dom.websiteDetailDomain) dom.websiteDetailDomain.innerHTML = `${escapeHtml(site.current_domain || site.domain || site.login_url || '')} <span class="setup-pill ${site.environment === 'development' ? 'setup-pill-warning' : 'setup-pill-success'}">${site.environment === 'development' ? 'DEVELOPMENT' : 'LIVE'}</span>`;
     if (dom.websiteGoLiveOpen) dom.websiteGoLiveOpen.hidden = !site.go_live?.available;
-    if (dom.websiteDetailHealth) {
-        dom.websiteDetailHealth.innerHTML = buildHealthBand({
+    if (dom.websiteDetailStatusBand) {
+        dom.websiteDetailStatusBand.innerHTML = buildHealthBand({
             availabilityLabel: customerSnapshot.availability?.label,
             availabilityDetail: customerSnapshot.availability,
             uptimePercent: customerSnapshot.uptime?.percent_30d,

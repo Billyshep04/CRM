@@ -542,7 +542,7 @@
                     <section class="content-grid">
                         <div class="card wide">
                             <div class="card-header"><div><div class="card-title" id="website-detail-title">Website</div><div class="card-subtitle" id="website-detail-domain">Loading details…</div></div><div class="card-header-actions"><button class="btn btn-primary admin-only" id="website-go-live-open" type="button" hidden>Go Live</button><button class="btn btn-outline" id="website-detail-check" type="button">Check now</button><button class="btn btn-outline" id="website-detail-back" type="button">Back</button></div></div>
-                            <div class="health-band" id="website-detail-health"></div>
+                            <div class="health-band" id="website-detail-status-band"></div>
                             <div class="stats-grid" id="website-detail-summary"></div>
                         </div>
                         <nav class="website-detail-tabs wide" aria-label="Website details"><button class="btn btn-primary" data-website-tab="overview">Overview</button><button class="btn btn-outline" data-website-tab="hosting">Hosting</button><button class="btn btn-outline" data-website-tab="wordpress">WordPress</button><button class="btn btn-outline" data-website-tab="analytics">Analytics</button><button class="btn btn-outline" data-website-tab="issues">Issues</button><button class="btn btn-outline" data-website-tab="activity">Activity</button><button class="btn btn-outline" data-website-tab="settings">Settings</button></nav>
@@ -1968,10 +1968,7 @@
                         </div>
                         <div class="card wide"><div class="card-header"><div><div class="card-title">How your website is doing</div><div class="card-subtitle">A live check of uptime, security, maintenance and speed.</div></div></div><div class="health-band" id="portal-website-health"></div></div>
                         <div class="card wide" id="portal-website-detail-analytics-card" hidden><div class="card-header"><div><div class="card-title">Visitors</div><div class="card-subtitle" id="portal-website-analytics-subtitle">Traffic to your website.</div></div></div><div class="analytics-tiles" id="portal-website-analytics-tiles"></div><div class="analytics-chart" id="portal-website-analytics-chart"></div><div class="analytics-breakdowns" id="portal-website-analytics-breakdowns"></div></div>
-                        <div class="portal-detail-columns wide">
-                            <div class="card"><div class="card-header"><div><div class="card-title">Recent updates</div><div class="card-subtitle">What we have done on your website.</div></div></div><div class="stack" id="portal-website-detail-activities"></div></div>
-                            <div class="card" id="portal-website-extras-card" hidden><div class="card-header"><div><div class="card-title">Good to know</div><div class="card-subtitle">Extra details about your website and hosting.</div></div></div><div class="detail-grid" id="portal-website-detail-care"></div></div>
-                        </div>
+                        <div class="card wide" id="portal-website-extras-card" hidden><div class="card-header"><div><div class="card-title">Good to know</div><div class="card-subtitle">Extra details about your website and hosting.</div></div></div><div class="detail-grid" id="portal-website-detail-care"></div></div>
                     </section>
                 </section>
 
