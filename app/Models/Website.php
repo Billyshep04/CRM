@@ -114,7 +114,7 @@ class Website extends Model
 
     public static function defaultPortalVisibility(): array
     {
-        return ['status' => true, 'uptime' => true, 'ssl' => true, 'backup' => true, 'performance' => true, 'maintenance' => true, 'hosting_usage' => false, 'technical_details' => false, 'analytics' => false];
+        return ['status' => true, 'uptime' => true, 'ssl' => true, 'backup' => true, 'performance' => true, 'maintenance' => true, 'hosting_usage' => false, 'technical_details' => false, 'analytics' => true];
     }
 
     public function audits(): HasMany

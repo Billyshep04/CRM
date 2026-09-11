@@ -81,6 +81,26 @@ class WebsiteAnalyticsTest extends TestCase
         Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
     }
 
+    public function test_connect_returns_a_clean_502_instead_of_a_server_error_when_the_provider_blows_up(): void
+    {
+        Bus::fake();
+        $this->mock(AnalyticsProvider::class, function ($mock): void {
+            $mock->shouldReceive('verifyAccess')->andThrow(new \RuntimeException('boom: credentials misconfigured'));
+        });
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer());
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/connect", ['property_id' => '123456789'])
+            ->assertStatus(502)
+            ->assertJsonPath('message', 'Could not reach Google Analytics. Check the service-account configuration.');
+
+        $website->refresh();
+        $this->assertSame('error', $website->google_analytics_status);
+        $this->assertFalse($website->google_analytics_enabled);
+        Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
+    }
+
     public function test_connect_rejects_a_non_numeric_property_id(): void
     {
         $admin = $this->user('admin');
@@ -183,7 +203,7 @@ class WebsiteAnalyticsTest extends TestCase
             ->assertJsonPath('data.analytics.status', 'connected');
     }
 
-    public function test_portal_only_shows_traffic_when_visibility_is_enabled_and_never_leaks_internal_fields(): void
+    public function test_portal_traffic_respects_visibility_and_never_leaks_internal_fields(): void
     {
         $portalUser = $this->user('customer', 'client@example.com');
         $customer = $this->customer($portalUser, 'client@example.com');
@@ -195,7 +215,8 @@ class WebsiteAnalyticsTest extends TestCase
         ]);
         $this->seedDailySnapshots($website, Carbon::yesterday()->subDays(27), Carbon::yesterday(), 30);
 
-        // Hidden by default.
+        // Hidden when an admin has explicitly turned analytics visibility off.
+        $website->update(['portal_visibility' => [...Website::defaultPortalVisibility(), 'analytics' => false]]);
         $this->actingAs($portalUser)
             ->getJson("/api/portal/websites/{$website->id}")
             ->assertOk()

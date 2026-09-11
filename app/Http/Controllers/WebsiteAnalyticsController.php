@@ -9,6 +9,7 @@ use App\Services\Analytics\WebsiteAnalyticsReportBuilder;
 use App\Services\Analytics\WebsiteAnalyticsSync;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Throwable;
 
@@ -50,14 +51,28 @@ class WebsiteAnalyticsController extends Controller
         try {
             $connected = $sync->connect($website, $validated['property_id']);
         } catch (Throwable $exception) {
-            $website->forceFill([
-                'google_analytics_property_id' => trim(str_replace('properties/', '', $validated['property_id'])),
-                'google_analytics_enabled' => false,
-                'google_analytics_status' => 'error',
-                'google_analytics_last_error' => mb_substr($exception->getMessage(), 0, 480),
-            ])->save();
+            Log::error('Google Analytics connect failed.', [
+                'website_id' => $website->id,
+                'exception' => $exception->getMessage(),
+            ]);
 
-            return response()->json(['message' => 'Could not reach Google Analytics. Check the service-account configuration.'], 502);
+            // Best-effort status update — a broken schema or DB hiccup here must
+            // never turn an already-known failure into an opaque 500.
+            try {
+                $website->forceFill([
+                    'google_analytics_property_id' => trim(str_replace('properties/', '', $validated['property_id'])),
+                    'google_analytics_enabled' => false,
+                    'google_analytics_status' => 'error',
+                    'google_analytics_last_error' => mb_substr($exception->getMessage(), 0, 480),
+                ])->save();
+            } catch (Throwable) {
+                // Swallowed: the caller still gets a clear 502 below either way.
+            }
+
+            return response()->json([
+                'message' => 'Could not reach Google Analytics. Check the service-account configuration.',
+                'detail' => mb_substr($exception->getMessage(), 0, 300),
+            ], 502);
         }
 
         if ($connected) {
