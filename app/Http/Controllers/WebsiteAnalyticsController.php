@@ -41,13 +41,35 @@ class WebsiteAnalyticsController extends Controller
             return response()->json(['message' => 'This website has no linked Google Analytics property.'], 422);
         }
 
+        return $this->queueAndReport($website, 'recent', 'Analytics sync queued.');
+    }
+
+    /**
+     * Re-pulls the full backfill window (config('analytics.backfill_days'),
+     * a year by default) and overwrites every stored day/month — including
+     * any left over from an earlier misconfigured driver (e.g. fabricated
+     * mock-driver history). "Sync now" deliberately only refreshes a small
+     * trailing window, so this is the only way to purge older bad data
+     * short of a terminal command.
+     */
+    public function backfill(Website $website): JsonResponse
+    {
+        if (! $website->analyticsConfigured()) {
+            return response()->json(['message' => 'This website has no linked Google Analytics property.'], 422);
+        }
+
+        return $this->queueAndReport($website, 'backfill', 'Full history rebuild queued. This can take a minute or two on a large date range.');
+    }
+
+    private function queueAndReport(Website $website, string $mode, string $successMessage): JsonResponse
+    {
         try {
             AnalyticsDriver::current();
         } catch (AnalyticsMisconfiguredException $exception) {
             return $this->misconfiguredResponse($exception);
         }
 
-        $this->dispatchSync($website->id, 'recent');
+        $this->dispatchSync($website->id, $mode);
 
         // On QUEUE_CONNECTION=sync the job just ran inline above, so its outcome
         // is already on the website record — surface a real failure instead of
@@ -60,7 +82,7 @@ class WebsiteAnalyticsController extends Controller
             ], $website->google_analytics_status === 'no_access' ? 422 : 502);
         }
 
-        return response()->json(['message' => 'Analytics sync queued.'], 202);
+        return response()->json(['message' => $successMessage], 202);
     }
 
     public function connect(Request $request, Website $website): JsonResponse

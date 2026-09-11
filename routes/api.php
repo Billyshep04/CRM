@@ -117,6 +117,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('websites/{website}/activities', [WebsiteController::class, 'activity']);
         Route::get('websites/{website}/analytics', [WebsiteAnalyticsController::class, 'summary']);
         Route::post('websites/{website}/analytics/sync', [WebsiteAnalyticsController::class, 'sync'])->middleware('throttle:6,1');
+        Route::post('websites/{website}/analytics/backfill', [WebsiteAnalyticsController::class, 'backfill'])->middleware('throttle:3,10');
         Route::post('websites/{website}/analytics/connect', [WebsiteAnalyticsController::class, 'connect']);
         Route::delete('websites/{website}/analytics', [WebsiteAnalyticsController::class, 'disconnect']);
         Route::apiResource('websites', WebsiteController::class)->except(['destroy']);

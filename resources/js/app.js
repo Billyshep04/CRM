@@ -284,6 +284,7 @@ const dom = {
     websiteAnalyticsDisconnect: document.getElementById('website-analytics-disconnect'),
     websiteAnalyticsRange: document.getElementById('website-analytics-range'),
     websiteAnalyticsSync: document.getElementById('website-analytics-sync'),
+    websiteAnalyticsBackfill: document.getElementById('website-analytics-backfill'),
     websiteAnalyticsPanelStatus: document.getElementById('website-analytics-panel-status'),
     websiteAnalyticsTiles: document.getElementById('website-analytics-tiles'),
     websiteAnalyticsChart: document.getElementById('website-analytics-chart'),
@@ -9140,6 +9141,25 @@ if (dom.websiteAnalyticsSync) dom.websiteAnalyticsSync.addEventListener('click',
         showToast(getErrorMessage(error, 'Could not queue the sync.'), true);
     } finally {
         dom.websiteAnalyticsSync.disabled = false;
+    }
+});
+if (dom.websiteAnalyticsBackfill) dom.websiteAnalyticsBackfill.addEventListener('click', async () => {
+    if (!state.currentWebsite?.id) return;
+    if (!window.confirm('Rebuild the full traffic history for this website from Google Analytics? This re-pulls up to a year of data, overwrites everything currently stored (including any old sample data), and can take a minute or two.')) return;
+    dom.websiteAnalyticsBackfill.disabled = true;
+    setFormStatus(dom.websiteAnalyticsPanelStatus, 'Rebuilding full history from Google Analytics… this can take a minute or two.');
+    try {
+        const response = await api.post(`/api/websites/${state.currentWebsite.id}/analytics/backfill`);
+        showToast(response?.data?.message || 'History rebuild queued.');
+        // With QUEUE_CONNECTION=sync the rebuild has already finished by the time
+        // this resolves; on a real queue it hasn't started yet, so a follow-up
+        // reload after a delay picks it up either way.
+        await loadWebsiteAnalytics(state.currentWebsite.id);
+        window.setTimeout(() => { if (state.currentWebsite?.id) loadWebsiteAnalytics(state.currentWebsite.id); }, 20000);
+    } catch (error) {
+        setFormStatus(dom.websiteAnalyticsPanelStatus, getErrorMessage(error, 'Could not rebuild history.'), true);
+    } finally {
+        dom.websiteAnalyticsBackfill.disabled = false;
     }
 });
 if (dom.managedWebsiteForm) dom.managedWebsiteForm.addEventListener('submit', async (event) => {
