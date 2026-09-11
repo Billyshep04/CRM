@@ -202,11 +202,18 @@ class WebsiteAnalyticsSync
 
     private function friendlyError(RequestException $exception, string $status): string
     {
+        // Google's own error body ("...Analytics Data API has not been used in
+        // project ... or it is disabled", "User does not have sufficient
+        // permissions...", etc.) is the actual diagnosis. A generic guess here
+        // just sends whoever is troubleshooting this in the wrong direction.
+        $detail = (string) ($exception->response->json('error.message') ?? '');
+        $suffix = $detail !== '' ? ' Google said: "'.mb_substr($detail, 0, 220).'"' : '';
+
         if ($status === 'no_access') {
-            return 'The analytics service account cannot read this GA4 property. Add its email as a Viewer in the property\'s access management.';
+            return 'The analytics service account cannot read this GA4 property. Make sure its email is added as a Viewer under the property\'s Access Management, and that the Google Analytics Data API is enabled for the Google Cloud project.'.$suffix;
         }
 
-        return 'Google Analytics request failed ('.$exception->response->status().').';
+        return 'Google Analytics request failed ('.$exception->response->status().').'.$suffix;
     }
 
     private function logActivity(Website $website, string $title, string $description): void

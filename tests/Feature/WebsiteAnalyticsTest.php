@@ -239,6 +239,42 @@ class WebsiteAnalyticsTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_a_403_from_google_surfaces_the_real_reason_instead_of_a_generic_guess(): void
+    {
+        $key = RSA::createKey(2048);
+        config([
+            'analytics.driver' => 'google',
+            'analytics.google.credentials_json' => json_encode([
+                'client_email' => 'reporting@project.iam.gserviceaccount.com',
+                'private_key' => (string) $key,
+                'token_uri' => 'https://oauth2.googleapis.com/token',
+            ]),
+        ]);
+        Http::fake([
+            'oauth2.googleapis.com/token' => Http::response(['access_token' => 'ya29.test', 'expires_in' => 3600]),
+            'analyticsdata.googleapis.com/*' => Http::response([
+                'error' => [
+                    'code' => 403,
+                    'message' => 'Analytics Data API has not been used in project 515622507715 before or it is disabled.',
+                    'status' => 'PERMISSION_DENIED',
+                ],
+            ], 403),
+        ]);
+        $website = $this->website($this->customer(), [
+            'google_analytics_property_id' => '123456789',
+            'google_analytics_enabled' => true,
+        ]);
+
+        app(WebsiteAnalyticsSync::class)->syncRecent($website);
+
+        $website->refresh();
+        $this->assertSame('no_access', $website->google_analytics_status);
+        $this->assertStringContainsString(
+            'Analytics Data API has not been used in project 515622507715 before or it is disabled.',
+            $website->google_analytics_last_error,
+        );
+    }
+
     public function test_job_is_a_no_op_when_analytics_is_not_configured(): void
     {
         $website = $this->website($this->customer(), ['google_analytics_property_id' => '123', 'google_analytics_enabled' => false]);
