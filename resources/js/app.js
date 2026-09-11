@@ -2575,7 +2575,8 @@ function renderWebsiteDetail(site) {
     if (dom.websiteAnalyticsForm) {
         dom.websiteAnalyticsForm.elements.google_analytics_property_id.value = site.google_analytics_property_id || '';
         dom.websiteAnalyticsForm.elements.google_analytics_dashboard_url.value = site.google_analytics_dashboard_url || '';
-        setFormStatus(dom.websiteAnalyticsStatus, analyticsLinkStatusMessage(site.analytics, site.google_analytics_property_id), site.analytics?.status === 'no_access' || site.analytics?.status === 'error');
+        const analyticsDriverIsLive = !site.analytics?.driver || site.analytics.driver === 'google';
+        setFormStatus(dom.websiteAnalyticsStatus, analyticsLinkStatusMessage(site.analytics, site.google_analytics_property_id), site.analytics?.status === 'no_access' || site.analytics?.status === 'error' || !analyticsDriverIsLive);
     }
     if (dom.websiteAnalyticsDisconnect) dom.websiteAnalyticsDisconnect.hidden = !site.analytics?.enabled;
     if (dom.websiteAnalyticsOpen) {
@@ -2587,11 +2588,16 @@ function renderWebsiteDetail(site) {
 
 function analyticsLinkStatusMessage(analytics, propertyId) {
     if (!propertyId) return 'No Analytics property linked yet.';
+    const driverNote = analytics?.driver === 'mock'
+        ? ' ⚠ The server is running the mock analytics driver — this is sample data, not live Google Analytics.'
+        : analytics?.driver === 'misconfigured'
+            ? ' ⚠ ANALYTICS_DRIVER is misconfigured on the server — showing sample data until this is fixed.'
+            : '';
     switch (analytics?.status) {
-        case 'connected': return `GA4 property linked${analytics.last_synced_at ? ` · last synced ${formatDate(analytics.last_synced_at)}` : ''}.`;
-        case 'no_access': return analytics.last_error || 'The reporting service account cannot read this property. Add it as a Viewer in GA4.';
-        case 'error': return analytics.last_error || 'The last analytics sync failed.';
-        default: return 'GA4 property saved. Waiting for the first sync.';
+        case 'connected': return `GA4 property linked${analytics.last_synced_at ? ` · last synced ${formatDate(analytics.last_synced_at)}` : ''}.${driverNote}`;
+        case 'no_access': return (analytics.last_error || 'The reporting service account cannot read this property. Add it as a Viewer in GA4.') + driverNote;
+        case 'error': return (analytics.last_error || 'The last analytics sync failed.') + driverNote;
+        default: return 'GA4 property saved. Waiting for the first sync.' + driverNote;
     }
 }
 
@@ -2724,12 +2730,17 @@ async function loadWebsiteAnalytics(websiteId) {
             setFormStatus(dom.websiteAnalyticsPanelStatus, 'Link a GA4 property in Settings to see traffic here.');
             return;
         }
-        const statusNote = data.status === 'no_access'
+        const driverWarning = data.driver === 'mock'
+            ? 'SAMPLE DATA — the server is running the mock analytics driver, not live Google Analytics. '
+            : data.driver === 'misconfigured'
+                ? 'ANALYTICS_DRIVER IS MISCONFIGURED — showing mock/sample data until this is fixed. '
+                : '';
+        const statusNote = driverWarning + (data.status === 'no_access'
             ? (data.last_error || 'The reporting service account cannot read this property.')
             : data.status === 'error'
                 ? (data.last_error || 'The last sync failed. Showing the most recent stored data.')
-                : `${data.range?.label || ''} · ${data.last_synced_at ? `synced ${formatDate(data.last_synced_at)}` : 'first sync pending'}`;
-        setFormStatus(dom.websiteAnalyticsPanelStatus, statusNote, data.status === 'no_access' || data.status === 'error');
+                : `${data.range?.label || ''} · ${data.last_synced_at ? `synced ${formatDate(data.last_synced_at)}` : 'first sync pending'}`);
+        setFormStatus(dom.websiteAnalyticsPanelStatus, statusNote, Boolean(driverWarning) || data.status === 'no_access' || data.status === 'error');
         renderAnalyticsTiles(dom.websiteAnalyticsTiles, data);
         dom.websiteAnalyticsChart.innerHTML = analyticsSparkline(data.series, 'sessions');
         renderAnalyticsBreakdowns(dom.websiteAnalyticsBreakdowns, data);
@@ -9100,7 +9111,8 @@ if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit'
             dashboard_url: dashboardUrl,
         });
         const result = response?.data?.data || {};
-        setFormStatus(dom.websiteAnalyticsStatus, result.connected ? 'Connected. Backfilling traffic history…' : (result.last_error || 'Saved, but access could not be confirmed.'), !result.connected);
+        const driverNote = result.driver === 'mock' ? ' ⚠ Sample data — the server is running the mock analytics driver, not live Google Analytics.' : '';
+        setFormStatus(dom.websiteAnalyticsStatus, (result.connected ? 'Connected. Backfilling traffic history…' : (result.last_error || 'Saved, but access could not be confirmed.')) + driverNote, !result.connected || Boolean(driverNote));
         await loadWebsiteDetail(state.currentWebsite.id);
     } catch (error) {
         setFormStatus(dom.websiteAnalyticsStatus, getErrorMessage(error, 'Unable to save Analytics link.'), true);

@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources;
 
+use App\Services\Analytics\AnalyticsDriver;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -36,6 +37,10 @@ class WebsiteResource extends JsonResource
                 'status' => $this->google_analytics_status ?? ($this->google_analytics_property_id ? 'unconfigured' : null),
                 'last_synced_at' => $this->google_analytics_last_synced_at,
                 'last_error' => $this->google_analytics_last_error,
+                // Lets staff tell live Google Analytics apart from the mock
+                // driver at a glance, instead of trusting a "connected" status
+                // that the mock provider can also report.
+                'driver' => AnalyticsDriver::currentOrUnknown(),
             ],
             'cpanel_username' => $this->cpanel_username, 'wordpress_enabled' => $this->wordpress_enabled, 'management_enabled' => $this->management_enabled, 'monitoring_enabled' => $this->monitoring_enabled,
             'hosting_enabled' => $this->hosting_enabled, 'status' => $this->status,

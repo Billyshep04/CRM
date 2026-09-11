@@ -101,6 +101,64 @@ class WebsiteAnalyticsTest extends TestCase
         Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
     }
 
+    public function test_connect_fails_loudly_instead_of_silently_falling_back_to_mock_when_the_driver_is_misconfigured(): void
+    {
+        Bus::fake();
+        config(['analytics.driver' => 'goggle']); // typo, not a recognised driver
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer());
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/connect", ['property_id' => '123456789'])
+            ->assertStatus(500)
+            ->assertJsonPath('message', 'Analytics is not configured correctly on this server. An administrator needs to check the ANALYTICS_DRIVER setting.');
+
+        Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
+    }
+
+    public function test_properties_endpoint_fails_loudly_when_the_driver_is_misconfigured(): void
+    {
+        config(['analytics.driver' => 'goggle']);
+        $admin = $this->user('admin');
+
+        $this->actingAs($admin)
+            ->getJson('/api/website-analytics/properties')
+            ->assertStatus(500)
+            ->assertJsonPath('message', 'Analytics is not configured correctly on this server. An administrator needs to check the ANALYTICS_DRIVER setting.');
+    }
+
+    public function test_sync_endpoint_fails_loudly_when_the_driver_is_misconfigured(): void
+    {
+        Bus::fake();
+        config(['analytics.driver' => 'goggle']);
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), ['google_analytics_property_id' => '123456789', 'google_analytics_enabled' => true]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/sync")
+            ->assertStatus(500);
+
+        Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
+    }
+
+    public function test_summary_and_website_resource_expose_the_active_driver_so_staff_can_tell_mock_from_live(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), [
+            'google_analytics_property_id' => '123456789',
+            'google_analytics_enabled' => true,
+            'google_analytics_status' => 'connected',
+        ]);
+
+        config(['analytics.driver' => 'mock']);
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}/analytics")->assertJsonPath('data.driver', 'mock');
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}")->assertJsonPath('data.analytics.driver', 'mock');
+
+        config(['analytics.driver' => 'goggle']);
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}/analytics")->assertJsonPath('data.driver', 'misconfigured');
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}")->assertJsonPath('data.analytics.driver', 'misconfigured');
+    }
+
     public function test_connect_rejects_a_non_numeric_property_id(): void
     {
         $admin = $this->user('admin');
