@@ -47,7 +47,18 @@ class WebsiteAnalyticsController extends Controller
             return $this->misconfiguredResponse($exception);
         }
 
-        SyncWebsiteAnalytics::dispatch($website->id, 'recent');
+        $this->dispatchSync($website->id, 'recent');
+
+        // On QUEUE_CONNECTION=sync the job just ran inline above, so its outcome
+        // is already on the website record — surface a real failure instead of
+        // always claiming success. On a real queue this simply won't have
+        // changed yet and the normal "queued" response below applies.
+        $website->refresh();
+        if (in_array($website->google_analytics_status, ['error', 'no_access'], true)) {
+            return response()->json([
+                'message' => $website->google_analytics_last_error ?? 'The analytics sync failed.',
+            ], $website->google_analytics_status === 'no_access' ? 422 : 502);
+        }
 
         return response()->json(['message' => 'Analytics sync queued.'], 202);
     }
@@ -97,7 +108,7 @@ class WebsiteAnalyticsController extends Controller
         }
 
         if ($connected) {
-            SyncWebsiteAnalytics::dispatch($website->id, 'backfill');
+            $this->dispatchSync($website->id, 'backfill');
         }
 
         return response()->json([
@@ -139,6 +150,29 @@ class WebsiteAnalyticsController extends Controller
                 'message' => 'Could not list Google Analytics properties.',
                 'detail' => mb_substr($exception->getMessage(), 0, 300),
             ], 502);
+        }
+    }
+
+    /**
+     * Dispatching a job is not supposed to be able to fail the request that
+     * triggered it. It normally can't — except when QUEUE_CONNECTION=sync,
+     * where "dispatch" actually runs the job's handle() inline right here.
+     * WebsiteAnalyticsSync deliberately rethrows after recording a failure
+     * status (so a real queue worker's retry/failed() handling still works),
+     * so that rethrow must be swallowed at the one call site that might be
+     * running synchronously. The failure is already recorded on the website
+     * either way; callers read it back from there if they need to react to it.
+     */
+    private function dispatchSync(int $websiteId, string $mode): void
+    {
+        try {
+            SyncWebsiteAnalytics::dispatch($websiteId, $mode);
+        } catch (Throwable $exception) {
+            Log::error('Google Analytics sync failed while dispatching (likely QUEUE_CONNECTION=sync).', [
+                'website_id' => $websiteId,
+                'mode' => $mode,
+                'exception' => $exception->getMessage(),
+            ]);
         }
     }
 

@@ -141,6 +141,47 @@ class WebsiteAnalyticsTest extends TestCase
         Bus::assertNotDispatched(SyncWebsiteAnalytics::class);
     }
 
+    public function test_sync_endpoint_returns_a_clean_error_instead_of_a_500_when_the_job_runs_inline_and_fails(): void
+    {
+        // No Bus::fake() here: this reproduces production exactly, where
+        // QUEUE_CONNECTION=sync means "dispatch" runs the job's handle()
+        // synchronously inside this HTTP request. Google is selected but no
+        // credentials are configured, so the job fails immediately.
+        config(['analytics.driver' => 'google']);
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), [
+            'google_analytics_property_id' => '123456789',
+            'google_analytics_enabled' => true,
+            'google_analytics_status' => 'connected',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/sync")
+            ->assertStatus(502)
+            ->assertJsonPath('message', 'Google Analytics credentials are not configured. Set GOOGLE_ANALYTICS_CREDENTIALS_PATH or GOOGLE_ANALYTICS_CREDENTIALS_JSON.');
+
+        $this->assertSame('error', $website->fresh()->google_analytics_status);
+    }
+
+    public function test_connect_backfill_kickoff_failing_inline_does_not_break_an_otherwise_successful_connect(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer());
+        $this->mock(AnalyticsProvider::class, function ($mock): void {
+            $mock->shouldReceive('verifyAccess')->andReturn(true);
+            // Simulates the backfill job itself failing once queued (e.g. the
+            // job runs inline under QUEUE_CONNECTION=sync and a later call
+            // throws) — connect() must still report success since the link
+            // itself was verified.
+            $mock->shouldReceive('fetchReport')->andThrow(new \RuntimeException('temporary API hiccup'));
+        });
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/connect", ['property_id' => '123456789'])
+            ->assertOk()
+            ->assertJsonPath('data.connected', true);
+    }
+
     public function test_summary_and_website_resource_expose_the_active_driver_so_staff_can_tell_mock_from_live(): void
     {
         $admin = $this->user('admin');
