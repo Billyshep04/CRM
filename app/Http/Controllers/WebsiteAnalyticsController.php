@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Contracts\AnalyticsProvider;
+use App\Exceptions\AnalyticsMisconfiguredException;
 use App\Jobs\SyncWebsiteAnalytics;
 use App\Models\Website;
+use App\Services\Analytics\AnalyticsDriver;
 use App\Services\Analytics\WebsiteAnalyticsReportBuilder;
 use App\Services\Analytics\WebsiteAnalyticsSync;
 use Illuminate\Http\JsonResponse;
@@ -15,6 +17,8 @@ use Throwable;
 
 class WebsiteAnalyticsController extends Controller
 {
+    private const MISCONFIGURED_MESSAGE = 'Analytics is not configured correctly on this server. An administrator needs to check the ANALYTICS_DRIVER setting.';
+
     public function summary(Request $request, Website $website, WebsiteAnalyticsReportBuilder $builder): JsonResponse
     {
         $validated = $request->validate([
@@ -22,7 +26,12 @@ class WebsiteAnalyticsController extends Controller
         ]);
 
         return response()->json([
-            'data' => $builder->build($website, $validated['range'] ?? '28d'),
+            'data' => [
+                ...$builder->build($website, $validated['range'] ?? '28d'),
+                // Never throws — lets staff see at a glance whether they're
+                // looking at live Google Analytics data or the mock driver.
+                'driver' => AnalyticsDriver::currentOrUnknown(),
+            ],
         ]);
     }
 
@@ -32,12 +41,18 @@ class WebsiteAnalyticsController extends Controller
             return response()->json(['message' => 'This website has no linked Google Analytics property.'], 422);
         }
 
+        try {
+            AnalyticsDriver::current();
+        } catch (AnalyticsMisconfiguredException $exception) {
+            return $this->misconfiguredResponse($exception);
+        }
+
         SyncWebsiteAnalytics::dispatch($website->id, 'recent');
 
         return response()->json(['message' => 'Analytics sync queued.'], 202);
     }
 
-    public function connect(Request $request, Website $website, WebsiteAnalyticsSync $sync): JsonResponse
+    public function connect(Request $request, Website $website): JsonResponse
     {
         $validated = $request->validate([
             'property_id' => ['required', 'string', 'regex:/^(properties\/)?\d{4,20}$/'],
@@ -49,7 +64,13 @@ class WebsiteAnalyticsController extends Controller
         }
 
         try {
-            $connected = $sync->connect($website, $validated['property_id']);
+            // Resolved here, inside the try block: constructing WebsiteAnalyticsSync
+            // resolves AnalyticsProvider, which throws AnalyticsMisconfiguredException
+            // for an invalid ANALYTICS_DRIVER — that must be caught below, not
+            // escape as an uncaught 500 during Laravel's method injection.
+            $connected = app(WebsiteAnalyticsSync::class)->connect($website, $validated['property_id']);
+        } catch (AnalyticsMisconfiguredException $exception) {
+            return $this->misconfiguredResponse($exception);
         } catch (Throwable $exception) {
             Log::error('Google Analytics connect failed.', [
                 'website_id' => $website->id,
@@ -85,6 +106,7 @@ class WebsiteAnalyticsController extends Controller
                 'status' => $website->fresh()->google_analytics_status,
                 'property_id' => $website->google_analytics_property_id,
                 'last_error' => $website->google_analytics_last_error,
+                'driver' => AnalyticsDriver::currentOrUnknown(),
             ],
         ], $connected ? 200 : 422);
     }
@@ -101,15 +123,32 @@ class WebsiteAnalyticsController extends Controller
         return response()->json(['data' => ['status' => null]]);
     }
 
-    public function properties(AnalyticsProvider $provider): JsonResponse
+    public function properties(): JsonResponse
     {
         try {
-            return response()->json(['data' => $provider->listProperties()]);
+            $provider = app(AnalyticsProvider::class);
+
+            return response()->json([
+                'data' => $provider->listProperties(),
+                'driver' => AnalyticsDriver::current(),
+            ]);
+        } catch (AnalyticsMisconfiguredException $exception) {
+            return $this->misconfiguredResponse($exception);
         } catch (Throwable $exception) {
             return response()->json([
                 'message' => 'Could not list Google Analytics properties.',
                 'detail' => mb_substr($exception->getMessage(), 0, 300),
             ], 502);
         }
+    }
+
+    private function misconfiguredResponse(AnalyticsMisconfiguredException $exception): JsonResponse
+    {
+        Log::error('Google Analytics driver is misconfigured.', ['exception' => $exception->getMessage()]);
+
+        return response()->json([
+            'message' => self::MISCONFIGURED_MESSAGE,
+            'detail' => $exception->getMessage(),
+        ], 500);
     }
 }
