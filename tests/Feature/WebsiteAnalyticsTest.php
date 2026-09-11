@@ -163,6 +163,48 @@ class WebsiteAnalyticsTest extends TestCase
         $this->assertSame('error', $website->fresh()->google_analytics_status);
     }
 
+    public function test_backfill_endpoint_queues_a_full_rebuild_and_overwrites_stored_history(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer(), [
+            'google_analytics_property_id' => '123456789',
+            'google_analytics_enabled' => true,
+            'google_analytics_status' => 'connected',
+        ]);
+        // Simulates leftover fake data from an earlier misconfigured driver.
+        WebsiteAnalyticsSnapshot::create([
+            'website_id' => $website->id,
+            'property_id' => '123456789',
+            'granularity' => 'day',
+            'period_start' => Carbon::yesterday()->toDateString(),
+            'period_end' => Carbon::yesterday()->toDateString(),
+            'sessions' => 999999,
+            'fetched_at' => now(),
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/backfill")
+            ->assertStatus(202)
+            ->assertJsonPath('message', 'Full history rebuild queued. This can take a minute or two on a large date range.');
+
+        $refreshed = WebsiteAnalyticsSnapshot::where('website_id', $website->id)
+            ->where('granularity', 'day')
+            ->where('period_start', Carbon::yesterday()->toDateString())
+            ->first();
+        $this->assertNotSame(999999, $refreshed->sessions, 'The backfill must overwrite pre-existing rows, not skip them.');
+    }
+
+    public function test_backfill_endpoint_requires_a_configured_property(): void
+    {
+        $admin = $this->user('admin');
+        $website = $this->website($this->customer());
+
+        $this->actingAs($admin)
+            ->postJson("/api/websites/{$website->id}/analytics/backfill")
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'This website has no linked Google Analytics property.');
+    }
+
     public function test_connect_backfill_kickoff_failing_inline_does_not_break_an_otherwise_successful_connect(): void
     {
         $admin = $this->user('admin');
