@@ -31,6 +31,28 @@ class WebsiteDeletionTest extends TestCase
         $this->assertSoftDeleted('websites',['id'=>$website->id]); $this->assertDatabaseHas('hosting_accounts',['id'=>$account->id]); $this->assertDatabaseHas('website_deletion_audits',['website_id'=>$website->id,'deletion_type'=>'crm_only','state'=>'complete']);
     }
 
+    public function test_preview_flags_hosting_termination_as_not_ready_when_mock_mode_is_left_on_in_production():void
+    {
+        [$website]=$this->records(); $admin=$this->user('admin'); $original=$this->app['env']; $this->app['env']='production';
+        try {
+            $this->actingAs($admin)->getJson("/api/websites/{$website->id}/deletion-preview")->assertOk()
+                ->assertJsonPath('data.hosting_termination_allowed',true)
+                ->assertJsonPath('data.hosting_termination_ready',false)
+                ->assertJsonPath('data.hosting_termination_mode','mock');
+        } finally { $this->app['env']=$original; }
+    }
+
+    public function test_full_deletion_fails_loudly_instead_of_silently_skipping_termination_when_mock_mode_is_left_on_in_production():void
+    {
+        [$website,$account]=$this->records(); $admin=$this->user('admin'); $original=$this->app['env']; $this->app['env']='production';
+        try {
+            $this->actingAs($admin)->postJson("/api/websites/{$website->id}/delete",['deletion_type'=>'hosting_and_crm','confirmation'=>'example.test','backup_confirmed'=>true,'idempotency_key'=>(string)Str::uuid()])
+                ->assertUnprocessable()
+                ->assertJsonPath('message','Hosting termination is running in mock mode on this server, so no real Krystal account will be removed. Set HOSTING_TERMINATION_MODE=live and ALLOW_HOSTING_TERMINATION=true to enable real termination.');
+            $this->assertDatabaseHas('websites',['id'=>$website->id]); $this->assertDatabaseHas('hosting_accounts',['id'=>$account->id]);
+        } finally { $this->app['env']=$original; }
+    }
+
     public function test_deletion_stops_an_unfinished_provisioning_run():void
     {
         [$website]=$this->records(); $admin=$this->user('admin');
