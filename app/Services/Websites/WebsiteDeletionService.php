@@ -24,7 +24,31 @@ class WebsiteDeletionService
         $expected=$this->domain($website->domain); $domains=collect($account?->domains??[])->push($account?->primary_domain)->map(fn($d)=>$this->domain(is_array($d)?($d['domain']??''):$d))->filter()->unique();
         if ($account && $expected && $domains->isNotEmpty() && !$domains->contains($expected)) $reasons[]='Website domain is not present on the hosting account.';
         if ($account && $domains->filter(fn($d)=>$d!==$expected)->isNotEmpty()) $reasons[]='Hosting account contains other domains and cannot be safely terminated.';
-        return ['website_id'=>$website->id,'name'=>$website->name,'domain'=>$website->domain,'customer'=>$website->customer?->name,'hosting_provider'=>$website->hostingServer?->provider,'hosting_server'=>$website->hostingServer?->name,'cpanel_username'=>$account?->username,'hosting_termination_allowed'=>$reasons===[],'blocking_reasons'=>$reasons,'latest_known_backup_at'=>$website->latestHealthCheck?->last_successful_backup_at,'backup_status'=>$website->latestHealthCheck?->backup_status,'backup_warning'=>'A known backup is not proof that a terminated account can be restored. Verify recovery separately before deletion.'];
+        $termination=$this->terminationReadiness();
+        return ['website_id'=>$website->id,'name'=>$website->name,'domain'=>$website->domain,'customer'=>$website->customer?->name,'hosting_provider'=>$website->hostingServer?->provider,'hosting_server'=>$website->hostingServer?->name,'cpanel_username'=>$account?->username,'hosting_termination_allowed'=>$reasons===[],'blocking_reasons'=>$reasons,'hosting_termination_mode'=>$termination['mode'],'hosting_termination_ready'=>$termination['ready'],'hosting_termination_not_ready_reason'=>$termination['reason'],'latest_known_backup_at'=>$website->latestHealthCheck?->last_successful_backup_at,'backup_status'=>$website->latestHealthCheck?->backup_status,'backup_warning'=>'A known backup is not proof that a terminated account can be restored. Verify recovery separately before deletion.'];
+    }
+
+    /**
+     * Predicts whether terminateAccount() would actually run against Krystal
+     * right now, mirroring the exact gates HostingProviderManager::mock() and
+     * KrystalWhmProvider::terminateAccount() enforce at call time. Added after
+     * a production deletion silently only removed the CRM record: staff had
+     * no way to see, before confirming, that HOSTING_TERMINATION_MODE was
+     * still "mock" (the safe-by-default value) rather than "live".
+     *
+     * @return array{mode: string, ready: bool, reason: ?string}
+     */
+    private function terminationReadiness(): array
+    {
+        $mode=strtolower(trim((string)config('hosting.termination_mode','mock')));
+        if ($mode==='mock') {
+            if (app()->environment(['local','testing'])) return ['mode'=>$mode,'ready'=>true,'reason'=>null];
+            return ['mode'=>$mode,'ready'=>false,'reason'=>'Hosting termination is running in mock mode on this server, so no real Krystal account will be removed. Set HOSTING_TERMINATION_MODE=live and ALLOW_HOSTING_TERMINATION=true to enable real termination.'];
+        }
+        if ($mode!=='live' || !config('hosting.allow_live_termination') || !app()->environment('production')) {
+            return ['mode'=>$mode,'ready'=>false,'reason'=>'Live hosting termination is disabled outside the explicitly enabled production environment.'];
+        }
+        return ['mode'=>$mode,'ready'=>true,'reason'=>null];
     }
 
     public function delete(Website $website,string $type,string $confirmation,string $key,?int $userId,bool $backupConfirmed=false): WebsiteDeletionAudit
@@ -35,7 +59,7 @@ class WebsiteDeletionService
             if ($existing=WebsiteDeletionAudit::where('idempotency_key',$key)->first()) return $existing;
             $preview=$this->preview($website); $account=$website->hostingAccount; $server=$website->hostingServer;
             if ($type==='hosting_and_crm' && !$preview['hosting_termination_allowed']) throw new RuntimeException(implode(' ',$preview['blocking_reasons']));
-            if ($type==='hosting_and_crm' && config('hosting.termination_mode')==='live' && (!config('hosting.allow_live_termination') || !app()->environment('production'))) throw new RuntimeException('Live hosting termination is disabled outside the explicitly enabled production environment.');
+            if ($type==='hosting_and_crm' && !$preview['hosting_termination_ready']) throw new RuntimeException($preview['hosting_termination_not_ready_reason']);
             $audit=WebsiteDeletionAudit::create(['idempotency_key'=>$key,'website_id'=>$website->id,'customer_id'=>$website->customer_id,'hosting_server_id'=>$website->hosting_server_id,'hosting_account_id'=>$website->hosting_account_id,'initiated_by_user_id'=>$userId,'website_name'=>$website->name,'domain'=>$website->domain,'customer_name'=>$website->customer?->name,'hosting_provider'=>$server?->provider,'hosting_server_name'=>$server?->name,'cpanel_username'=>$account?->username,'deletion_type'=>$type,'state'=>'requested','metadata'=>['mode'=>$type==='hosting_and_crm'?config('hosting.termination_mode'):'crm_only'],'requested_at'=>now()]);
             $website->update(['lifecycle_state'=>'deletion_requested','deletion_status'=>'processing']);
             try {
