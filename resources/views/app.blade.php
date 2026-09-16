@@ -2225,6 +2225,7 @@
                         <label class="check-row"><input name="wordpress_enabled" type="checkbox"><span>WordPress website — monitoring can be connected</span></label>
                         <label class="check-row"><input name="management_enabled" type="checkbox"><span>Managed by us</span></label>
                         <label class="check-row"><input name="hosting_enabled" type="checkbox"><span>Hosted by us</span></label>
+                        <label class="check-row"><input name="hosting_setup_dismissed" type="checkbox"><span>Hosting can't be auto-verified (e.g. an addon domain on a shared account) — don't flag setup</span></label>
                     </div>
                     <label class="field"><span>GA4 Property ID</span><input name="google_analytics_property_id"></label>
                     <label class="field"><span>Google Analytics dashboard URL</span><input name="google_analytics_dashboard_url" type="url" placeholder="https://analytics.google.com/..."></label>

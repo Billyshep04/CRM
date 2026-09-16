@@ -2344,6 +2344,8 @@ async function loadManagedWebsites() {
                 ? '<span class="setup-pill setup-pill-danger">Missing from Krystal</span>'
                 : isKrystalHosted
                 ? '<span class="setup-pill setup-pill-success"><span class="connection-dot connected"></span>Krystal hosting</span>'
+                : site.hosting_setup_dismissed
+                ? '<span class="setup-pill">Hosting managed manually</span>'
                 : (site.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
             const monitoringState = site.wordpress_enabled
                 ? (site.agent_linked
@@ -2389,6 +2391,7 @@ function openWebsiteEditModal(websiteId) {
     form.elements.wordpress_enabled.checked = Boolean(website.wordpress_enabled);
     form.elements.management_enabled.checked = Boolean(website.management_enabled);
     form.elements.hosting_enabled.checked = Boolean(website.hosting_enabled);
+    form.elements.hosting_setup_dismissed.checked = Boolean(website.hosting_setup_dismissed);
     form.elements.google_analytics_property_id.value = website.google_analytics_property_id || '';
     form.elements.google_analytics_dashboard_url.value = website.google_analytics_dashboard_url || '';
     form.elements.notes.value = website.notes || '';
@@ -2424,6 +2427,7 @@ async function handleWebsiteEditSubmit(event) {
             wordpress_enabled: form.elements.wordpress_enabled.checked,
             management_enabled: form.elements.management_enabled.checked,
             hosting_enabled: form.elements.hosting_enabled.checked,
+            hosting_setup_dismissed: form.elements.hosting_setup_dismissed.checked,
             google_analytics_property_id: String(data.get('google_analytics_property_id') || '').trim() || null,
             google_analytics_dashboard_url: String(data.get('google_analytics_dashboard_url') || '').trim() || null,
             notes: String(data.get('notes') || '').trim() || null,
@@ -4930,6 +4934,8 @@ function renderCustomerWebsites(websites = []) {
         card.className = 'site-card';
         const hostingState = website.hosting_connected
             ? '<span class="setup-pill setup-pill-success">Krystal hosting connected</span>'
+            : website.hosting_setup_dismissed
+            ? '<span class="setup-pill">Hosting managed manually</span>'
             : (website.hosting_enabled ? '<span class="setup-pill setup-pill-warning">Hosting setup needed</span>' : '<span class="setup-pill">External hosting</span>');
         const monitoringState = website.agent_connected
             ? '<span class="setup-pill setup-pill-success">Monitoring connected</span>'

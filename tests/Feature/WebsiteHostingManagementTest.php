@@ -55,6 +55,39 @@ class WebsiteHostingManagementTest extends TestCase
         $this->actingAs($admin)->getJson('/api/websites?connection=unlinked')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $unlinked->id)->assertJsonPath('data.0.agent_linked', false);
     }
 
+    public function test_hosting_setup_dismissed_excludes_a_website_from_setup_required_without_hiding_a_real_monitoring_gap(): void
+    {
+        $admin = $this->user('admin'); $customer = $this->customer();
+        // Hosted by us, no hosting account/server linked at all — would
+        // normally flag "setup required" (e.g. an addon domain on a shared
+        // cPanel account the CRM can never auto-verify).
+        $dismissed = $this->website($customer, ['name' => 'Addon Domain Site', 'domain' => 'addon.example.com', 'hosting_enabled' => true, 'hosting_setup_dismissed' => true]);
+        $stillNeedsSetup = $this->website($customer, ['name' => 'Genuinely Unlinked', 'domain' => 'unlinked.example.com', 'hosting_enabled' => true]);
+        // Dismissing hosting setup must not silence an unrelated, real gap:
+        // WordPress monitoring never having connected.
+        $dismissedButNeedsMonitoring = $this->website($customer, ['name' => 'Dismissed But No Agent', 'domain' => 'agentless.example.com', 'hosting_enabled' => true, 'hosting_setup_dismissed' => true, 'wordpress_enabled' => true]);
+
+        $this->actingAs($admin)->getJson('/api/websites/summary')->assertOk()->assertJsonPath('data.setup_required', 2);
+
+        $ids = $this->actingAs($admin)->getJson('/api/websites?connection=setup')->assertOk()->json('data.*.id');
+        $this->assertContains($stillNeedsSetup->id, $ids);
+        $this->assertContains($dismissedButNeedsMonitoring->id, $ids);
+        $this->assertNotContains($dismissed->id, $ids);
+    }
+
+    public function test_hosting_setup_dismissed_can_be_toggled_via_update(): void
+    {
+        $admin = $this->user('admin'); $website = $this->website($this->customer(), ['hosting_enabled' => true]);
+
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", ['hosting_setup_dismissed' => true])
+            ->assertOk()->assertJsonPath('data.hosting_setup_dismissed', true);
+        $this->assertTrue($website->fresh()->hosting_setup_dismissed);
+
+        $this->actingAs($admin)->putJson("/api/websites/{$website->id}", ['hosting_setup_dismissed' => false])
+            ->assertOk()->assertJsonPath('data.hosting_setup_dismissed', false);
+        $this->assertFalse($website->fresh()->hosting_setup_dismissed);
+    }
+
     public function test_admin_can_enable_wordpress_monitoring_when_editing_a_website(): void
     {
         $admin = $this->user('admin');

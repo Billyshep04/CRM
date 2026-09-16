@@ -41,6 +41,7 @@ class Website extends Model
         'management_enabled',
         'monitoring_enabled',
         'hosting_enabled',
+        'hosting_setup_dismissed',
         'status',
         'provisioning_status',
         'lifecycle_state',
@@ -58,7 +59,7 @@ class Website extends Model
     ];
 
     protected $casts = [
-        'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean',
+        'wordpress_enabled' => 'boolean', 'management_enabled' => 'boolean', 'monitoring_enabled' => 'boolean', 'hosting_enabled' => 'boolean', 'hosting_setup_dismissed' => 'boolean',
         'google_analytics_enabled' => 'boolean', 'google_analytics_last_synced_at' => 'datetime',
         'agent_last_seen_at' => 'datetime', 'agent_last_failed_at' => 'datetime', 'last_checked_at' => 'datetime', 'went_live_at' => 'datetime', 'portal_visibility' => 'array', 'metadata' => 'array',
         'agent_token_encrypted' => 'encrypted',
