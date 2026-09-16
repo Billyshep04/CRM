@@ -131,7 +131,7 @@ class WebsiteController extends Controller
         return $request->validate([
             'customer_id' => [$required, 'integer', 'exists:customers,id'], 'hosting_server_id' => ['nullable', 'integer', 'exists:hosting_servers,id'], 'hosting_account_id' => ['nullable', 'integer', 'exists:hosting_accounts,id'], 'subscription_id' => ['nullable', 'integer', 'exists:subscriptions,id'],
             'name' => [$required, 'string', 'max:255'], 'domain' => ['nullable', 'string', 'max:255'], 'login_url' => [$required, 'url:http,https', 'max:2048'], 'environment' => ['sometimes', Rule::in(['production', 'staging', 'development'])],
-            'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'monitoring_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'],
+            'cpanel_username' => ['nullable', 'string', 'max:255'], 'wordpress_enabled' => ['sometimes', 'boolean'], 'management_enabled' => ['sometimes', 'boolean'], 'monitoring_enabled' => ['sometimes', 'boolean'], 'hosting_enabled' => ['sometimes', 'boolean'], 'hosting_setup_dismissed' => ['sometimes', 'boolean'],
             'google_analytics_property_id' => ['nullable', 'string', 'max:255'], 'google_analytics_dashboard_url' => ['nullable', 'url:http,https', 'max:2048'],
             'status' => ['sometimes', Rule::in(['unknown', 'healthy', 'attention', 'critical', 'paused'])], 'notes' => ['nullable', 'string'], 'portal_visibility' => ['sometimes', 'array'], 'portal_visibility.*' => ['boolean'], 'metadata' => ['sometimes', 'nullable', 'array'],
         ]);
@@ -142,8 +142,14 @@ class WebsiteController extends Controller
     private function needsSetup($query): void
     {
         $query->where(function ($outer): void {
+            // hosting_setup_dismissed is a deliberate, explicit per-website
+            // override (set via Edit) for sites the CRM can never verify
+            // automatically — e.g. an addon domain on a shared cPanel account
+            // rather than its own exclusive account. It only silences the
+            // hosting half of this check; a genuinely disconnected monitoring
+            // agent still surfaces below regardless of that flag.
             $outer->where(function ($hosting): void {
-                $hosting->where('hosting_enabled', true)->where(function ($connection): void {
+                $hosting->where('hosting_enabled', true)->where('hosting_setup_dismissed', false)->where(function ($connection): void {
                     $connection->whereNull('hosting_account_id')
                         ->orWhereDoesntHave('hostingServer', fn ($q) => $q->where('api_type', 'whm'))
                         ->orWhereDoesntHave('hostingAccount', fn ($q) => $q->whereNotNull('last_synced_at'));

@@ -43,7 +43,7 @@ class WebsiteResource extends JsonResource
                 'driver' => AnalyticsDriver::currentOrUnknown(),
             ],
             'cpanel_username' => $this->cpanel_username, 'wordpress_enabled' => $this->wordpress_enabled, 'management_enabled' => $this->management_enabled, 'monitoring_enabled' => $this->monitoring_enabled,
-            'hosting_enabled' => $this->hosting_enabled, 'status' => $this->status,
+            'hosting_enabled' => $this->hosting_enabled, 'hosting_setup_dismissed' => (bool) $this->hosting_setup_dismissed, 'status' => $this->status,
             'hosting_connected' => $this->resource->hasVerifiedHostingConnection(),
             'agent_linked' => $this->agent_last_seen_at !== null,
             'agent_connected' => $agentConnected,
