@@ -2244,6 +2244,7 @@
                     <label class="check-row"><input type="radio" name="deletion_type" value="hosting_and_crm" id="website-delete-hosting-choice"><span><strong>Delete hosting and remove from CRM</strong><br>Permanently terminates the verified, exclusive cPanel account.</span></label>
                     <label class="field"><span>Type the domain to confirm</span><input name="confirmation" id="website-delete-confirmation" autocomplete="off" required></label>
                     <label class="check-row"><input type="checkbox" name="backup_confirmed" id="website-delete-backup"><span>I have reviewed the latest known backup information and understand restoration is not guaranteed.</span></label>
+                    <label class="check-row" id="website-delete-other-domains-row" hidden><input type="checkbox" name="other_domains_confirmed" id="website-delete-other-domains"><span id="website-delete-other-domains-text">I understand this hosting account has other domains on it that will also be permanently removed.</span></label>
                     <div id="website-delete-status" class="form-hint"></div>
                     <div class="form-actions"><button class="btn btn-outline" id="website-delete-cancel" type="button">Cancel</button><button class="btn btn-danger" id="website-delete-submit" type="submit" disabled>Delete website</button></div>
                 </form>

@@ -276,6 +276,8 @@ const dom = {
     websiteDeletePreview: document.getElementById('website-delete-preview'),
     websiteDeleteConfirmation: document.getElementById('website-delete-confirmation'),
     websiteDeleteHostingChoice: document.getElementById('website-delete-hosting-choice'),
+    websiteDeleteOtherDomainsRow: document.getElementById('website-delete-other-domains-row'),
+    websiteDeleteOtherDomainsText: document.getElementById('website-delete-other-domains-text'),
     websiteDeleteSubmit: document.getElementById('website-delete-submit'),
     websiteDeleteStatus: document.getElementById('website-delete-status'),
     websiteAnalyticsForm: document.getElementById('website-analytics-form'),
@@ -9080,21 +9082,25 @@ if (dom.websiteDetailProvisioning) dom.websiteDetailProvisioning.addEventListene
 });
 const closeWebsiteDelete=()=>{if(dom.websiteDeleteModal)dom.websiteDeleteModal.hidden=true;};
 if(dom.websiteDeleteOpen)dom.websiteDeleteOpen.addEventListener('click',async()=>{
-    if(!state.currentWebsite?.id)return; dom.websiteDeleteModal.hidden=false; dom.websiteDeleteConfirmation.value=''; if(dom.websiteDeleteForm?.elements.backup_confirmed)dom.websiteDeleteForm.elements.backup_confirmed.checked=false; dom.websiteDeleteSubmit.disabled=true; setFormStatus(dom.websiteDeleteStatus,'');
+    if(!state.currentWebsite?.id)return; dom.websiteDeleteModal.hidden=false; dom.websiteDeleteConfirmation.value=''; if(dom.websiteDeleteForm?.elements.backup_confirmed)dom.websiteDeleteForm.elements.backup_confirmed.checked=false; if(dom.websiteDeleteForm?.elements.other_domains_confirmed)dom.websiteDeleteForm.elements.other_domains_confirmed.checked=false; if(dom.websiteDeleteOtherDomainsRow)dom.websiteDeleteOtherDomainsRow.hidden=true; dom.websiteDeleteSubmit.disabled=true; setFormStatus(dom.websiteDeleteStatus,'');
     try {
         const response=await api.get(`/api/websites/${state.currentWebsite.id}/deletion-preview`); const preview=response?.data?.data||{};
         dom.websiteDeleteModal.dataset.domain=preview.domain||'';
         dom.websiteDeleteHostingChoice.disabled=!preview.hosting_termination_allowed||!preview.hosting_termination_ready;
+        const otherDomains=preview.hosting_account_other_domains||[];
+        if(dom.websiteDeleteOtherDomainsRow) dom.websiteDeleteOtherDomainsRow.hidden=otherDomains.length===0;
+        if(dom.websiteDeleteOtherDomainsText) dom.websiteDeleteOtherDomainsText.textContent=`I understand this hosting account also has ${otherDomains.length} other domain(s) — ${otherDomains.join(', ')} — that will be permanently removed along with it.`;
         const backup=preview.latest_known_backup_at?`${escapeHtml(formatDate(preview.latest_known_backup_at))} (${escapeHtml(preview.backup_status||'status unknown')})`:'Backup status cannot be verified';
         let hostingStatus;
         if (!preview.hosting_termination_allowed) hostingStatus=`<br><br><strong>Hosting deletion is blocked:</strong> ${escapeHtml((preview.blocking_reasons||[]).join(' '))}`;
         else if (!preview.hosting_termination_ready) hostingStatus=`<br><br><strong>Hosting deletion would fail if attempted:</strong> ${escapeHtml(preview.hosting_termination_not_ready_reason||'Live termination is currently disabled on this server.')}`;
         else hostingStatus='<br><br>Full hosting deletion passed the ownership and shared-account checks.';
+        if (otherDomains.length) hostingStatus+=`<br><br><strong>Warning:</strong> This account also has other domains that will be removed too: ${escapeHtml(otherDomains.join(', '))}.`;
         dom.websiteDeletePreview.innerHTML=`<strong>Website:</strong> ${escapeHtml(preview.domain||'—')}<br><strong>Customer:</strong> ${escapeHtml(preview.customer||'—')}<br><strong>cPanel account:</strong> ${escapeHtml(preview.cpanel_username||'—')}<br><strong>Hosting:</strong> ${escapeHtml(preview.hosting_server||'—')}<br><br><strong>Latest known backup:</strong> ${backup}<br>${escapeHtml(preview.backup_warning||'')}${hostingStatus}`;
     }
     catch(error){setFormStatus(dom.websiteDeleteStatus,getErrorMessage(error,'Unable to run deletion checks.'),true);}
 });
-const updateWebsiteDeleteButton=()=>{const values=new FormData(dom.websiteDeleteForm);const full=values.get('deletion_type')==='hosting_and_crm';const domainMatches=dom.websiteDeleteConfirmation.value.trim().toLowerCase()===(dom.websiteDeleteModal.dataset.domain||'').trim().toLowerCase();dom.websiteDeleteSubmit.textContent=full?'Permanently Delete Website & Hosting':'Remove Website from CRM';dom.websiteDeleteSubmit.disabled=!domainMatches||(full&&!dom.websiteDeleteForm.elements.backup_confirmed.checked);};
+const updateWebsiteDeleteButton=()=>{const values=new FormData(dom.websiteDeleteForm);const full=values.get('deletion_type')==='hosting_and_crm';const domainMatches=dom.websiteDeleteConfirmation.value.trim().toLowerCase()===(dom.websiteDeleteModal.dataset.domain||'').trim().toLowerCase();const otherDomainsOk=dom.websiteDeleteOtherDomainsRow?.hidden!==false||dom.websiteDeleteForm.elements.other_domains_confirmed.checked;dom.websiteDeleteSubmit.textContent=full?'Permanently Delete Website & Hosting':'Remove Website from CRM';dom.websiteDeleteSubmit.disabled=!domainMatches||(full&&(!dom.websiteDeleteForm.elements.backup_confirmed.checked||!otherDomainsOk));};
 if(dom.websiteDeleteConfirmation)dom.websiteDeleteConfirmation.addEventListener('input',updateWebsiteDeleteButton);
 if(dom.websiteDeleteForm)dom.websiteDeleteForm.addEventListener('change',updateWebsiteDeleteButton);
 if(dom.websiteDeleteClose)dom.websiteDeleteClose.addEventListener('click',closeWebsiteDelete);
@@ -9102,7 +9108,7 @@ if(dom.websiteDeleteCancel)dom.websiteDeleteCancel.addEventListener('click',clos
 if(dom.websiteDeleteForm)dom.websiteDeleteForm.addEventListener('submit',async(event)=>{
     event.preventDefault(); if(!state.currentWebsite?.id||dom.websiteDeleteSubmit.disabled)return;
     const values=new FormData(dom.websiteDeleteForm); const deletionType=values.get('deletion_type'); dom.websiteDeleteSubmit.disabled=true; setFormStatus(dom.websiteDeleteStatus,deletionType==='hosting_and_crm'?'Terminating the verified hosting account, then removing the CRM record…':'Removing the CRM record while leaving hosting online…');
-    try { await api.post(`/api/websites/${state.currentWebsite.id}/delete`,{deletion_type:deletionType,confirmation:values.get('confirmation'),backup_confirmed:values.get('backup_confirmed')==='on',idempotency_key:crypto.randomUUID()}); closeWebsiteDelete(); showToast('Website deletion completed.'); setActiveView('websites'); await loadManagedWebsites(); }
+    try { await api.post(`/api/websites/${state.currentWebsite.id}/delete`,{deletion_type:deletionType,confirmation:values.get('confirmation'),backup_confirmed:values.get('backup_confirmed')==='on',other_domains_confirmed:values.get('other_domains_confirmed')==='on',idempotency_key:crypto.randomUUID()}); closeWebsiteDelete(); showToast('Website deletion completed.'); setActiveView('websites'); await loadManagedWebsites(); }
     catch(error){setFormStatus(dom.websiteDeleteStatus,getErrorMessage(error,'Website deletion failed. Nothing else was removed.'),true); dom.websiteDeleteSubmit.disabled=false;}
 });
 if (dom.websiteAnalyticsForm) dom.websiteAnalyticsForm.addEventListener('submit', async (event) => {

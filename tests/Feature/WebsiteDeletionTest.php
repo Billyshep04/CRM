@@ -53,6 +53,32 @@ class WebsiteDeletionTest extends TestCase
         } finally { $this->app['env']=$original; }
     }
 
+    public function test_other_domains_on_the_account_are_a_warning_not_a_hard_block():void
+    {
+        [$website]=$this->recordsWithAnotherDomainOnTheAccount(); $admin=$this->user('admin');
+        $this->actingAs($admin)->getJson("/api/websites/{$website->id}/deletion-preview")->assertOk()
+            ->assertJsonPath('data.hosting_termination_allowed',true)
+            ->assertJsonPath('data.hosting_account_other_domains',['unrelated-leftover.test']);
+    }
+
+    public function test_full_deletion_requires_explicit_confirmation_of_the_other_domains_before_proceeding():void
+    {
+        [$website,$account]=$this->recordsWithAnotherDomainOnTheAccount(); $admin=$this->user('admin');
+        $this->actingAs($admin)->postJson("/api/websites/{$website->id}/delete",['deletion_type'=>'hosting_and_crm','confirmation'=>'example.test','backup_confirmed'=>true,'idempotency_key'=>(string)Str::uuid()])
+            ->assertUnprocessable()
+            ->assertJsonPath('message','Confirm that removing the other domains on this hosting account is intended before deleting it.');
+        $this->assertDatabaseHas('websites',['id'=>$website->id]); $this->assertDatabaseHas('hosting_accounts',['id'=>$account->id]);
+    }
+
+    public function test_full_deletion_proceeds_once_the_other_domains_are_explicitly_confirmed():void
+    {
+        [$website,$account]=$this->recordsWithAnotherDomainOnTheAccount(); $admin=$this->user('admin');
+        $this->actingAs($admin)->postJson("/api/websites/{$website->id}/delete",['deletion_type'=>'hosting_and_crm','confirmation'=>'example.test','backup_confirmed'=>true,'other_domains_confirmed'=>true,'idempotency_key'=>(string)Str::uuid()])
+            ->assertOk();
+        $this->assertSoftDeleted('websites',['id'=>$website->id]); $this->assertDatabaseMissing('hosting_accounts',['id'=>$account->id]);
+        $this->assertDatabaseHas('website_deletion_audits',['website_id'=>$website->id,'deletion_type'=>'hosting_and_crm','state'=>'complete']);
+    }
+
     public function test_deletion_stops_an_unfinished_provisioning_run():void
     {
         [$website]=$this->records(); $admin=$this->user('admin');
@@ -94,6 +120,13 @@ class WebsiteDeletionTest extends TestCase
         $customer=Customer::create(['name'=>'Client','email'=>fake()->unique()->safeEmail(),'billing_address'=>'1 Road']); $server=HostingServer::create(['name'=>'Mock Krystal','provider'=>'krystal','api_type'=>'mock']);
         $account=HostingAccount::create(['hosting_server_id'=>$server->id,'customer_id'=>$customer->id,'external_id'=>'example','username'=>'example','primary_domain'=>'example.test','domains'=>[['domain'=>'example.test','type'=>'primary']],'status'=>'active']);
         $website=Website::create(['customer_id'=>$customer->id,'hosting_server_id'=>$server->id,'hosting_account_id'=>$account->id,'name'=>'Example','domain'=>'example.test','login_url'=>'https://example.test','hosting_enabled'=>true]); return[$website,$account,$customer];
+    }
+
+    private function recordsWithAnotherDomainOnTheAccount():array
+    {
+        [$website,$account,$customer]=$this->records();
+        $account->update(['domains'=>[['domain'=>'example.test','type'=>'primary'],['domain'=>'unrelated-leftover.test','type'=>'addon']]]);
+        return [$website,$account,$customer];
     }
     private function user(string $role):User{$user=User::factory()->create();$user->roles()->attach(Role::where('slug',$role)->firstOrFail());return$user;}
 }
