@@ -10,11 +10,13 @@ use Illuminate\Support\Str;
 
 class ProposalPdfService
 {
+    private const TEMPLATE_VERSION = 1;
+
     public function generate(Proposal $proposal): StoredFile
     {
         $proposal->loadMissing(['customer', 'job', 'lineItems']);
 
-        if ($proposal->pdfFile && $this->fileExists($proposal->pdfFile)) {
+        if ($proposal->pdfFile && $this->isCurrentTemplate($proposal->pdfFile)) {
             return $proposal->pdfFile;
         }
 
@@ -33,6 +35,20 @@ class ProposalPdfService
 
         Storage::disk($disk)->put($path, $contents);
 
+        if ($proposal->pdfFile) {
+            $proposal->pdfFile->forceFill([
+                'disk' => $disk,
+                'path' => $path,
+                'original_name' => $fileName,
+                'mime_type' => 'application/pdf',
+                'size' => strlen($contents),
+                'checksum' => hash('sha256', $contents),
+                'metadata' => ['proposal_template_version' => self::TEMPLATE_VERSION],
+            ])->save();
+
+            return $proposal->pdfFile->fresh();
+        }
+
         return StoredFile::create([
             'disk' => $disk,
             'path' => $path,
@@ -42,6 +58,7 @@ class ProposalPdfService
             'category' => 'proposal_pdf',
             'checksum' => hash('sha256', $contents),
             'is_private' => true,
+            'metadata' => ['proposal_template_version' => self::TEMPLATE_VERSION],
             'uploaded_by_user_id' => $proposal->created_by_user_id,
             'owner_type' => $proposal::class,
             'owner_id' => $proposal->id,
@@ -59,5 +76,11 @@ class ProposalPdfService
         }
 
         return Storage::disk($file->disk)->exists($file->path);
+    }
+
+    private function isCurrentTemplate(StoredFile $file): bool
+    {
+        return $this->fileExists($file)
+            && (int) data_get($file->metadata, 'proposal_template_version') === self::TEMPLATE_VERSION;
     }
 }
