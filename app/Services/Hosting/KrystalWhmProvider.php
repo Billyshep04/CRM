@@ -17,7 +17,7 @@ use RuntimeException;
 
 class KrystalWhmProvider implements HostingProviderInterface
 {
-    private function client(HostingServer $server, int $timeout = 20): PendingRequest
+    private function client(HostingServer $server, int $timeout = 20, bool $retryOnConnectionFailure = true): PendingRequest
     {
         $credentials = $server->credentials ?? [];
 
@@ -25,18 +25,43 @@ class KrystalWhmProvider implements HostingProviderInterface
             throw new RuntimeException('WHM credentials are not configured.');
         }
 
-        return Http::withHeaders([
+        $request = Http::withHeaders([
             'Authorization' => 'whm '.$credentials['username'].':'.$credentials['token'],
         ])->acceptJson()
-            ->connectTimeout(8)
+            ->connectTimeout(12)
             ->timeout($timeout)
             ->baseUrl('https://'.preg_replace('/:\d+$/', '', $server->hostname).':2087/json-api');
+
+        // A handful of these calls have failed with a bare connection error
+        // (no response at all — DNS/TLS/handshake level) that then succeeded
+        // on a simple manual retry, which suggests transient network flakiness
+        // rather than a real config problem. A couple of quick, automatic
+        // retries here means staff no longer have to manually re-click a
+        // destructive confirmation dialog to get past a blip. createacct is
+        // deliberately excluded: it isn't idempotent, and already has its own
+        // "did this actually get created despite the failure" reconciliation
+        // in createAccount() that a transparent retry here would bypass.
+        if ($retryOnConnectionFailure) {
+            // throw: false is essential here — retry()'s default is to throw
+            // once retries are exhausted even for a plain non-2xx response,
+            // which would break the existing metadata/401/403 handling below
+            // that expects to inspect an ordinary (non-connection-failure)
+            // Response itself rather than catch an exception for it.
+            $request = $request->retry(
+                config('hosting.whm_connection_retries', 2),
+                config('hosting.whm_connection_retry_delay_ms', 800),
+                fn (\Throwable $e) => $e instanceof ConnectionException,
+                throw: false,
+            );
+        }
+
+        return $request;
     }
 
     private function call(HostingServer $server, string $function, array $query = [], int $timeout = 20): array
     {
         try {
-            $response = $this->client($server, $timeout)->get('/'.$function, [
+            $response = $this->client($server, $timeout, $function !== 'createacct')->get('/'.$function, [
                 'api.version' => 1,
                 ...$query,
             ]);
@@ -47,7 +72,7 @@ class KrystalWhmProvider implements HostingProviderInterface
                 );
             }
             throw new RuntimeException(
-                'The CRM could not connect to WHM on port 2087. Check the WHM hostname and that outbound HTTPS connections to port 2087 are allowed.'
+                'The CRM could not connect to WHM on port 2087 after retrying. Check the WHM hostname and that outbound HTTPS connections to port 2087 are allowed.'
             );
         }
 
