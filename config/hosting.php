@@ -5,6 +5,8 @@ return [
     'wordpress_admin_username'=>env('HOSTING_WORDPRESS_ADMIN_USERNAME','webstamp_admin'), 'wordpress_admin_email'=>env('HOSTING_WORDPRESS_ADMIN_EMAIL'),
     'ssh'=>['port'=>(int)env('HOSTING_SSH_PORT',722),'host_fingerprint'=>env('HOSTING_SSH_HOST_FINGERPRINT')],
     'whm_account_creation_timeout_seconds'=>(int)env('HOSTING_WHM_ACCOUNT_CREATION_TIMEOUT_SECONDS',120),
+    'whm_connection_retries'=>(int)env('HOSTING_WHM_CONNECTION_RETRIES',2),
+    'whm_connection_retry_delay_ms'=>(int)env('HOSTING_WHM_CONNECTION_RETRY_DELAY_MS',800),
     'dns_retry_minutes'=>(int)env('HOSTING_DNS_RETRY_MINUTES',10),
     'ssl_retry_minutes'=>(int)env('HOSTING_SSL_RETRY_MINUTES',10),
     'development_base_domain'=>env('DEVELOPMENT_BASE_DOMAIN','dev.web-stamp.co.uk'),
