@@ -1440,7 +1440,7 @@ function parseTotal(response) {
 async function calculateDashboardMetrics() {
     const response = await api.get('/api/stats/revenue');
     return {
-        revenue: Number(response?.data?.total ?? 0),
+        revenue: Number(response?.data?.paid_invoices_total ?? 0),
         costs: Number(response?.data?.costs_total ?? 0),
         profit: Number(response?.data?.profit_total ?? 0),
     };
@@ -1584,7 +1584,7 @@ async function loadStaffStats() {
     const cards = document.querySelectorAll('[data-view="dashboard"] .panel-grid .card');
     const labels = ['Revenue this month', 'Costs this month', 'Profit this month', 'Jobs', 'Subscriptions'];
     const metas = [
-        'Completed jobs this month + paid subscriptions',
+        'Invoices marked paid this month',
         'Total incurred costs this month',
         'Revenue this month minus costs this month',
         'Open or invoiced',
