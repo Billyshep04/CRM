@@ -33,6 +33,7 @@ class StatsController extends Controller
 
         $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
         $profitTotal = $revenueTotal - $monthlyCostsTotal;
+        $paidInvoicesTotal = $this->calculatePaidInvoicesTotalForRange($startOfMonth, $endOfMonth);
 
         return response()->json([
             'completed_jobs_total' => $completedJobsTotal,
@@ -41,6 +42,7 @@ class StatsController extends Controller
             'costs_total' => $monthlyCostsTotal,
             'profit_total' => $profitTotal,
             'total' => $revenueTotal,
+            'paid_invoices_total' => $paidInvoicesTotal,
         ]);
     }
 
@@ -272,6 +274,14 @@ class StatsController extends Controller
                     });
             })
             ->sum('cost');
+    }
+
+    private function calculatePaidInvoicesTotalForRange(Carbon $startDate, Carbon $endDate): float
+    {
+        return (float) Invoice::query()
+            ->where('status', 'paid')
+            ->whereBetween('paid_at', [$startDate, $endDate])
+            ->sum('total');
     }
 
     private function calculatePaidSubscriptionsTotalForMonth(Carbon $monthStart): float
