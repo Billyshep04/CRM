@@ -9,6 +9,7 @@ use App\Contracts\SslInspector;
 use App\Models\HostingAccount;
 use App\Models\HostingPackage;
 use App\Models\HostingServer;
+use App\Models\WordpressProfile;
 use App\Services\Hosting\KrystalWordpressProvisioner;
 use App\Services\Hosting\ProvisioningDnsService;
 use App\Services\Hosting\ProvisioningSslService;
@@ -36,6 +37,63 @@ class KrystalWordpressProvisioningTest extends TestCase
 
         $this->assertStringContainsString("'O'\"'\"'Brien; touch /tmp/no'", $command);
         $this->assertSame(1, substr_count($command, 'touch /tmp/no'));
+    }
+
+    public function test_configure_tolerates_default_content_already_being_deleted(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'post' 'delete' '1'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'Error: Could not find the post with ID 1.'],
+            "'comment' 'delete' '1'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'Error: Could not find the comment with ID 1.'],
+        ]);
+        $profile = new WordpressProfile(['configuration' => ['delete_default_content' => true]]);
+
+        $result = (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+            ->configure($this->server(), $this->account(), 'not-logged', $profile, []);
+
+        $this->assertTrue($result['configured']);
+    }
+
+    public function test_configure_still_fails_when_default_content_deletion_fails_for_another_reason(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'post' 'delete' '1'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'Error: database connection lost.'],
+        ]);
+        $profile = new WordpressProfile(['configuration' => ['delete_default_content' => true]]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Removing default WordPress content failed.');
+
+        (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+            ->configure($this->server(), $this->account(), 'not-logged', $profile, []);
+    }
+
+    public function test_configure_tolerates_a_profile_plugin_already_being_installed(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'plugin' 'install' 'redirection'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'Error: Plugin already installed.'],
+            "'plugin' 'activate' 'redirection'" => ['exit_code' => 0, 'stdout' => '', 'stderr' => ''],
+        ]);
+        $profile = new WordpressProfile(['configuration' => ['plugins' => ['redirection']]]);
+
+        $result = (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+            ->configure($this->server(), $this->account(), 'not-logged', $profile, []);
+
+        $this->assertTrue($result['configured']);
+        $this->assertStringContainsString("'plugin' 'activate' 'redirection'", implode("\n", $runner->commands));
+    }
+
+    public function test_configure_still_fails_when_a_profile_plugin_install_fails_for_another_reason(): void
+    {
+        $runner = new RecordingSshRunner([
+            "'plugin' 'install' 'redirection'" => ['exit_code' => 1, 'stdout' => '', 'stderr' => 'Error: could not resolve host.'],
+        ]);
+        $profile = new WordpressProfile(['configuration' => ['plugins' => ['redirection']]]);
+
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('Installing the redirection plugin failed.');
+
+        (new KrystalWordpressProvisioner($runner, new RecordingCpanelUapiClient))
+            ->configure($this->server(), $this->account(), 'not-logged', $profile, []);
     }
 
     public function test_wordpress_download_refuses_to_overwrite_existing_public_html(): void

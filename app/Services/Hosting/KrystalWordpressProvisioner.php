@@ -173,11 +173,21 @@ class KrystalWordpressProvisioner
         foreach (($configuration['plugins'] ?? []) as $plugin) {
             if ($plugin === 'webstamp-site-agent') continue;
             if (! preg_match('/^[a-z0-9-]+$/', (string) $plugin)) throw new RuntimeException('The provisioning profile contains an invalid plugin slug.');
-            $this->execute($server, $account, $password, $this->wpCliCommand(['plugin', 'install', $plugin, '--activate']), "Installing the {$plugin} plugin failed.", 180);
+            $install = $this->run($server, $account, $password, $this->wpCliCommand(['plugin', 'install', $plugin]), 180);
+            if ($install['exit_code'] !== 0 && ! str_contains(strtolower($install['stdout'].$install['stderr']), 'already installed')) {
+                throw new RuntimeException("Installing the {$plugin} plugin failed.");
+            }
+            $this->execute($server, $account, $password, $this->wpCliCommand(['plugin', 'activate', $plugin]), "Activating the {$plugin} plugin failed.");
         }
         if (($configuration['delete_default_content'] ?? false) === true) {
-            $this->execute($server, $account, $password, $this->wpCliCommand(['post', 'delete', '1', '--force']), 'Removing default WordPress content failed.');
-            $this->execute($server, $account, $password, $this->wpCliCommand(['comment', 'delete', '--all', '--force']), 'Removing default WordPress comments failed.');
+            $post = $this->run($server, $account, $password, $this->wpCliCommand(['post', 'delete', '1', '--force']));
+            if ($post['exit_code'] !== 0 && ! str_contains(strtolower($post['stdout'].$post['stderr']), 'could not find the post')) {
+                throw new RuntimeException('Removing default WordPress content failed.');
+            }
+            $comment = $this->run($server, $account, $password, $this->wpCliCommand(['comment', 'delete', '1', '--force']));
+            if ($comment['exit_code'] !== 0 && ! str_contains(strtolower($comment['stdout'].$comment['stderr']), 'could not find the comment')) {
+                throw new RuntimeException('Removing default WordPress comments failed.');
+            }
         }
         return ['configured' => true, 'profile' => $profile?->slug, 'agent_installation' => 'separate_step'];
     }
