@@ -1006,6 +1006,13 @@ function formatBytes(value) {
     return `${size.toFixed(unit ? 1 : 0)} ${units[unit]}`;
 }
 
+function formatDateTime(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 function formatDateWithYear(value) {
     if (!value) return '';
     const date = new Date(value);
@@ -7609,7 +7616,7 @@ function renderInvoices() {
             <span>#${escapeHtml(invoice.invoice_number)}${invoice.payment_link ? `<small class="invoice-payment-url" title="${escapeHtml(invoice.payment_link)}">${escapeHtml(invoice.payment_link)}</small>` : ''}</span>
             <span>${escapeHtml(invoice.customer?.name || getCustomerName(invoice.customer_id))}</span>
             <span>${formatCurrency(Number(invoice.total))}</span>
-            <span>${escapeHtml(displayStatus)}</span>
+            <span>${escapeHtml(displayStatus)}${isPaid && invoice.paid_at ? `<small class="invoice-paid-at">Paid ${escapeHtml(formatDateTime(invoice.paid_at))}</small>` : ''}</span>
             <span>${formatDate(invoice.due_date)}</span>
             <div class="row-actions">
                 <button class="btn btn-outline btn-small" data-action="toggle-payment" data-id="${invoice.id}" data-next-status="${nextStatus}">${paymentActionLabel}</button>
