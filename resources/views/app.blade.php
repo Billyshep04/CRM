@@ -177,7 +177,7 @@
                         <div class="card highlight dashboard-tile" id="dashboard-tile-revenue">
                             <div class="card-label">Revenue this month</div>
                             <div class="card-value" id="dashboard-revenue">--</div>
-                            <div class="card-meta">Completed jobs this month + paid subscriptions</div>
+                            <div class="card-meta">Invoices marked paid this month</div>
                         </div>
                         <div class="card dashboard-tile" id="dashboard-tile-costs">
                             <div class="card-label">Costs this month</div>
@@ -439,7 +439,7 @@
                                 <div class="card monthly-finance-card" id="monthly-finance-card-revenue">
                                     <div class="card-label">Revenue</div>
                                     <div class="card-value" id="monthly-finance-revenue">--</div>
-                                    <div class="card-meta" id="monthly-finance-revenue-meta">Completed jobs + paid subscriptions</div>
+                                    <div class="card-meta" id="monthly-finance-revenue-meta">Invoices marked paid this month</div>
                                 </div>
                                 <div class="card monthly-finance-card" id="monthly-finance-card-costs">
                                     <div class="card-label">Costs</div>

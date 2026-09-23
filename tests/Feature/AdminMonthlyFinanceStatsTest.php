@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Cost;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Role;
 use App\Models\Subscription;
@@ -39,9 +40,12 @@ class AdminMonthlyFinanceStatsTest extends TestCase
             'billing_address' => '1 Billing Street',
         ]);
 
+        // Completed work and a subscription month that were never actually
+        // invoiced — these must NOT contribute to revenue, since revenue is
+        // now based on invoices marked paid, not on job/subscription state.
         Job::query()->create([
             'customer_id' => $customer->id,
-            'description' => 'March completed work',
+            'description' => 'March completed work (never invoiced)',
             'cost' => 120.00,
             'status' => 'completed',
             'completed_at' => '2026-03-10 09:00:00',
@@ -49,8 +53,8 @@ class AdminMonthlyFinanceStatsTest extends TestCase
 
         Job::query()->create([
             'customer_id' => $customer->id,
-            'description' => 'April completed work',
-            'cost' => 40.00,
+            'description' => 'April completed work (never invoiced)',
+            'cost' => 999.00,
             'status' => 'completed',
             'completed_at' => '2026-04-05 09:00:00',
         ]);
@@ -69,6 +73,30 @@ class AdminMonthlyFinanceStatsTest extends TestCase
             'month_start' => '2026-03-01',
             'subscription_status' => 'active',
             'payment_status' => 'paid',
+        ]);
+
+        Invoice::query()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-MARCH',
+            'issue_date' => '2026-03-01',
+            'due_date' => '2026-03-15',
+            'status' => 'paid',
+            'subtotal' => 200.00,
+            'tax_amount' => 0,
+            'total' => 200.00,
+            'paid_at' => '2026-03-15 10:00:00',
+        ]);
+
+        Invoice::query()->create([
+            'customer_id' => $customer->id,
+            'invoice_number' => 'INV-APRIL',
+            'issue_date' => '2026-04-01',
+            'due_date' => '2026-04-15',
+            'status' => 'paid',
+            'subtotal' => 40.00,
+            'tax_amount' => 0,
+            'total' => 40.00,
+            'paid_at' => '2026-04-05 10:00:00',
         ]);
 
         Cost::query()->create([

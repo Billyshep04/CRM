@@ -1679,7 +1679,7 @@ function resetMonthlyFinanceCards() {
     if (dom.monthlyFinanceProfit) dom.monthlyFinanceProfit.textContent = '--';
     if (dom.monthlyFinanceTax) dom.monthlyFinanceTax.textContent = '--';
     if (dom.monthlyFinanceOwed) dom.monthlyFinanceOwed.textContent = '--';
-    if (dom.monthlyFinanceRevenueMeta) dom.monthlyFinanceRevenueMeta.textContent = 'Completed jobs + paid subscriptions';
+    if (dom.monthlyFinanceRevenueMeta) dom.monthlyFinanceRevenueMeta.textContent = 'Invoices marked paid this month';
     if (dom.monthlyFinanceCostsMeta) dom.monthlyFinanceCostsMeta.textContent = 'Incurred and recurring costs';
     if (dom.monthlyFinanceProfitMeta) dom.monthlyFinanceProfitMeta.textContent = 'Revenue minus costs';
     if (dom.monthlyFinanceTaxMeta) dom.monthlyFinanceTaxMeta.textContent = '20% of Profit';
@@ -1800,7 +1800,7 @@ function renderMonthlyFinanceCards() {
 
     const suffix = periodText ? ` • ${periodText}` : '';
     if (dom.monthlyFinanceRevenueMeta) {
-        dom.monthlyFinanceRevenueMeta.textContent = `Completed jobs + paid subscriptions${suffix}`;
+        dom.monthlyFinanceRevenueMeta.textContent = `Invoices marked paid this month${suffix}`;
     }
     if (dom.monthlyFinanceCostsMeta) {
         dom.monthlyFinanceCostsMeta.textContent = `Incurred and recurring costs${suffix}`;
