@@ -77,7 +77,7 @@ class StatsController extends Controller
                 ? $this->calculatePaidSubscriptionsTotalForMonth($monthStart)
                 : 0.0;
             $costsTotal = $this->calculateCostsTotalForRange($monthStart, $monthEnd);
-            $revenueTotal = $completedJobsTotal + $paidSubscriptionsTotal;
+            $revenueTotal = $this->calculatePaidInvoicesTotalForRange($monthStart, $monthEnd);
             $profitTotal = $revenueTotal - $costsTotal;
             $taxTotal = $profitTotal * 0.2;
             $owedTotal = $this->calculateOwedTotalForRange($monthStart, $monthEnd);

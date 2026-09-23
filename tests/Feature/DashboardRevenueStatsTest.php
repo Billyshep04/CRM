@@ -45,6 +45,32 @@ class DashboardRevenueStatsTest extends TestCase
         $this->assertSame(900.0, (float) $response->json('completed_jobs_total'));
     }
 
+    public function test_monthly_finance_revenue_also_uses_invoices_paid_in_that_month(): void
+    {
+        $admin = User::factory()->create();
+        $this->assignRole($admin, 'admin');
+        Sanctum::actingAs($admin);
+
+        $customer = $this->customer();
+        $thisMonthStart = now()->startOfMonth();
+
+        $this->invoice($customer, 500.00, 'paid', $thisMonthStart->copy()->addDays(2));
+        Job::query()->create([
+            'customer_id' => $customer->id,
+            'description' => 'Unbilled work',
+            'cost' => 900.00,
+            'status' => 'completed',
+            'completed_at' => $thisMonthStart->copy()->addDays(3),
+        ]);
+
+        $response = $this->getJson('/api/admin/stats/monthly-finance')->assertOk();
+        $months = collect($response->json('months'));
+        $currentMonth = $months->firstWhere('month_start', $thisMonthStart->toDateString());
+
+        $this->assertNotNull($currentMonth);
+        $this->assertSame(500.0, (float) $currentMonth['revenue_total']);
+    }
+
     private function customer(): Customer
     {
         return Customer::query()->create([
