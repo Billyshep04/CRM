@@ -16,6 +16,8 @@ class ProcessWebsiteLaunch implements ShouldQueue
 
     public int $tries = 1;
 
+    public int $timeout = 600;
+
     public function __construct(public int $runId) {}
 
     public function handle(WebsiteLaunchService $service): void
