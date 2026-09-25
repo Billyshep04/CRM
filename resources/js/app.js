@@ -5337,10 +5337,13 @@ function renderCustomerProvisioningRun(run) {
     const wwwInstructions = run.dns_status?.www_required === false ? '' : `<p><strong>CNAME</strong><br>Host: www<br>Value: ${escapeHtml(run.domain)}</p>`;
     const dnsInstructions = run.state === 'waiting_for_dns' ? `<div class="manual-action-card"><strong>Manual action required — DNS changes</strong><p>Your hosting and WordPress are ready. Update DNS wherever this domain is managed:</p><p><strong>A record</strong><br>Host: ${run.dns_status?.www_required === false ? escapeHtml(run.domain.split('.')[0]) : '@'}<br>Value: ${escapeHtml(run.expected_ip || 'Assigned Krystal IP')}</p>${wwwInstructions}<p>Current A record: ${escapeHtml(rootCurrent)}<br>${provider ? `DNS appears to be managed by ${escapeHtml(provider)}.` : 'DNS provider could not be identified automatically.'}<br>DNS changes may take time to propagate. The CRM will keep checking automatically.</p></div>` : '';
     const sslInstructions = run.state === 'waiting_for_ssl' ? '<div class="manual-action-card"><strong>SSL pending</strong><p>DNS is correct. Krystal AutoSSL is still issuing the certificate; the CRM will check again automatically.</p></div>' : '';
+    const inProgress = !preview && !['waiting_for_dns', 'waiting_for_ssl', 'complete', 'failed', 'action_required'].includes(run.state)
+        ? '<div class="manual-action-card"><strong>This is normal — no action needed</strong><p>This can take a couple of minutes. You don\'t need to keep this open — feel free to close it and carry on; this website\'s page will show the result as soon as it\'s ready.</p></div>'
+        : '';
     const complete = run.state === 'complete' ? (preview
         ? '<div class="manual-action-card"><strong>Local preview only</strong><p>No WHM account, WordPress installation, DNS connection, SSL certificate, or monitoring connection was created.</p></div>'
         : `<div class="manual-action-card"><strong>Website created successfully</strong><p>Domain: ${escapeHtml(run.domain)}<br>Hosting: Verified in Krystal WHM<br>WordPress: ${run.website_type === 'wordpress' ? 'Installed' : 'Not selected'}<br>DNS: Connected<br>SSL: Active</p><p><a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}" target="_blank" rel="noopener">Open website</a> ${run.website_type === 'wordpress' ? `<a class="btn btn-outline btn-small" href="https://${escapeHtml(run.domain)}/wp-admin/" target="_blank" rel="noopener">Open WordPress admin</a> ${wordpressLoginActions(run.wordpress_login, run.website?.id)}` : ''}</p></div>`) : '';
-    if (dom.customerWebsiteProvisioningResult) dom.customerWebsiteProvisioningResult.innerHTML = `<strong>${escapeHtml(labels[run.state] || 'Setup in progress')}</strong><br>${run.expected_ip ? `Assigned IP: ${escapeHtml(run.expected_ip)}<br>` : ''}${provider ? `Detected DNS: ${escapeHtml(provider)}<br>` : ''}${run.safe_error ? escapeHtml(run.safe_error) : ''}${dnsInstructions}${sslInstructions}${complete}`;
+    if (dom.customerWebsiteProvisioningResult) dom.customerWebsiteProvisioningResult.innerHTML = `<strong>${escapeHtml(labels[run.state] || 'Setup in progress')}</strong><br>${run.expected_ip ? `Assigned IP: ${escapeHtml(run.expected_ip)}<br>` : ''}${provider ? `Detected DNS: ${escapeHtml(provider)}<br>` : ''}${run.safe_error ? escapeHtml(run.safe_error) : ''}${inProgress}${dnsInstructions}${sslInstructions}${complete}`;
     if (dom.customerWebsiteProvisioningChecklist) dom.customerWebsiteProvisioningChecklist.innerHTML = (run.steps || []).map((step) => `<div class="customer-connect-domain"><div><strong>${step.status === 'complete' ? '✓' : step.status === 'failed' ? '!' : step.status === 'waiting' ? '◷' : step.status === 'manual_action' ? '↗' : '○'} ${escapeHtml(step.step.replaceAll('_', ' '))}</strong><small>${escapeHtml(step.safe_message || step.status)}</small></div></div>`).join('');
     const check = dom.customerWebsiteKrystalForm?.querySelector('[data-provision-check]');
     if (check) check.hidden = !['waiting_for_dns', 'waiting_for_ssl', 'failed', 'action_required'].includes(run.state);
@@ -5410,7 +5413,7 @@ async function handleCustomerKrystalCreate(event) {
     }
     const submit = dom.customerWebsiteKrystalForm.querySelector('button[type="submit"]');
     if (submit) submit.disabled = true;
-    setFormStatus(dom.customerWebsiteKrystalStatus, 'Creating the website and Krystal hosting…');
+    setFormStatus(dom.customerWebsiteKrystalStatus, 'Creating the website and Krystal hosting… this can take a couple of minutes.');
     try {
         const response = await api.post('/api/website-provisioning', {
             customer_id: Number(customer.id),
@@ -5432,7 +5435,7 @@ async function handleCustomerKrystalCreate(event) {
         });
         setCustomerProvisioningStage(5);
         renderCustomerProvisioningRun(response?.data?.data);
-        showToast('Website creation started.');
+        showToast('Website creation started — this can take a couple of minutes. No need to wait here; check the website\'s page any time.');
         window.setTimeout(() => refreshCustomerProvisioningRun(false).catch(() => {}), 1200);
         await refreshWebsiteWizardViews(customer.id);
     } catch (error) {

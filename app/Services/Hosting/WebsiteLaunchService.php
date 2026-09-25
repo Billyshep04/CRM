@@ -111,6 +111,8 @@ class WebsiteLaunchService
             $result = $this->dns->inspect($run->production_domain, $run->expected_ip);
             $run->update(['dns_status' => $result]);
             if (! ($result['ready'] ?? false) && ! ($run->options['dns_override'] ?? false)) throw new ProvisioningWait('waiting_for_dns', 'DNS is not pointing to this Krystal account yet. Update the displayed records, then choose Check again.', config('hosting.dns_retry_minutes', 10));
+            $vhost = $this->http->inspectAddonVhost($run->production_domain);
+            if (! ($vhost['ready'] ?? false)) throw new ProvisioningWait('waiting_for_dns', 'DNS is correct, but this domain is not yet serving the website on this hosting account. This can happen briefly right after the domain is attached — the CRM will check again automatically.', config('hosting.dns_retry_minutes', 10));
         } elseif ($step->step === 'migrate_wordpress') {
             $result = $this->wordpress->migrateDomain($server, $account, $password, 'https://'.$run->development_domain, 'https://'.$run->production_domain, (bool) ($run->options['enable_indexing'] ?? false));
         } elseif ($step->step === 'trigger_autossl') {

@@ -139,7 +139,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             if (str_contains($request->url(), '/cpanel') && (int) $request['cpanel_jsonapi_apiversion'] === 2) return Http::response(['cpanelresult' => ['event' => ['result' => 1], 'data' => $addon ? [['domain' => 'site.test', 'dir' => '/public_html']] : []]]);
             if (str_contains($request->url(), '/cpanel')) return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => 'site-ab12.dev.web-stamp.co.uk', 'addon_domains' => $addon ? ['site.test'] : []]]]]);
             if (str_contains($request->url(), '/uapi_cpanel')) return Http::response(['metadata' => ['result' => 1], 'data' => ['uapi' => ['status' => 1, 'errors' => null, 'messages' => null, 'data' => null]]]);
-            return Http::response('ok', 200);
+            return Http::response(str_repeat('<p>Website content.</p>', 20), 200);
         });
         $dns = new class implements DnsResolver {
             public bool $ready = false;
@@ -193,6 +193,48 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
         app(WebsiteLaunchService::class)->process($run->fresh());
         $this->assertSame(1, $run->steps()->where('step', 'attach_production_domain')->value('attempts'));
         Http::assertNotSent(fn ($request) => str_contains($request->url(), '/modifyacct'));
+    }
+
+    public function test_check_dns_waits_when_the_production_domain_is_not_actually_serving_the_site_yet(): void
+    {
+        // Reproduces the real incident: cPanel reports the addon domain as
+        // successfully attached (DNS is correct, listaddondomains says
+        // public_html), but the underlying vhost never actually finished
+        // deploying, so the domain doesn't serve anything yet. The pipeline
+        // must catch this itself and wait/retry rather than sailing on to
+        // request a certificate for a domain that isn't really live.
+        $admin = $this->user('admin');
+        $customer = Customer::create(['name' => 'Client', 'email' => fake()->unique()->safeEmail(), 'billing_address' => '1 Test Road']);
+        $server = HostingServer::create(['name' => 'Krystal', 'provider' => 'krystal', 'api_type' => 'whm', 'hostname' => 'whm.example.test', 'credentials' => ['username' => 'reseller', 'token' => 'secret']]);
+        $account = HostingAccount::create(['hosting_server_id' => $server->id, 'external_id' => 'devusr', 'username' => 'devusr', 'primary_domain' => 'site-ab12.dev.web-stamp.co.uk', 'assigned_ip' => '192.0.2.10', 'status' => 'active', 'last_synced_at' => now(), 'automation_password_encrypted' => 'cpanel-secret']);
+        $website = Website::create(['customer_id' => $customer->id, 'hosting_server_id' => $server->id, 'hosting_account_id' => $account->id, 'name' => 'Development site', 'domain' => $account->primary_domain, 'current_domain' => $account->primary_domain, 'development_domain' => $account->primary_domain, 'environment' => 'development', 'login_url' => 'https://'.$account->primary_domain.'/wp-admin/', 'hosting_enabled' => true, 'wordpress_enabled' => true, 'monitoring_enabled' => false]);
+        $run = WebsiteLaunchRun::create(['public_id' => (string) Str::uuid(), 'website_id' => $website->id, 'hosting_account_id' => $account->id, 'initiated_by_user_id' => $admin->id, 'idempotency_key' => 'launch-broken-vhost', 'development_domain' => $account->primary_domain, 'production_domain' => 'site.test', 'expected_ip' => '192.0.2.10', 'options' => ['enable_indexing' => true]]);
+        foreach (['preflight', 'attach_production_domain', 'verify_production_domain', 'check_dns', 'trigger_autossl', 'check_ssl', 'migrate_wordpress', 'verify_production', 'redirect_development_domain'] as $step) $run->steps()->create(['step' => $step]);
+        $run->steps()->whereIn('step', ['preflight', 'attach_production_domain', 'verify_production_domain'])->update(['status' => 'complete']);
+        $run->update(['state' => 'checking_dns']);
+
+        $autosslTriggered = false;
+        Http::fake(function ($request) use (&$autosslTriggered) {
+            $url = $request->url();
+            if (str_contains($url, '/cpanel') && (int) $request['cpanel_jsonapi_apiversion'] === 2) return Http::response(['cpanelresult' => ['event' => ['result' => 1], 'data' => [['domain' => 'site.test', 'dir' => '/public_html']]]]);
+            if (str_contains($url, '/cpanel') && $request['cpanel_jsonapi_func'] === 'start_autossl_check') { $autosslTriggered = true; return Http::response(['metadata' => ['result' => 1]]); }
+            // The domain resolves and cPanel believes it's attached, but nothing is actually served yet.
+            if (str_starts_with($url, 'http://site.test')) return Http::response('', 200);
+            return Http::response('ok', 200);
+        });
+        $this->app->instance(DnsResolver::class, new class implements DnsResolver {
+            public function aRecords(string $domain): array { return ['192.0.2.10']; }
+            public function cnameRecords(string $domain): array { return []; }
+            public function nameservers(string $domain): array { return ['ns1.krystal.uk']; }
+        });
+
+        $result = app(WebsiteLaunchService::class)->process($run->fresh());
+
+        $this->assertSame('waiting_for_dns', $result->state);
+        $this->assertFalse($autosslTriggered);
+        $step = $result->steps()->where('step', 'check_dns')->firstOrFail();
+        $this->assertSame('waiting', $step->status);
+        $this->assertStringContainsString('not yet serving the website', $step->safe_message);
     }
 
     public function test_go_live_request_creates_a_resumable_run_without_changing_the_current_domain(): void
@@ -256,7 +298,7 @@ class WebsiteDevelopmentWorkflowTest extends TestCase
             if (str_contains($url, '/cpanel')) return Http::response(['metadata' => ['result' => 1], 'data' => ['result' => ['data' => ['main_domain' => $whm->primary_domain, 'addon_domains' => $whm->addon_domains]]]]);
             if (str_contains($url, '/uapi_cpanel')) { $data = $request['cpanel.function'] === 'get_restrictions' ? ['prefix' => $whm->username.'_', 'max_database_name_length' => 64, 'max_username_length' => 32] : null; return Http::response(['metadata' => ['result' => 1, 'reason' => 'OK'], 'data' => ['uapi' => ['status' => 1, 'errors' => null, 'messages' => null, 'data' => $data]]]); }
             if (str_starts_with($url, 'http://')) return Http::response('', 301, ['Location' => preg_replace('/^http:/', 'https:', $url)]);
-            if (str_starts_with($url, 'https://')) return Http::response('', 200);
+            if (str_starts_with($url, 'https://')) return Http::response(str_repeat('<p>Website content.</p>', 20), 200);
             return Http::response([], 404);
         });
 
