@@ -822,6 +822,34 @@ function updateSyncStatus(status) {
     }
 }
 
+function updateUrlForView(view) {
+    let hash = `#/${view}`;
+    if (view === 'website-detail' && state.currentWebsite?.id) hash += `/${state.currentWebsite.id}`;
+    else if (view === 'customer-detail' && state.currentCustomer?.id) hash += `/${state.currentCustomer.id}`;
+    else if (view === 'lead-detail' && state.currentLead?.id) hash += `/${state.currentLead.id}`;
+    else if (view === 'portal-website-detail' && state.currentPortalWebsite?.id) hash += `/${state.currentPortalWebsite.id}`;
+    if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
+}
+
+function restoreViewFromUrl(role) {
+    const match = window.location.hash.match(/^#\/([a-z-]+)(?:\/(\d+))?$/);
+    if (!match) return false;
+    const [, view, id] = match;
+    if (role === 'customer') {
+        if (view === 'portal-website-detail' && id) { state.currentPortalWebsite = { id: Number(id) }; setActiveView(view); return true; }
+        if (['portal', 'portal-websites', 'portal-proposals', 'portal-forms', 'portal-support', 'portal-admin'].includes(view)) { setActiveView(view); return true; }
+        return false;
+    }
+    if (view === 'website-detail' && id) { openWebsiteDetail(id); return true; }
+    if (view === 'customer-detail' && id) { openCustomerDetail(Number(id)); return true; }
+    if (view === 'lead-detail' && id) { openLeadDetail(id); return true; }
+    if (!viewMeta[view]) return false;
+    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'].includes(view) && role !== 'admin') return false;
+    if (view === 'monthly-tasks' && role !== 'staff') return false;
+    setActiveView(view);
+    return true;
+}
+
 function setActiveView(view) {
     if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'].includes(view) && state.role !== 'admin') {
         return;
@@ -834,6 +862,7 @@ function setActiveView(view) {
     const meta = viewMeta[view] || viewMeta.dashboard;
     state.view = view;
     const navView = view === 'customer-detail' ? 'customers' : (view === 'website-detail' ? 'websites' : (view === 'lead-detail' ? 'lead-discovery' : view));
+    updateUrlForView(view);
 
     dom.views.forEach((section) => {
         section.classList.toggle('active', section.dataset.view === view);
@@ -2879,10 +2908,10 @@ async function loadSession() {
         await Promise.all([loadPreferences(), loadBrand()]);
 
         if (role === 'customer') {
-            setActiveView('portal');
+            if (!restoreViewFromUrl(role)) setActiveView('portal');
         } else {
             loadCustomerOptions();
-            setActiveView('dashboard');
+            if (!restoreViewFromUrl(role)) setActiveView('dashboard');
             loadStaffStats();
         }
     } catch (error) {
