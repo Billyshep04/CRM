@@ -1711,6 +1711,46 @@ body[data-role="staff"] .staff-member-only {
     color: #bbf7d0;
 }
 
+.background-task-pills {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    z-index: 9998;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.background-task-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: rgba(15, 23, 42, 0.96);
+    color: #e2e8f0;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.35);
+}
+
+.background-task-pill::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #38bdf8;
+    animation: backgroundTaskPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes backgroundTaskPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.35; }
+}
+
 @keyframes floatIn {
     from {
         opacity: 0;

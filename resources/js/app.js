@@ -268,6 +268,8 @@ const dom = {
     websiteGoLiveResult: document.getElementById('website-go-live-result'),
     websiteGoLiveChecklist: document.getElementById('website-go-live-checklist'),
     websiteGoLiveStatus: document.getElementById('website-go-live-status'),
+    websiteGoLivePill: document.getElementById('website-go-live-pill'),
+    websiteCreationPill: document.getElementById('website-creation-pill'),
     websiteDeleteOpen: document.getElementById('website-delete-open'),
     websiteDeleteModal: document.getElementById('website-delete-modal'),
     websiteDeleteClose: document.getElementById('website-delete-close'),
@@ -570,9 +572,11 @@ const state = {
     hostingOptions: { servers: [], profiles: [], mode: 'mock', live_enabled: false },
     customerProvisioningStage: 1,
     customerProvisioningRunId: null,
+    customerProvisioningRunState: null,
     customerWebsiteTargetCustomer: null,
     customerDevelopmentDomain: null,
     websiteLaunchRunId: null,
+    websiteLaunchRunState: null,
     krystalDomains: [],
     currentLead: null,
     filters: {
@@ -822,6 +826,14 @@ function updateSyncStatus(status) {
     }
 }
 
+function updateBackgroundTaskPills() {
+    const inWebsitesSection = state.view === 'websites' || state.view === 'website-detail';
+    const creationActive = Boolean(inWebsitesSection && state.customerProvisioningRunId && !['complete', 'failed'].includes(state.customerProvisioningRunState) && dom.customerWebsiteModal?.hidden);
+    const goLiveActive = Boolean(inWebsitesSection && state.websiteLaunchRunId && !['complete', 'failed'].includes(state.websiteLaunchRunState) && dom.websiteGoLiveModal?.hidden);
+    if (dom.websiteCreationPill) dom.websiteCreationPill.hidden = !creationActive;
+    if (dom.websiteGoLivePill) dom.websiteGoLivePill.hidden = !goLiveActive;
+}
+
 function updateUrlForView(view) {
     let hash = `#/${view}`;
     if (view === 'website-detail' && state.currentWebsite?.id) hash += `/${state.currentWebsite.id}`;
@@ -863,6 +875,7 @@ function setActiveView(view) {
     state.view = view;
     const navView = view === 'customer-detail' ? 'customers' : (view === 'website-detail' ? 'websites' : (view === 'lead-detail' ? 'lead-discovery' : view));
     updateUrlForView(view);
+    updateBackgroundTaskPills();
 
     dom.views.forEach((section) => {
         section.classList.toggle('active', section.dataset.view === view);
@@ -2849,6 +2862,8 @@ function setWebsiteLaunchStage(stage) {
 function renderWebsiteLaunch(run) {
     if (!run) return;
     state.websiteLaunchRunId = run.id;
+    state.websiteLaunchRunState = run.state;
+    updateBackgroundTaskPills();
     setWebsiteLaunchStage(3);
     const dns = run.dns_status || {};
     const root = dns.root || {};
@@ -5278,13 +5293,20 @@ async function generateCustomerDevelopmentDomain() {
 
 function closeCustomerWebsiteModal() {
     if (dom.customerWebsiteModal) dom.customerWebsiteModal.hidden = true;
+    if (state.customerProvisioningRunId && !['complete', 'failed'].includes(state.customerProvisioningRunState)) {
+        // A creation is still running in the background — minimize instead of losing track of it.
+        updateBackgroundTaskPills();
+        return;
+    }
     resetCustomerWebsiteForm();
     dom.customerWebsiteKrystalForm?.reset();
     state.customerProvisioningRunId = null;
+    state.customerProvisioningRunState = null;
     state.customerDevelopmentDomain = null;
     state.customerWebsiteTargetCustomer = null;
     setCustomerProvisioningStage(1);
     setCustomerWebsiteMode('choice');
+    updateBackgroundTaskPills();
 }
 
 function populateCustomerKrystalPackages() {
@@ -5333,6 +5355,14 @@ async function refreshWebsiteWizardViews(customerId) {
 
 async function openCustomerWebsiteModal({ chooseCustomer = false } = {}) {
     if (!dom.customerWebsiteModal || (!chooseCustomer && !state.currentCustomer?.id)) return;
+    if (!chooseCustomer && state.customerProvisioningRunId && !['complete', 'failed'].includes(state.customerProvisioningRunState)) {
+        // Resume the creation already running in the background instead of resetting it.
+        dom.customerWebsiteModal.hidden = false;
+        setCustomerProvisioningStage(5);
+        updateBackgroundTaskPills();
+        refreshCustomerProvisioningRun(false).catch(() => {});
+        return;
+    }
     resetCustomerWebsiteForm();
     dom.customerWebsiteModal.hidden = false;
     await loadHostingOptions();
@@ -5359,6 +5389,8 @@ async function openCustomerWebsiteModal({ chooseCustomer = false } = {}) {
 function renderCustomerProvisioningRun(run) {
     if (!run) return;
     state.customerProvisioningRunId = run.id;
+    state.customerProvisioningRunState = run.state;
+    updateBackgroundTaskPills();
     const preview = run.mode === 'mock';
     const labels = { waiting_for_dns: 'DNS connection pending', waiting_for_ssl: 'SSL pending', complete: preview ? 'Preview complete — nothing was created' : 'Website online', failed: 'Setup needs attention' };
     const provider = run.dns_status?.provider?.label || run.dns_provider;
@@ -9082,13 +9114,33 @@ if (dom.websiteDetailCheck) dom.websiteDetailCheck.addEventListener('click', asy
 });
 if (dom.websiteGoLiveOpen) dom.websiteGoLiveOpen.addEventListener('click', () => {
     if (!state.currentWebsite || !dom.websiteGoLiveModal || !dom.websiteGoLiveForm) return;
+    if (state.websiteLaunchRunId && !['complete', 'failed'].includes(state.websiteLaunchRunState)) {
+        // Resume the launch already running in the background instead of resetting it.
+        dom.websiteGoLiveModal.hidden = false;
+        updateBackgroundTaskPills();
+        refreshWebsiteLaunch(false).catch(() => {});
+        return;
+    }
     dom.websiteGoLiveForm.reset(); state.websiteLaunchRunId = null; setWebsiteLaunchStage(1);
     dom.websiteGoLiveDevelopmentDomain.textContent = state.currentWebsite.development_domain || state.currentWebsite.domain;
     dom.websiteGoLiveModal.hidden = false; setFormStatus(dom.websiteGoLiveStatus, '');
 });
-const closeWebsiteGoLive = () => { if (dom.websiteGoLiveModal) dom.websiteGoLiveModal.hidden = true; };
+const closeWebsiteGoLive = () => { if (dom.websiteGoLiveModal) dom.websiteGoLiveModal.hidden = true; updateBackgroundTaskPills(); };
 if (dom.websiteGoLiveClose) dom.websiteGoLiveClose.addEventListener('click', closeWebsiteGoLive);
 if (dom.websiteGoLiveModal) dom.websiteGoLiveModal.addEventListener('click', event => { if (event.target === dom.websiteGoLiveModal) closeWebsiteGoLive(); });
+if (dom.websiteGoLivePill) dom.websiteGoLivePill.addEventListener('click', () => {
+    if (!dom.websiteGoLiveModal) return;
+    dom.websiteGoLiveModal.hidden = false;
+    updateBackgroundTaskPills();
+    refreshWebsiteLaunch(false).catch(() => {});
+});
+if (dom.websiteCreationPill) dom.websiteCreationPill.addEventListener('click', () => {
+    if (!dom.customerWebsiteModal) return;
+    dom.customerWebsiteModal.hidden = false;
+    setCustomerProvisioningStage(5);
+    updateBackgroundTaskPills();
+    refreshCustomerProvisioningRun(false).catch(() => {});
+});
 if (dom.websiteGoLiveForm) dom.websiteGoLiveForm.addEventListener('click', async event => {
     const preflight = event.target.closest('[data-launch-preflight]');
     const back = event.target.closest('[data-launch-back]');
