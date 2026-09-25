@@ -2254,6 +2254,11 @@
 
         <div id="app-toast" class="toast" role="status" aria-live="polite"></div>
 
+        <div id="background-task-pills" class="background-task-pills">
+            <button type="button" id="website-creation-pill" class="background-task-pill" hidden>Site creation</button>
+            <button type="button" id="website-go-live-pill" class="background-task-pill" hidden>Go Live</button>
+        </div>
+
         <div class="crm-modal-backdrop" id="staff-user-detail-modal" hidden>
             <section class="crm-modal customer-form-modal staff-user-detail-modal" role="dialog" aria-modal="true" aria-labelledby="staff-user-detail-title">
                 <div class="crm-modal-header">
