@@ -586,7 +586,8 @@ npm run build
 </code></pre>
 
     <h3>Queues</h3>
-    <pre><code>php artisan queue:work</code></pre>
+    <pre><code>php artisan queue:work --queue=discovery,default,audit</code></pre>
+    <p>List every queue the app uses: lead discovery runs on <code>discovery</code> and website audits on <code>audit</code>. A bare <code>queue:work</code> only processes <code>default</code>, so discovery runs stay pending.</p>
 
     <h3>Scheduler (Production Cron)</h3>
     <pre><code>* * * * * php /path/to/artisan schedule:run &gt;&gt; /dev/null 2&gt;&amp;1</code></pre>

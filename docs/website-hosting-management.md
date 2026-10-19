@@ -4,12 +4,20 @@ This module is local-first and adds a central website register, historical monit
 
 ## Local setup
 
-Run migrations, then keep the normal queue worker and scheduler active:
+Run migrations, then keep the queue worker and scheduler active:
 
 ```bash
 php artisan migrate
-php artisan queue:work
+php artisan queue:work --queue=discovery,default,audit
 php artisan schedule:work
+```
+
+The worker must list every queue the app uses. Lead discovery runs on `discovery` (`LEAD_DISCOVERY_QUEUE`) and website audits on `audit` (`WEBSITE_AUDIT_QUEUE`). A bare `queue:work` only processes `default`, so discovery runs stay `pending` forever.
+
+On cPanel shared hosting there is no Supervisor, so start a worker every minute from cron:
+
+```cron
+* * * * * cd /home/webstamp/public_html/crm && /usr/local/bin/php -d disable_functions= artisan queue:work --queue=discovery,default,audit --stop-when-empty --tries=3 --timeout=600 >> storage/logs/queue-worker.log 2>&1
 ```
 
 The scheduler queues lightweight HTTP checks every 10 minutes and fuller checks every four hours. Only sites with hosting or management enabled are monitored. Two consecutive failures are required before a critical outage incident opens; recovery resolves the existing incident rather than creating duplicates.
