@@ -2056,8 +2056,21 @@ function renderStaffTracking() {
 
 async function loadPortalInvoices() {
     try {
-        const invoices = await api.get('/api/portal/invoices?per_page=6');
-        const items = invoices?.data?.data ?? [];
+        const perPage = 100;
+        let page = 1;
+        let lastPage = 1;
+        const items = [];
+
+        do {
+            const query = buildQuery({ per_page: perPage, page });
+            const response = await api.get(`/api/portal/invoices${query}`);
+            const pageItems = response?.data?.data ?? [];
+            items.push(...pageItems);
+            const meta = response?.data?.meta || {};
+            lastPage = meta.last_page ?? page;
+            page += 1;
+        } while (page <= lastPage);
+
         state.portalInvoices = items;
         renderPortalInvoices(items, 'No invoices available.');
     } catch (error) {
