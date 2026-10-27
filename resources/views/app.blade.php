@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" data-font="inter" data-density="compact" data-radius="default" data-sidebar="light" data-nav-labels="on" data-motion="on">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +9,7 @@
         <link rel="apple-touch-icon" href="/favicon.png?v=2">
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body data-auth="guest">
@@ -97,46 +97,49 @@
             <aside class="sidebar">
                 <div class="sidebar-header">
                     <div class="logo-dot"></div>
-                    <div>
+                    <div class="sidebar-brand-text">
                         <div class="brand-title">WebStamp</div>
                         <div class="brand-subtitle">CRM Suite</div>
                     </div>
                 </div>
                 <nav class="nav-stack">
-                    <a href="#" class="nav-item active" data-view="dashboard">Dashboard</a>
-                    <a href="#" class="nav-item staff-only" data-view="customers">Customers</a>
-                    <a href="#" class="nav-item staff-only" data-view="lead-discovery">Lead Discovery</a>
-                    <a href="#" class="nav-item staff-only" data-view="revenue-opportunities">Revenue Opportunities</a>
-                    <a href="#" class="nav-item staff-only" data-view="jobs">Jobs</a>
-                    <a href="#" class="nav-item staff-only" data-view="websites">Websites</a>
-                    <a href="#" class="nav-item staff-only" data-view="subscriptions">Subscriptions</a>
-                    <a href="#" class="nav-item staff-only" data-view="costs">Costs</a>
-                    <a href="#" class="nav-item staff-only" data-view="proposals">Proposals</a>
-                    <a href="#" class="nav-item staff-only" data-view="invoices">Invoices</a>
-                    <a href="#" class="nav-item staff-only" data-view="tasks">Tasks</a>
-                    <a href="#" class="nav-item admin-only" data-view="monthly-finance">Monthly Finance</a>
-                    <a href="#" class="nav-item staff-member-only" data-view="monthly-tasks">Monthly Tasks</a>
-                    <a href="#" class="nav-item admin-only" data-view="staff-tracking">Staff</a>
-                    <a href="#" class="nav-item staff-only" data-view="admin">Admin</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal">My Portal</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-websites">Websites</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-proposals" id="portal-proposals-nav">
-                        Proposals
-                        <span class="portal-forms-notification" id="portal-proposals-notification" aria-hidden="true" hidden></span>
-                    </a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-forms" id="portal-forms-nav">
-                        Forms
-                        <span class="portal-forms-notification" id="portal-forms-notification" aria-hidden="true" hidden></span>
-                    </a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-support">Support</a>
-                    <a href="#" class="nav-item customer-only" data-view="portal-admin">Admin</a>
-                    <button type="button" class="nav-item nav-logout" id="logout-button-mobile">Logout</button>
+                    <a href="#" class="nav-item active" data-view="dashboard" title="Dashboard"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/></svg><span class="nav-label">Dashboard</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="tasks" title="Tasks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m8 12 3 3 5-6"/></svg><span class="nav-label">Tasks</span></a>
+                    <a href="#" class="nav-item staff-member-only" data-view="monthly-tasks" title="Monthly Tasks"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="m9 16 2 2 4-4"/></svg><span class="nav-label">Monthly Tasks</span></a>
+                    <div class="nav-section staff-only">Sales</div>
+                    <a href="#" class="nav-item staff-only" data-view="customers" title="Customers"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="nav-label">Customers</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="lead-discovery" title="Lead Discovery"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg><span class="nav-label">Lead Discovery</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="revenue-opportunities" title="Revenue Opportunities"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg><span class="nav-label">Revenue Opportunities</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="proposals" title="Proposals"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg><span class="nav-label">Proposals</span></a>
+                    <div class="nav-section staff-only">Delivery</div>
+                    <a href="#" class="nav-item staff-only" data-view="jobs" title="Jobs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></svg><span class="nav-label">Jobs</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="websites" title="Websites"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="nav-label">Websites</span></a>
+                    <div class="nav-section staff-only">Finance</div>
+                    <a href="#" class="nav-item staff-only" data-view="invoices" title="Invoices"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2v20l3-2 3 2 2-2 2 2 3-2 3 2V2l-3 2-3-2-2 2-2-2-3 2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span class="nav-label">Invoices</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="subscriptions" title="Subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg><span class="nav-label">Subscriptions</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="costs" title="Costs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M21 9h-6a3 3 0 0 0 0 6h6z"/></svg><span class="nav-label">Costs</span></a>
+                    <a href="#" class="nav-item admin-only" data-view="monthly-finance" title="Monthly Finance"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5"/><rect x="12" y="8" width="3" height="9"/><rect x="17" y="5" width="3" height="12"/></svg><span class="nav-label">Monthly Finance</span></a>
+                    <div class="nav-section admin-only">Team</div>
+                    <a href="#" class="nav-item admin-only" data-view="staff-tracking" title="Staff"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg><span class="nav-label">Staff</span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal" title="My Portal"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span class="nav-label">My Portal</span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-websites" title="Websites"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="nav-label">Websites</span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-proposals" id="portal-proposals-nav" title="Proposals"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg><span class="nav-label">Proposals</span><span class="portal-forms-notification" id="portal-proposals-notification" aria-hidden="true" hidden></span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-forms" id="portal-forms-nav" title="Forms"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></svg><span class="nav-label">Forms</span><span class="portal-forms-notification" id="portal-forms-notification" aria-hidden="true" hidden></span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-support" title="Support"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><path d="m4.93 4.93 4.24 4.24M14.83 14.83l4.24 4.24M14.83 9.17l4.24-4.24M4.93 19.07l4.24-4.24"/></svg><span class="nav-label">Support</span></a>
+                    <div class="nav-divider"></div>
+                    <a href="#" class="nav-item staff-only" data-view="admin" title="Admin"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="nav-label">Admin</span></a>
+                    <a href="#" class="nav-item customer-only" data-view="portal-admin" title="Admin"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="nav-label">Admin</span></a>
+                    <button type="button" class="nav-item nav-logout" id="logout-button-mobile"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg><span class="nav-label">Logout</span></button>
                 </nav>
                 <div class="sidebar-footer">
-                    <div class="status-card">
-                        <div class="status-label">Sync Status</div>
-                        <div class="status-value" id="sync-status">Connected</div>
+                    <div class="status-card" title="Sync status">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span class="status-label">Sync</span>
+                        <span class="status-value" id="sync-status">Connected</span>
                     </div>
+                    <button type="button" class="sidebar-collapse" id="sidebar-collapse-toggle" aria-label="Collapse sidebar" aria-pressed="false" title="Collapse sidebar">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg>
+                    </button>
                 </div>
             </aside>
             <main class="main">
@@ -1612,87 +1615,89 @@
                 </section>
 
                 <section class="view staff-view admin-view" data-view="admin">
-                    <section class="content-grid admin-panel">
-                        <div class="card admin-only organisation-settings-card">
-                            <div class="card-header"><div><div class="card-title">CRM customisation</div><div class="card-subtitle">Brand, regional, document, portal and dashboard defaults for this organisation.</div></div></div>
-                            <form id="organisation-settings-form" class="form-stack">
-                                <details open><summary>Company and branding</summary><div class="settings-fields">
-                                    <label class="field"><span>Company name</span><input name="company_name" required maxlength="120"></label>
-                                    <label class="field"><span>Trading name</span><input name="trading_name" maxlength="120"></label>
-                                    <label class="field"><span>Business email</span><input name="business_email" type="email"></label>
-                                    <label class="field"><span>Phone</span><input name="business_phone"></label>
-                                    <label class="field"><span>Website</span><input name="website_url" type="url"></label>
-                                    <label class="field"><span>Company number</span><input name="company_number"></label>
-                                    <label class="field"><span>VAT number</span><input name="vat_number"></label>
-                                    <label class="field"><span>Login title</span><input name="login_title" required></label>
-                                    <label class="field"><span>Primary colour</span><input name="primary_colour" type="color"></label>
-                                    <label class="field"><span>Accent colour</span><input name="accent_colour" type="color"></label>
-                                    <label class="field"><span>Light page background</span><input name="background_colour" type="color"></label>
-                                    <label class="field"><span>Light card background</span><input name="surface_colour" type="color"></label>
-                                    <label class="field"><span>Dark page background</span><input name="dark_background_colour" type="color"></label>
-                                    <label class="field"><span>Dark card background</span><input name="dark_surface_colour" type="color"></label>
-                                    <label class="field settings-field-wide"><span>Business address</span><textarea name="business_address" rows="3"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Footer text</span><input name="footer_text" maxlength="500"></label>
-                                </div></details>
-                                <details><summary>Regional and financial defaults</summary><div class="settings-fields">
-                                    <label class="field"><span>Currency</span><select name="currency"><option>GBP</option><option>EUR</option><option>USD</option></select></label>
-                                    <label class="field"><span>Timezone</span><select name="timezone"><option>Europe/London</option><option>Europe/Dublin</option><option>America/New_York</option><option>America/Los_Angeles</option><option>UTC</option></select></label>
-                                    <label class="field"><span>Date format</span><select name="date_format"><option value="d/m/Y">DD/MM/YYYY</option><option value="m/d/Y">MM/DD/YYYY</option><option value="Y-m-d">YYYY-MM-DD</option></select></label>
-                                    <label class="field"><span>Financial year starts</span><select name="financial_year_start_month"><option value="1">January</option><option value="4">April</option><option value="7">July</option><option value="10">October</option></select></label>
-                                </div></details>
-                                <details><summary>Invoices and proposals</summary><div class="settings-fields">
-                                    <label class="field"><span>Invoice prefix</span><input name="invoice_prefix" required></label><label class="field"><span>Payment terms (days)</span><input name="invoice_payment_terms_days" type="number" min="0"></label>
-                                    <label class="field"><span>Default tax rate (%)</span><input name="default_tax_rate" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>Proposal prefix</span><input name="proposal_prefix" required></label>
-                                    <label class="field"><span>Proposal validity (days)</span><input name="proposal_validity_days" type="number" min="1"></label>
-                                    <label class="field settings-field-wide"><span>Default invoice notes</span><textarea name="invoice_notes" rows="3"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Invoice footer</span><textarea name="invoice_footer" rows="2"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Default proposal terms</span><textarea name="proposal_terms" rows="4"></textarea></label>
-                                </div></details>
-                                <details><summary>Email defaults and templates</summary><div class="settings-fields">
-                                    <label class="field"><span>Sender name</span><input name="sender_name" required></label><label class="field"><span>Reply-to email</span><input name="reply_to_email" type="email"></label>
-                                    <label class="field settings-field-wide"><span>Email signature</span><textarea name="email_signature" rows="3"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Invoice email template</span><textarea name="invoice_email_template" rows="4" placeholder="Use placeholders such as @{{customer_name}} and @{{invoice_number}}"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Proposal email template</span><textarea name="proposal_email_template" rows="4"></textarea></label>
-                                    <label class="field settings-field-wide"><span>Reminder email template</span><textarea name="reminder_email_template" rows="4"></textarea></label>
-                                </div></details>
-                                <details><summary>Customer portal</summary><div class="settings-fields">
-                                    <label class="field settings-field-wide"><span>Welcome message</span><textarea name="portal_welcome_message" rows="3"></textarea></label><label class="field"><span>Support email</span><input name="portal_support_email" type="email"></label>
-                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input type="checkbox" name="portal_show_jobs"><span>Show jobs</span></label><label class="check-row"><input type="checkbox" name="portal_show_invoices"><span>Show invoices</span></label><label class="check-row"><input type="checkbox" name="portal_show_proposals"><span>Show proposals</span></label><label class="check-row"><input type="checkbox" name="portal_show_subscriptions"><span>Show subscriptions</span></label><label class="check-row"><input type="checkbox" name="portal_allow_invoice_payment"><span>Allow invoice payment updates</span></label><label class="check-row"><input type="checkbox" name="portal_allow_proposal_approval"><span>Allow proposal approval</span></label></div>
-                                </div></details>
-                                <details><summary>Dashboard and security defaults</summary><div class="settings-fields">
-                                    <label class="field"><span>Session timeout (minutes)</span><input name="session_timeout_minutes" type="number" min="15"></label><label class="field"><span>Default reporting period</span><select name="default_dashboard_period"><option value="week">Week</option><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option></select></label>
-                                    <label class="field"><span>MRR target</span><input name="mrr_target" type="number" min="0" step="0.01"></label><label class="field"><span>Revenue target</span><input name="revenue_target" type="number" min="0" step="0.01"></label>
-                                    <label class="field"><span>Overdue warning (days)</span><input name="overdue_warning_days" type="number" min="0"></label><label class="field"><span>Lead inactivity warning (days)</span><input name="lead_inactivity_days" type="number" min="1"></label>
-                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input type="checkbox" name="show_today_overdue"><span>Show overdue actions in Today</span></label><label class="check-row"><input type="checkbox" name="show_today_upcoming"><span>Show upcoming actions</span></label><label class="check-row"><input type="checkbox" name="show_today_invoices"><span>Show invoices</span></label><label class="check-row"><input type="checkbox" name="show_today_proposals"><span>Show proposals</span></label></div>
-                                </div></details>
-                                <div id="organisation-settings-status" class="form-hint" aria-live="polite"></div><button class="btn btn-primary" type="submit">Save CRM customisation</button>
-                            </form>
-                        </div>
-                        <div class="card wide admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Brand settings</div>
-                                    <div class="card-subtitle">Upload a new logo for the top navigation.</div>
-                                </div>
-                            </div>
-                            <form id="logo-upload-form" class="form-stack">
+                    <form id="organisation-settings-form" class="admin-only" hidden></form>
+                    <div class="settings-layout">
+                        <nav class="settings-nav" id="settings-nav" aria-label="Settings sections"><div class="settings-nav-group admin-only"><div class="settings-nav-heading">Organisation</div><a href="#settings-appearance" class="settings-nav-link" data-settings-target="settings-appearance">Appearance</a><a href="#settings-company" class="settings-nav-link" data-settings-target="settings-company">Company & branding</a><a href="#settings-regional" class="settings-nav-link" data-settings-target="settings-regional">Regional</a><a href="#settings-documents" class="settings-nav-link" data-settings-target="settings-documents">Invoices & proposals</a><a href="#settings-email-templates" class="settings-nav-link" data-settings-target="settings-email-templates">Email templates</a><a href="#settings-portal" class="settings-nav-link" data-settings-target="settings-portal">Customer portal</a><a href="#settings-dashboard" class="settings-nav-link" data-settings-target="settings-dashboard">Dashboard & security</a></div><div class="settings-nav-group admin-only"><div class="settings-nav-heading">Integrations</div><a href="#settings-email-delivery" class="settings-nav-link" data-settings-target="settings-email-delivery">Email delivery</a><a href="#settings-payment" class="settings-nav-link" data-settings-target="settings-payment">Payment details</a></div><div class="settings-nav-group admin-only"><div class="settings-nav-heading">Forms</div><a href="#settings-proposal-forms" class="settings-nav-link" data-settings-target="settings-proposal-forms">Proposal forms</a><a href="#settings-customer-forms" class="settings-nav-link" data-settings-target="settings-customer-forms">Customer forms</a></div><div class="settings-nav-group "><div class="settings-nav-heading">Account</div><a href="#settings-profile" class="settings-nav-link" data-settings-target="settings-profile">Profile</a><a href="#settings-password" class="settings-nav-link" data-settings-target="settings-password">Password</a></div></nav>
+                        <div class="settings-content">
+                        <section class="settings-section admin-only" id="settings-appearance">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Appearance</h2><p class="settings-section-subtitle">Colours, typography, density and navigation style for everyone using this CRM.</p></div></div>
+                            <div class="settings-section-body"><div class="appearance-grid"><div class="appearance-controls"><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Colour preset</div><div class="settings-row-hint">Start from a preset, then fine-tune below.</div></div><div class="settings-row-control"><div class="preset-grid"><button type="button" class="preset-swatch" data-preset-primary="#35b8ef" data-preset-accent="#1477a8"><span class="preset-chip" style="background:linear-gradient(135deg,#35b8ef 0 50%,#1477a8 50% 100%)"></span>Web Stamp</button><button type="button" class="preset-swatch" data-preset-primary="#f6821f" data-preset-accent="#c2410c"><span class="preset-chip" style="background:linear-gradient(135deg,#f6821f 0 50%,#c2410c 50% 100%)"></span>Ember</button><button type="button" class="preset-swatch" data-preset-primary="#10b981" data-preset-accent="#047857"><span class="preset-chip" style="background:linear-gradient(135deg,#10b981 0 50%,#047857 50% 100%)"></span>Emerald</button><button type="button" class="preset-swatch" data-preset-primary="#8b5cf6" data-preset-accent="#6d28d9"><span class="preset-chip" style="background:linear-gradient(135deg,#8b5cf6 0 50%,#6d28d9 50% 100%)"></span>Violet</button><button type="button" class="preset-swatch" data-preset-primary="#f43f5e" data-preset-accent="#be123c"><span class="preset-chip" style="background:linear-gradient(135deg,#f43f5e 0 50%,#be123c 50% 100%)"></span>Rose</button><button type="button" class="preset-swatch" data-preset-primary="#475569" data-preset-accent="#1e293b"><span class="preset-chip" style="background:linear-gradient(135deg,#475569 0 50%,#1e293b 50% 100%)"></span>Graphite</button></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Brand colours</div><div class="settings-row-hint">Primary is used for buttons, links and highlights.</div></div><div class="settings-row-control"><div class="colour-fields"><label class="colour-field"><input form="organisation-settings-form" name="primary_colour" type="color"><span>Primary</span><code data-colour-value="primary_colour"></code></label><label class="colour-field"><input form="organisation-settings-form" name="accent_colour" type="color"><span>Accent</span><code data-colour-value="accent_colour"></code></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Font</div><div class="settings-row-hint">Typeface used across the CRM.</div></div><div class="settings-row-control"><div class="segmented" role="radiogroup"><label><input form="organisation-settings-form" type="radio" name="ui_font" value="inter"><span>Inter</span></label><label><input form="organisation-settings-form" type="radio" name="ui_font" value="manrope"><span>Manrope</span></label><label><input form="organisation-settings-form" type="radio" name="ui_font" value="dm-sans"><span>DM Sans</span></label><label><input form="organisation-settings-form" type="radio" name="ui_font" value="system"><span>System</span></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Density</div><div class="settings-row-hint">Compact fits more information on screen.</div></div><div class="settings-row-control"><div class="segmented" role="radiogroup"><label><input form="organisation-settings-form" type="radio" name="ui_density" value="compact"><span>Compact</span></label><label><input form="organisation-settings-form" type="radio" name="ui_density" value="comfortable"><span>Comfortable</span></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Corners</div><div class="settings-row-hint">Roundness of cards, buttons and inputs.</div></div><div class="settings-row-control"><div class="segmented" role="radiogroup"><label><input form="organisation-settings-form" type="radio" name="ui_radius" value="sharp"><span>Sharp</span></label><label><input form="organisation-settings-form" type="radio" name="ui_radius" value="default"><span>Default</span></label><label><input form="organisation-settings-form" type="radio" name="ui_radius" value="rounded"><span>Rounded</span></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Sidebar</div><div class="settings-row-hint">Background style of the main navigation.</div></div><div class="settings-row-control"><div class="segmented" role="radiogroup"><label><input form="organisation-settings-form" type="radio" name="ui_sidebar_style" value="light"><span>Light</span></label><label><input form="organisation-settings-form" type="radio" name="ui_sidebar_style" value="dark"><span>Dark</span></label><label><input form="organisation-settings-form" type="radio" name="ui_sidebar_style" value="brand"><span>Brand</span></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Navigation</div><div class="settings-row-hint">Extra display options.</div></div><div class="settings-row-control"><div class="settings-checks"><label class="switch-row"><input form="organisation-settings-form" type="checkbox" name="ui_nav_labels"><span>Show section headings</span></label><label class="switch-row"><input form="organisation-settings-form" type="checkbox" name="ui_animations"><span>Enable animations</span></label></div></div></div><div class="settings-row"><div class="settings-row-label"><div class="settings-row-title">Backgrounds</div><div class="settings-row-hint">Page and card colours for each theme.</div></div><div class="settings-row-control"><div class="colour-fields"><label class="colour-field"><input form="organisation-settings-form" name="background_colour" type="color"><span>Light page</span><code data-colour-value="background_colour"></code></label><label class="colour-field"><input form="organisation-settings-form" name="surface_colour" type="color"><span>Light card</span><code data-colour-value="surface_colour"></code></label><label class="colour-field"><input form="organisation-settings-form" name="dark_background_colour" type="color"><span>Dark page</span><code data-colour-value="dark_background_colour"></code></label><label class="colour-field"><input form="organisation-settings-form" name="dark_surface_colour" type="color"><span>Dark card</span><code data-colour-value="dark_surface_colour"></code></label></div></div></div></div><div class="appearance-preview-wrap"><div class="settings-row-title">Live preview</div><div class="appearance-preview" aria-hidden="true"><div class="ap-sidebar"><span class="ap-logo"></span><span class="ap-nav active"></span><span class="ap-nav"></span><span class="ap-nav"></span><span class="ap-nav"></span></div><div class="ap-main"><div class="ap-top"><span></span></div><div class="ap-cards"><div class="ap-card"><i></i><b></b></div><div class="ap-card"><i></i><b></b></div></div><div class="ap-table"><span></span><span></span><span></span></div><div class="ap-btn">Save</div></div></div><div class="settings-row-hint">Changes preview instantly across the CRM. Save to keep them.</div></div></div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-company">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Company & branding</h2><p class="settings-section-subtitle">Business details used on documents, emails and the login screen.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field"><span>Company name</span><input form="organisation-settings-form" name="company_name" required maxlength="120"></label>
+                                    <label class="field"><span>Trading name</span><input form="organisation-settings-form" name="trading_name" maxlength="120"></label>
+                                    <label class="field"><span>Business email</span><input form="organisation-settings-form" name="business_email" type="email"></label>
+                                    <label class="field"><span>Phone</span><input form="organisation-settings-form" name="business_phone"></label>
+                                    <label class="field"><span>Website</span><input form="organisation-settings-form" name="website_url" type="url"></label>
+                                    <label class="field"><span>Company number</span><input form="organisation-settings-form" name="company_number"></label>
+                                    <label class="field"><span>VAT number</span><input form="organisation-settings-form" name="vat_number"></label>
+                                    <label class="field"><span>Login title</span><input form="organisation-settings-form" name="login_title" required></label>
+                                    <label class="field settings-field-wide"><span>Business address</span><textarea form="organisation-settings-form" name="business_address" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Footer text</span><input form="organisation-settings-form" name="footer_text" maxlength="500"></label>
+                                </div><div class="settings-subsection"><div class="settings-row-title">Logo</div><div class="settings-row-hint">Shown in the top navigation. PNG, JPG or SVG.</div><form id="logo-upload-form" class="form-stack">
                                 <label class="field">
                                     <span>Logo file (PNG, JPG, SVG)</span>
                                     <input type="file" name="logo" accept=".png,.jpg,.jpeg,.svg" required>
                                 </label>
                                 <div id="logo-upload-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Upload logo</button>
-                            </form>
+                            </form></div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-regional">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Regional & financial</h2><p class="settings-section-subtitle">Currency, dates and the start of your financial year.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field"><span>Currency</span><select form="organisation-settings-form" name="currency"><option>GBP</option><option>EUR</option><option>USD</option></select></label>
+                                    <label class="field"><span>Timezone</span><select form="organisation-settings-form" name="timezone"><option>Europe/London</option><option>Europe/Dublin</option><option>America/New_York</option><option>America/Los_Angeles</option><option>UTC</option></select></label>
+                                    <label class="field"><span>Date format</span><select form="organisation-settings-form" name="date_format"><option value="d/m/Y">DD/MM/YYYY</option><option value="m/d/Y">MM/DD/YYYY</option><option value="Y-m-d">YYYY-MM-DD</option></select></label>
+                                    <label class="field"><span>Financial year starts</span><select form="organisation-settings-form" name="financial_year_start_month"><option value="1">January</option><option value="4">April</option><option value="7">July</option><option value="10">October</option></select></label>
+                                </div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-documents">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Invoices & proposals</h2><p class="settings-section-subtitle">Numbering, terms and default wording for new documents.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field"><span>Invoice prefix</span><input form="organisation-settings-form" name="invoice_prefix" required></label><label class="field"><span>Payment terms (days)</span><input form="organisation-settings-form" name="invoice_payment_terms_days" type="number" min="0"></label>
+                                    <label class="field"><span>Default tax rate (%)</span><input form="organisation-settings-form" name="default_tax_rate" type="number" min="0" max="100" step="0.01"></label><label class="field"><span>Proposal prefix</span><input form="organisation-settings-form" name="proposal_prefix" required></label>
+                                    <label class="field"><span>Proposal validity (days)</span><input form="organisation-settings-form" name="proposal_validity_days" type="number" min="1"></label>
+                                    <label class="field settings-field-wide"><span>Default invoice notes</span><textarea form="organisation-settings-form" name="invoice_notes" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Invoice footer</span><textarea form="organisation-settings-form" name="invoice_footer" rows="2"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Default proposal terms</span><textarea form="organisation-settings-form" name="proposal_terms" rows="4"></textarea></label>
+                                </div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-email-templates">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Email templates</h2><p class="settings-section-subtitle">Sender details and the default wording of outgoing emails.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field"><span>Sender name</span><input form="organisation-settings-form" name="sender_name" required></label><label class="field"><span>Reply-to email</span><input form="organisation-settings-form" name="reply_to_email" type="email"></label>
+                                    <label class="field settings-field-wide"><span>Email signature</span><textarea form="organisation-settings-form" name="email_signature" rows="3"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Invoice email template</span><textarea form="organisation-settings-form" name="invoice_email_template" rows="4" placeholder="Use placeholders such as @{{customer_name}} and @{{invoice_number}}"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Proposal email template</span><textarea form="organisation-settings-form" name="proposal_email_template" rows="4"></textarea></label>
+                                    <label class="field settings-field-wide"><span>Reminder email template</span><textarea form="organisation-settings-form" name="reminder_email_template" rows="4"></textarea></label>
+                                </div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-portal">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Customer portal</h2><p class="settings-section-subtitle">What customers can see and do when they sign in.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field settings-field-wide"><span>Welcome message</span><textarea form="organisation-settings-form" name="portal_welcome_message" rows="3"></textarea></label><label class="field"><span>Support email</span><input form="organisation-settings-form" name="portal_support_email" type="email"></label>
+                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_show_jobs"><span>Show jobs</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_show_invoices"><span>Show invoices</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_show_proposals"><span>Show proposals</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_show_subscriptions"><span>Show subscriptions</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_allow_invoice_payment"><span>Allow invoice payment updates</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="portal_allow_proposal_approval"><span>Allow proposal approval</span></label></div>
+                                </div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-dashboard">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Dashboard & security</h2><p class="settings-section-subtitle">Targets, warnings and session defaults.</p></div></div>
+                            <div class="settings-section-body"><div class="settings-fields">
+                                    <label class="field"><span>Session timeout (minutes)</span><input form="organisation-settings-form" name="session_timeout_minutes" type="number" min="15"></label><label class="field"><span>Default reporting period</span><select form="organisation-settings-form" name="default_dashboard_period"><option value="week">Week</option><option value="month">Month</option><option value="quarter">Quarter</option><option value="year">Year</option></select></label>
+                                    <label class="field"><span>MRR target</span><input form="organisation-settings-form" name="mrr_target" type="number" min="0" step="0.01"></label><label class="field"><span>Revenue target</span><input form="organisation-settings-form" name="revenue_target" type="number" min="0" step="0.01"></label>
+                                    <label class="field"><span>Overdue warning (days)</span><input form="organisation-settings-form" name="overdue_warning_days" type="number" min="0"></label><label class="field"><span>Lead inactivity warning (days)</span><input form="organisation-settings-form" name="lead_inactivity_days" type="number" min="1"></label>
+                                    <div class="settings-checks settings-field-wide"><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="show_today_overdue"><span>Show overdue actions in Today</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="show_today_upcoming"><span>Show upcoming actions</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="show_today_invoices"><span>Show invoices</span></label><label class="check-row"><input form="organisation-settings-form" type="checkbox" name="show_today_proposals"><span>Show proposals</span></label></div>
+                                </div></div>
+                        </section>
+                        <div class="settings-savebar admin-only">
+                            <div id="organisation-settings-status" class="form-hint" aria-live="polite"></div>
+                            <button class="btn btn-primary" type="submit" form="organisation-settings-form">Save changes</button>
                         </div>
-
-                        <div class="card admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Email delivery</div>
-                                    <div class="card-subtitle">Use SMTP2GO API for invoice sending.</div>
-                                </div>
-                            </div>
-                            <form id="smtp2go-settings-form" class="form-stack">
+                        <section class="settings-section admin-only" id="settings-email-delivery">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Email delivery</h2><p class="settings-section-subtitle">Choose how invoices and notifications are sent.</p></div></div>
+                            <div class="settings-section-body"><form id="smtp2go-settings-form" class="form-stack">
                                 <label class="field">
                                     <span>Provider</span>
                                     <select name="smtp2go_enabled" id="smtp2go-enabled">
@@ -1707,17 +1712,11 @@
                                 <div class="form-hint" id="smtp2go-api-key-mask"></div>
                                 <div id="smtp2go-settings-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Save mail settings</button>
-                            </form>
-                        </div>
-
-                        <div class="card admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Invoice payment details</div>
-                                    <div class="card-subtitle">Shown on generated invoice PDFs.</div>
-                                </div>
-                            </div>
-                            <form id="invoice-settings-form" class="form-stack">
+                            </form></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-payment">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Payment details</h2><p class="settings-section-subtitle">Bank details shown on generated invoice PDFs.</p></div></div>
+                            <div class="settings-section-body"><form id="invoice-settings-form" class="form-stack">
                                 <label class="field">
                                     <span>Account Name</span>
                                     <input type="text" name="account_name" id="invoice-account-name" required>
@@ -1732,41 +1731,21 @@
                                 </label>
                                 <div id="invoice-settings-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Save payment settings</button>
-                            </form>
-                        </div>
-
-                        <div class="card wide admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Edit Proposal forms</div>
-                                    <div class="card-subtitle">Choose a proposal form to edit its questions.</div>
-                                </div>
-                                <button class="btn btn-outline" id="proposal-forms-add-type" type="button">Add type</button>
-                            </div>
-                            <div id="proposal-forms-editor" class="form-stack"></div>
-                            <div id="proposal-forms-settings-status" class="form-hint"></div>
-                        </div>
-
-                        <div class="card wide admin-only">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Edit Customer forms</div>
-                                    <div class="card-subtitle">Create and edit the forms that can be sent from a customer's page.</div>
-                                </div>
-                                <button class="btn btn-outline" id="customer-forms-add-type" type="button">Add form</button>
-                            </div>
-                            <div id="customer-forms-editor" class="form-stack"></div>
-                            <div id="customer-forms-settings-status" class="form-hint"></div>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Profile</div>
-                                    <div class="card-subtitle">Update your account contact details.</div>
-                                </div>
-                            </div>
-                            <form id="profile-form" class="form-stack">
+                            </form></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-proposal-forms">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Proposal forms</h2><p class="settings-section-subtitle">Choose a proposal form to edit its questions.</p></div><button class="btn btn-outline btn-small" id="proposal-forms-add-type" type="button">Add type</button></div>
+                            <div class="settings-section-body"><div id="proposal-forms-editor" class="form-stack"></div>
+                            <div id="proposal-forms-settings-status" class="form-hint"></div></div>
+                        </section>
+                        <section class="settings-section admin-only" id="settings-customer-forms">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Customer forms</h2><p class="settings-section-subtitle">Forms that can be sent from a customer's page.</p></div><button class="btn btn-outline btn-small" id="customer-forms-add-type" type="button">Add form</button></div>
+                            <div class="settings-section-body"><div id="customer-forms-editor" class="form-stack"></div>
+                            <div id="customer-forms-settings-status" class="form-hint"></div></div>
+                        </section>
+                        <section class="settings-section " id="settings-profile">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Profile</h2><p class="settings-section-subtitle">Your account contact details.</p></div></div>
+                            <div class="settings-section-body"><form id="profile-form" class="form-stack">
                                 <label class="field">
                                     <span>Name</span>
                                     <input type="text" name="name" id="profile-name" required>
@@ -1777,17 +1756,11 @@
                                 </label>
                                 <div id="profile-form-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Save profile</button>
-                            </form>
-                        </div>
-
-                        <div class="card">
-                            <div class="card-header">
-                                <div>
-                                    <div class="card-title">Reset password</div>
-                                    <div class="card-subtitle">Choose a new account password.</div>
-                                </div>
-                            </div>
-                            <form id="password-form" class="form-stack">
+                            </form></div>
+                        </section>
+                        <section class="settings-section " id="settings-password">
+                            <div class="settings-section-header"><div><h2 class="settings-section-title">Password</h2><p class="settings-section-subtitle">Choose a new account password.</p></div></div>
+                            <div class="settings-section-body"><form id="password-form" class="form-stack">
                                 <label class="field">
                                     <span>Current password</span>
                                     <input type="password" name="current_password" id="current-password" required>
@@ -1802,9 +1775,10 @@
                                 </label>
                                 <div id="password-form-status" class="form-hint"></div>
                                 <button type="submit" class="btn btn-primary">Update password</button>
-                            </form>
+                            </form></div>
+                        </section>
                         </div>
-                    </section>
+                    </div>
                 </section>
 
                 <section class="view staff-view admin-only-view" data-view="proposal-form-edit">

@@ -12,7 +12,10 @@ class OrganisationSettingController extends Controller
     {
         $all = $settings->all();
 
-        return response()->json(['data' => collect($all)->only(['company_name', 'primary_colour', 'accent_colour', 'background_colour', 'surface_colour', 'dark_background_colour', 'dark_surface_colour', 'login_title', 'footer_text'])->all()]);
+        return response()->json(['data' => collect($all)->only([
+            'company_name', 'primary_colour', 'accent_colour', 'background_colour', 'surface_colour', 'dark_background_colour', 'dark_surface_colour', 'login_title', 'footer_text',
+            ...OrganisationSettings::APPEARANCE_KEYS,
+        ])->all()]);
     }
 
     public function show(OrganisationSettings $settings): JsonResponse

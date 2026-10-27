@@ -1480,6 +1480,22 @@ function applyBrandPalette(settings) {
     if (settings.surface_colour) root.style.setProperty('--custom-light-surface', settings.surface_colour);
     if (settings.dark_background_colour) root.style.setProperty('--custom-dark-bg', settings.dark_background_colour);
     if (settings.dark_surface_colour) root.style.setProperty('--custom-dark-surface', settings.dark_surface_colour);
+    applyAppearance(settings);
+}
+
+const appearanceDefaults = {
+    ui_font: 'inter', ui_density: 'compact', ui_radius: 'default', ui_sidebar_style: 'light', ui_nav_labels: true, ui_animations: true,
+};
+
+function applyAppearance(settings) {
+    const root = document.documentElement;
+    const appearance = { ...appearanceDefaults, ...Object.fromEntries(Object.entries(settings).filter(([key, value]) => key in appearanceDefaults && value !== undefined && value !== null && value !== '')) };
+    root.dataset.font = appearance.ui_font;
+    root.dataset.density = appearance.ui_density;
+    root.dataset.radius = appearance.ui_radius;
+    root.dataset.sidebar = appearance.ui_sidebar_style;
+    root.dataset.navLabels = appearance.ui_nav_labels ? 'on' : 'off';
+    root.dataset.motion = appearance.ui_animations ? 'on' : 'off';
 }
 
 function parseTotal(response) {
@@ -3260,7 +3276,7 @@ async function handleLogoUpload(event) {
 const organisationBooleanSettings = new Set([
     'portal_show_jobs', 'portal_show_invoices', 'portal_show_proposals', 'portal_show_subscriptions',
     'portal_allow_invoice_payment', 'portal_allow_proposal_approval', 'show_today_overdue',
-    'show_today_upcoming', 'show_today_invoices', 'show_today_proposals',
+    'show_today_upcoming', 'show_today_invoices', 'show_today_proposals', 'ui_nav_labels', 'ui_animations',
 ]);
 const organisationNumberSettings = new Set([
     'financial_year_start_month', 'invoice_payment_terms_days', 'default_tax_rate', 'proposal_validity_days',
@@ -3272,8 +3288,44 @@ function applyOrganisationSettings(settings) {
     [...dom.organisationSettingsForm.elements].forEach((control) => {
         if (!control.name || !(control.name in settings)) return;
         if (control.type === 'checkbox') control.checked = Boolean(settings[control.name]);
+        else if (control.type === 'radio') control.checked = control.value === settings[control.name];
         else control.value = settings[control.name] ?? '';
     });
+    updateColourValueLabels();
+}
+
+function collectOrganisationSettings() {
+    const formData = new FormData(dom.organisationSettingsForm);
+    const payload = {};
+    [...dom.organisationSettingsForm.elements].forEach((control) => {
+        if (!control.name) return;
+        if (organisationBooleanSettings.has(control.name)) payload[control.name] = control.checked;
+        else if (organisationNumberSettings.has(control.name)) payload[control.name] = Number(formData.get(control.name) || 0);
+        else payload[control.name] = String(formData.get(control.name) || '').trim();
+    });
+    return payload;
+}
+
+function updateColourValueLabels() {
+    document.querySelectorAll('[data-colour-value]').forEach((label) => {
+        const input = dom.organisationSettingsForm?.elements?.namedItem(label.dataset.colourValue);
+        label.textContent = input?.value ? input.value.toUpperCase() : '';
+    });
+}
+
+function handleOrganisationSettingsInput(event) {
+    if (!event.target?.name) return;
+    updateColourValueLabels();
+    applyBrandPalette(collectOrganisationSettings());
+    setFormStatus(dom.organisationSettingsStatus, 'Unsaved changes');
+}
+
+function applyColourPreset(button) {
+    const form = dom.organisationSettingsForm;
+    if (!form) return;
+    form.elements.namedItem('primary_colour').value = button.dataset.presetPrimary;
+    form.elements.namedItem('accent_colour').value = button.dataset.presetAccent;
+    handleOrganisationSettingsInput({ target: form.elements.namedItem('primary_colour') });
 }
 
 async function loadOrganisationSettings() {
@@ -3291,14 +3343,7 @@ async function loadOrganisationSettings() {
 async function handleOrganisationSettingsSubmit(event) {
     event.preventDefault();
     if (!dom.organisationSettingsForm || state.role !== 'admin') return;
-    const formData = new FormData(dom.organisationSettingsForm);
-    const payload = {};
-    [...dom.organisationSettingsForm.elements].forEach((control) => {
-        if (!control.name) return;
-        if (organisationBooleanSettings.has(control.name)) payload[control.name] = control.checked;
-        else if (organisationNumberSettings.has(control.name)) payload[control.name] = Number(formData.get(control.name) || 0);
-        else payload[control.name] = String(formData.get(control.name) || '').trim();
-    });
+    const payload = collectOrganisationSettings();
     setFormStatus(dom.organisationSettingsStatus, 'Saving…');
     try {
         const response = await api.put('/api/admin/organisation-settings', payload);
@@ -8049,6 +8094,64 @@ if (dom.logoUploadForm) {
 
 if (dom.organisationSettingsForm) {
     dom.organisationSettingsForm.addEventListener('submit', handleOrganisationSettingsSubmit);
+    ['input', 'change'].forEach((type) => {
+        document.addEventListener(type, (event) => {
+            if (event.target?.form === dom.organisationSettingsForm) handleOrganisationSettingsInput(event);
+        });
+    });
+    document.querySelectorAll('[data-preset-primary]').forEach((button) => {
+        button.addEventListener('click', () => applyColourPreset(button));
+    });
+}
+
+const sidebarCollapsedKey = 'sidebar_collapsed';
+const sidebarCollapseToggle = document.getElementById('sidebar-collapse-toggle');
+
+function setSidebarCollapsed(collapsed) {
+    document.body.dataset.rail = collapsed ? 'collapsed' : 'expanded';
+    sidebarCollapseToggle?.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+    sidebarCollapseToggle?.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+    sidebarCollapseToggle?.setAttribute('title', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
+}
+
+try {
+    setSidebarCollapsed(localStorage.getItem(sidebarCollapsedKey) === '1');
+} catch (error) {
+    setSidebarCollapsed(false);
+}
+
+sidebarCollapseToggle?.addEventListener('click', () => {
+    const collapsed = document.body.dataset.rail !== 'collapsed';
+    setSidebarCollapsed(collapsed);
+    try {
+        localStorage.setItem(sidebarCollapsedKey, collapsed ? '1' : '0');
+    } catch (error) {
+        // Collapse state is a convenience only.
+    }
+});
+
+const settingsNavLinks = [...document.querySelectorAll('.settings-nav-link')];
+
+function setActiveSettingsLink(id) {
+    settingsNavLinks.forEach((link) => link.classList.toggle('active', link.dataset.settingsTarget === id));
+}
+
+settingsNavLinks.forEach((link) => {
+    link.addEventListener('click', (event) => {
+        event.preventDefault();
+        const target = document.getElementById(link.dataset.settingsTarget);
+        if (!target) return;
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setActiveSettingsLink(link.dataset.settingsTarget);
+    });
+});
+
+if ('IntersectionObserver' in window && settingsNavLinks.length) {
+    const settingsObserver = new IntersectionObserver((entries) => {
+        const visible = entries.filter((entry) => entry.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]) setActiveSettingsLink(visible[0].target.id);
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    document.querySelectorAll('.settings-section[id]').forEach((section) => settingsObserver.observe(section));
 }
 
 if (dom.smtp2goSettingsForm) {
