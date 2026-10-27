@@ -67,6 +67,8 @@ class ProposalWorkflowTest extends TestCase
             'customer_id' => $customer->id,
             'job_id' => $job->id,
             'title' => 'Website amendments revised',
+            'proposal_type' => 'website-build',
+            'form_answers' => ['number_of_pages' => 5],
             'issue_date' => '2026-04-20',
             'expiry_date' => '2026-05-10',
             'status' => 'draft',
@@ -144,9 +146,10 @@ class ProposalWorkflowTest extends TestCase
             'status' => 'accepted',
         ])->assertOk();
 
+        // The portal normalises the legacy "accepted" status to "approved".
         $this->assertDatabaseHas('proposals', [
             'id' => $proposal->id,
-            'status' => 'accepted',
+            'status' => 'approved',
         ]);
         $this->assertNotNull($proposal->fresh()->accepted_at);
     }

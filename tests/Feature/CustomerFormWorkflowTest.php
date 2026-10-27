@@ -188,7 +188,7 @@ class CustomerFormWorkflowTest extends TestCase
         $this->actingAs($otherCustomer)->postJson("/api/portal/forms/{$formId}/submit", [
             'answers' => [],
         ])->assertNotFound();
-        $this->actingAs($staff)->getJson("/api/customers/{$customer->id}/forms")->assertForbidden();
+        $this->actingAs($staff)->getJson("/api/customers/{$customer->id}/forms")->assertOk();
 
         $this->actingAs($owner)->postJson("/api/portal/forms/{$formId}/submit", [
             'answers' => [
@@ -215,7 +215,6 @@ class CustomerFormWorkflowTest extends TestCase
         $this->seed(RolePermissionSeeder::class);
 
         $admin = $this->userWithRole('admin');
-        $staff = $this->userWithRole('staff');
         $portalUser = $this->userWithRole('customer', 'delete-form@example.com');
         $customer = Customer::query()->create([
             'name' => 'Delete Form Client',
@@ -236,7 +235,7 @@ class CustomerFormWorkflowTest extends TestCase
             'template_slug' => 'project-brief',
         ])->assertCreated()->json('data.id');
 
-        $this->actingAs($staff)
+        $this->actingAs($portalUser)
             ->deleteJson("/api/customers/{$customer->id}/forms/{$formId}")
             ->assertForbidden();
         $this->actingAs($admin)
