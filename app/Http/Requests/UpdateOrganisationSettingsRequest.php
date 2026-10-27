@@ -33,6 +33,9 @@ class UpdateOrganisationSettingsRequest extends FormRequest
             'default_dashboard_period' => ['required', Rule::in(['week', 'month', 'quarter', 'year'])], 'mrr_target' => ['required', 'numeric', 'min:0', 'max:999999999'],
             'revenue_target' => ['required', 'numeric', 'min:0', 'max:999999999'], 'overdue_warning_days' => ['required', 'integer', 'between:0,90'], 'lead_inactivity_days' => ['required', 'integer', 'between:1,365'],
             'show_today_overdue' => ['required', 'boolean'], 'show_today_upcoming' => ['required', 'boolean'], 'show_today_invoices' => ['required', 'boolean'], 'show_today_proposals' => ['required', 'boolean'],
+            'ui_font' => ['required', Rule::in(['inter', 'manrope', 'dm-sans', 'system'])], 'ui_density' => ['required', Rule::in(['compact', 'comfortable'])],
+            'ui_radius' => ['required', Rule::in(['sharp', 'default', 'rounded'])], 'ui_sidebar_style' => ['required', Rule::in(['light', 'dark', 'brand'])],
+            'ui_nav_labels' => ['required', 'boolean'], 'ui_animations' => ['required', 'boolean'],
         ];
     }
 }

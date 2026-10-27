@@ -20,7 +20,11 @@ class OrganisationSettings
         'session_timeout_minutes' => 120, 'default_dashboard_period' => 'month', 'mrr_target' => 1000, 'revenue_target' => 5000,
         'overdue_warning_days' => 1, 'lead_inactivity_days' => 7, 'show_today_overdue' => true, 'show_today_upcoming' => true,
         'show_today_invoices' => true, 'show_today_proposals' => true,
+        'ui_font' => 'inter', 'ui_density' => 'compact', 'ui_radius' => 'default', 'ui_sidebar_style' => 'light',
+        'ui_nav_labels' => true, 'ui_animations' => true,
     ];
+
+    public const APPEARANCE_KEYS = ['ui_font', 'ui_density', 'ui_radius', 'ui_sidebar_style', 'ui_nav_labels', 'ui_animations'];
 
     public function all(): array
     {

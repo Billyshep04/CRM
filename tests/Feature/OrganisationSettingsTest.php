@@ -31,6 +31,27 @@ class OrganisationSettingsTest extends TestCase
             ->assertJsonMissingPath('data.business_email');
     }
 
+    public function test_admin_can_update_appearance_options_and_they_are_public(): void
+    {
+        $admin = $this->user('admin');
+        $settings = $this->actingAs($admin)->getJson('/api/admin/organisation-settings')->assertOk()
+            ->assertJsonPath('data.ui_density', 'compact')->assertJsonPath('data.ui_sidebar_style', 'light')->json('data');
+        $settings = array_replace($settings, [
+            'ui_font' => 'dm-sans', 'ui_density' => 'comfortable', 'ui_radius' => 'rounded',
+            'ui_sidebar_style' => 'dark', 'ui_nav_labels' => false, 'ui_animations' => false,
+        ]);
+
+        $this->actingAs($admin)->putJson('/api/admin/organisation-settings', $settings)->assertOk();
+
+        $this->getJson('/api/organisation/public-settings')->assertOk()
+            ->assertJsonPath('data.ui_font', 'dm-sans')->assertJsonPath('data.ui_density', 'comfortable')
+            ->assertJsonPath('data.ui_radius', 'rounded')->assertJsonPath('data.ui_sidebar_style', 'dark')
+            ->assertJsonPath('data.ui_nav_labels', false)->assertJsonPath('data.ui_animations', false);
+
+        $this->actingAs($admin)->putJson('/api/admin/organisation-settings', array_replace($settings, ['ui_sidebar_style' => 'neon']))
+            ->assertUnprocessable()->assertJsonValidationErrors('ui_sidebar_style');
+    }
+
     public function test_staff_cannot_access_organisation_admin_settings(): void
     {
         $this->actingAs($this->user('staff'))->getJson('/api/admin/organisation-settings')->assertForbidden();
