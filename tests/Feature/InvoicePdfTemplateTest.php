@@ -41,7 +41,7 @@ class InvoicePdfTemplateTest extends TestCase
         $rendered = app(InvoicePdfService::class)->generate($invoice->fresh());
 
         $this->assertSame($legacyFile->id, $rendered->id);
-        $this->assertSame(6, (int) data_get($rendered->metadata, 'invoice_template_version'));
+        $this->assertSame(7, (int) data_get($rendered->metadata, 'invoice_template_version'));
         $this->assertStringStartsWith('%PDF', Storage::disk('private')->get($rendered->path));
     }
 
@@ -56,7 +56,7 @@ class InvoicePdfTemplateTest extends TestCase
 
             $this->assertStringStartsWith('%PDF', $contents);
             $this->assertStringContainsString('/Count 1', $contents);
-            $this->assertSame(6, (int) data_get($rendered->metadata, 'invoice_template_version'));
+            $this->assertSame(7, (int) data_get($rendered->metadata, 'invoice_template_version'));
         }
     }
 
