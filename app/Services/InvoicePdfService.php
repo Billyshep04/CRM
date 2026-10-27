@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class InvoicePdfService
 {
-    private const TEMPLATE_VERSION = 6;
+    private const TEMPLATE_VERSION = 7;
 
     public function __construct(private readonly AdminInvoiceSettings $invoiceSettings)
     {
@@ -33,7 +33,6 @@ class InvoicePdfService
             'customer' => $invoice->customer,
             'payment_details' => $this->invoiceSettings->paymentDetails(),
             'invoice_logo_data_uri' => $this->invoiceLogoDataUri(),
-            'invoice_stamp_data_uri' => $this->invoiceStampDataUri(),
         ]);
 
         $contents = $pdf->output();
@@ -92,7 +91,7 @@ class InvoicePdfService
 
     private function invoiceLogoDataUri(): ?string
     {
-        $logoPath = resource_path('images/white-logo2.svg');
+        $logoPath = resource_path('images/new-logo-white-text.svg');
         if (!is_file($logoPath)) {
             return null;
         }
@@ -103,23 +102,5 @@ class InvoicePdfService
         }
 
         return 'data:image/svg+xml;base64,'.base64_encode($contents);
-    }
-
-    private function invoiceStampDataUri(): ?string
-    {
-        $logoPath = resource_path('images/white-logo2.svg');
-        if (!is_file($logoPath)) {
-            return null;
-        }
-
-        $contents = file_get_contents($logoPath);
-        if (
-            $contents === false
-            || preg_match('/<image[^>]+xlink:href="(data:image\/png;base64,[^"]+)"/', $contents, $matches) !== 1
-        ) {
-            return null;
-        }
-
-        return $matches[1];
     }
 }

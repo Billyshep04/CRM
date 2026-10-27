@@ -28,25 +28,11 @@
         }
         .hero-left { width: 55%; vertical-align: top; }
         .hero-right { width: 45%; vertical-align: top; text-align: right; }
-        .brand-crop {
-            position: relative;
-            width: 43.5mm;
-            height: 24.2mm;
-            margin-top: 5mm;
-        }
-        .brand-crop .brand-image {
+        .brand-logo {
             display: block;
-            width: 43.5mm;
-            height: 24.2mm;
-        }
-        .brand-crop .brand-stamp {
-            position: absolute;
-            width: 10.65mm;
-            height: 9mm;
-            left: 31.3mm;
-            top: -2.4mm;
-            transform: rotate(8.3deg);
-            transform-origin: top left;
+            width: 49.5mm;
+            height: 23.8mm;
+            margin-top: 3mm;
         }
         .brand-fallback { width: 46mm; line-height: .72; font-weight: 800; letter-spacing: -.9mm; }
         .brand-fallback .web { display: inline-block; color: #30b8f0; font-size: 25pt; }
@@ -212,12 +198,7 @@
             <tr>
                 <td class="hero-left">
                     @if (!empty($invoice_logo_data_uri))
-                        <div class="brand-crop">
-                            <img class="brand-image" src="{{ $invoice_logo_data_uri }}" alt="Web Stamp">
-                            @if (!empty($invoice_stamp_data_uri))
-                                <img class="brand-stamp" src="{{ $invoice_stamp_data_uri }}" alt="">
-                            @endif
-                        </div>
+                        <img class="brand-logo" src="{{ $invoice_logo_data_uri }}" alt="Web Stamp">
                     @else
                         <div class="brand-fallback"><span class="web">WEB</span><span class="fallback-mark">&nbsp;</span><span class="stamp">STAMP</span></div>
                     @endif
