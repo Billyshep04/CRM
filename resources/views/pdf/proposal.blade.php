@@ -20,12 +20,7 @@
         .hero-table { width: 100%; border-collapse: collapse; }
         .hero-left { width: 55%; vertical-align: top; }
         .hero-right { width: 45%; vertical-align: top; text-align: right; }
-        .brand-crop { position: relative; width: 43.5mm; height: 24.2mm; margin-top: 2mm; }
-        .brand-crop .brand-image { display: block; width: 43.5mm; height: 24.2mm; }
-        .brand-crop .brand-stamp {
-            position: absolute; width: 10.65mm; height: 9mm; left: 31.3mm; top: -2.4mm;
-            transform: rotate(8.3deg); transform-origin: top left;
-        }
+        .brand-logo { display: block; width: 49.5mm; height: 23.8mm; margin-top: 1mm; }
         .brand-fallback { width: 46mm; line-height: .72; font-weight: 800; letter-spacing: -.9mm; }
         .brand-fallback .web { display: inline-block; color: #30b8f0; font-size: 25pt; }
         .brand-fallback .fallback-mark {
@@ -129,15 +124,11 @@
 <body>
 @php
     $logoDataUri = null;
-    $stampDataUri = null;
-    $logoPath = resource_path('images/white-logo2.svg');
+    $logoPath = resource_path('images/new-logo-white-text.svg');
     if (is_file($logoPath)) {
         $svg = file_get_contents($logoPath);
         if ($svg !== false && $svg !== '') {
             $logoDataUri = 'data:image/svg+xml;base64,' . base64_encode($svg);
-            if (preg_match('/<image[^>]+xlink:href="(data:image\/png;base64,[^"]+)"/', $svg, $matches) === 1) {
-                $stampDataUri = $matches[1];
-            }
         }
     }
 
@@ -183,12 +174,7 @@
             <tr>
                 <td class="hero-left">
                     @if ($logoDataUri)
-                        <div class="brand-crop">
-                            <img class="brand-image" src="{{ $logoDataUri }}" alt="Web Stamp">
-                            @if ($stampDataUri)
-                                <img class="brand-stamp" src="{{ $stampDataUri }}" alt="">
-                            @endif
-                        </div>
+                        <img class="brand-logo" src="{{ $logoDataUri }}" alt="Web Stamp">
                     @else
                         <div class="brand-fallback"><span class="web">WEB</span><span class="fallback-mark">&nbsp;</span><span class="stamp">STAMP</span></div>
                     @endif

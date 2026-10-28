@@ -10,7 +10,7 @@ use Illuminate\Support\Str;
 
 class ProposalPdfService
 {
-    private const TEMPLATE_VERSION = 1;
+    private const TEMPLATE_VERSION = 2;
 
     public function generate(Proposal $proposal): StoredFile
     {

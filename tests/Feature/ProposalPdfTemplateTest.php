@@ -41,7 +41,7 @@ class ProposalPdfTemplateTest extends TestCase
         $rendered = app(ProposalPdfService::class)->generate($proposal->fresh());
 
         $this->assertSame($legacyFile->id, $rendered->id);
-        $this->assertSame(1, (int) data_get($rendered->metadata, 'proposal_template_version'));
+        $this->assertSame(2, (int) data_get($rendered->metadata, 'proposal_template_version'));
         $this->assertStringStartsWith('%PDF', Storage::disk('private')->get($rendered->path));
     }
 
@@ -68,7 +68,7 @@ class ProposalPdfTemplateTest extends TestCase
         $rendered = app(ProposalPdfService::class)->generate($proposal->fresh(['lineItems']));
 
         $this->assertStringStartsWith('%PDF', Storage::disk('private')->get($rendered->path));
-        $this->assertSame(1, (int) data_get($rendered->metadata, 'proposal_template_version'));
+        $this->assertSame(2, (int) data_get($rendered->metadata, 'proposal_template_version'));
     }
 
     public function test_a_minimal_proposal_with_no_notes_terms_or_answers_still_renders(): void
