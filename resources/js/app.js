@@ -7139,14 +7139,11 @@ function renderPortalProposals(proposals = [], emptyMessage = 'No proposals avai
         const row = document.createElement('div');
         row.className = 'table-row portal-proposals';
         const effectiveStatus = proposal.effective_status || proposal.status || 'draft';
-        const actionButtons = [];
+        const actionButtons = [
+            `<button type="button" class="btn btn-primary btn-small" data-action="portal-proposal-view" data-id="${proposal.id}">View</button>`,
+        ];
 
-        if (!['approved', 'declined', 'expired'].includes(effectiveStatus)) {
-            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="approved">Approve</button>`);
-            actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-status" data-id="${proposal.id}" data-next-status="declined">Decline</button>`);
-        }
-
-        actionButtons.push(`<button type="button" class="btn btn-outline btn-small" data-action="portal-proposal-download" data-id="${proposal.id}">Download</button>`);
+        actionButtons.push(`<button type="button" class="btn btn-outline btn-small btn-icon" data-action="portal-proposal-download" data-id="${proposal.id}" aria-label="Download PDF" title="Download PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>`);
 
         row.innerHTML = `
             <span>#${escapeHtml(proposal.proposal_number)} v${escapeHtml(String(proposal.version || 1))}</span>
@@ -7196,49 +7193,194 @@ async function handlePortalProposalAction(event) {
 
     const proposalId = Number(actionButton.dataset.id);
     const action = actionButton.dataset.action;
-    const nextStatus = actionButton.dataset.nextStatus;
     const proposal = state.portalProposals.find((item) => item.id === proposalId);
 
-    if (!proposalId || !action) return;
+    if (!proposalId || !proposal) return;
 
-    if (action === 'portal-proposal-download' && proposal) {
+    if (action === 'portal-proposal-view') {
+        openPortalProposalViewer(proposal);
+        return;
+    }
+
+    if (action === 'portal-proposal-download') {
         await downloadProposal(
             proposal.id,
             `Proposal-${proposal.proposal_number}-v${proposal.version}.pdf`,
             true
         );
-        return;
+    }
+}
+
+async function updatePortalProposalStatus(proposalId, nextStatus) {
+    const payload = { status: nextStatus };
+    let response;
+    try {
+        response = await api.patch(`/api/portal/proposals/${proposalId}/status`, payload);
+    } catch (error) {
+        const statusCode = Number(error?.response?.status || 0);
+        if (statusCode !== 404 && statusCode !== 405) {
+            throw error;
+        }
+        response = await api.post(`/api/portal/proposals/${proposalId}/status`, payload);
     }
 
-    if (action !== 'portal-proposal-status') {
-        return;
-    }
+    showToast(nextStatus === 'approved' ? 'Proposal approved' : 'Proposal declined');
+    await loadPortalProposals();
+    return response?.data?.data ?? null;
+}
 
-    if (!['approved', 'declined'].includes(nextStatus || '')) {
-        return;
-    }
+const proposalViewer = {
+    backdrop: document.getElementById('portal-proposal-viewer'),
+    title: document.getElementById('portal-proposal-viewer-title'),
+    subtitle: document.getElementById('portal-proposal-viewer-subtitle'),
+    status: document.getElementById('portal-proposal-viewer-status'),
+    close: document.getElementById('portal-proposal-viewer-close'),
+    message: document.getElementById('portal-proposal-viewer-message'),
+    frame: document.getElementById('portal-proposal-viewer-frame'),
+    download: document.getElementById('portal-proposal-viewer-download'),
+    decision: document.getElementById('portal-proposal-viewer-decision'),
+    confirm: document.getElementById('portal-proposal-viewer-confirm'),
+    confirmText: document.getElementById('portal-proposal-viewer-confirm-text'),
+    confirmButton: document.getElementById('portal-proposal-viewer-confirm-button'),
+    cancel: document.getElementById('portal-proposal-viewer-cancel'),
+    outcome: document.getElementById('portal-proposal-viewer-outcome'),
+    proposal: null,
+    blobUrl: null,
+    pendingStatus: null,
+    returnFocus: null,
+};
 
-    actionButton.disabled = true;
+function renderPortalProposalViewerState(proposal) {
+    const status = proposal.effective_status || proposal.status || 'draft';
+    const decided = ['approved', 'declined', 'expired'].includes(status);
+
+    proposalViewer.title.textContent = proposal.title || proposal.job?.description || 'Proposal';
+    proposalViewer.subtitle.textContent = [
+        `#${proposal.proposal_number} v${proposal.version || 1}`,
+        formatCurrency(Number(proposal.total || 0)),
+        proposal.expiry_date ? `Valid until ${formatDateWithYear(proposal.expiry_date)}` : '',
+    ].filter(Boolean).join(' · ');
+    proposalViewer.status.textContent = status;
+    proposalViewer.status.className = `pill${status === 'approved' ? ' success' : (decided ? ' outline' : '')}`;
+
+    proposalViewer.decision.hidden = decided;
+    proposalViewer.confirm.hidden = true;
+    proposalViewer.pendingStatus = null;
+    proposalViewer.outcome.hidden = !decided;
+    if (status === 'approved') {
+        proposalViewer.outcome.textContent = `You approved this proposal${proposal.accepted_at ? ` on ${formatDateWithYear(proposal.accepted_at)}` : ''}.`;
+    } else if (status === 'declined') {
+        proposalViewer.outcome.textContent = `You declined this proposal${proposal.rejected_at ? ` on ${formatDateWithYear(proposal.rejected_at)}` : ''}.`;
+    } else if (status === 'expired') {
+        proposalViewer.outcome.textContent = 'This proposal has expired. Please contact us if you would still like to go ahead.';
+    }
+}
+
+async function openPortalProposalViewer(proposal) {
+    if (!proposalViewer.backdrop) return;
+    proposalViewer.proposal = proposal;
+    proposalViewer.returnFocus = document.activeElement;
+    renderPortalProposalViewerState(proposal);
+
+    proposalViewer.frame.hidden = true;
+    proposalViewer.frame.removeAttribute('src');
+    proposalViewer.message.hidden = false;
+    proposalViewer.message.textContent = 'Loading proposal…';
+    proposalViewer.backdrop.hidden = false;
+    document.body.classList.add('modal-open');
+    proposalViewer.close.focus();
 
     try {
-        const payload = { status: nextStatus };
-        try {
-            await api.patch(`/api/portal/proposals/${proposalId}/status`, payload);
-        } catch (error) {
-            const statusCode = Number(error?.response?.status || 0);
-            if (statusCode !== 404 && statusCode !== 405) {
-                throw error;
-            }
-            await api.post(`/api/portal/proposals/${proposalId}/status`, payload);
-        }
-
-        showToast(nextStatus === 'approved' ? 'Proposal approved' : 'Proposal declined');
-        await loadPortalProposals();
+        const response = await api.get(`/api/portal/proposals/${proposal.id}/download`, { responseType: 'blob' });
+        if (proposalViewer.proposal?.id !== proposal.id || proposalViewer.backdrop.hidden) return;
+        releasePortalProposalViewerBlob();
+        proposalViewer.blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        proposalViewer.frame.src = `${proposalViewer.blobUrl}#navpanes=0&view=FitH`;
+        proposalViewer.frame.hidden = false;
+        proposalViewer.message.hidden = true;
     } catch (error) {
-        showToast('Unable to update proposal status', true);
-    } finally {
-        actionButton.disabled = false;
+        if (proposalViewer.proposal?.id !== proposal.id) return;
+        proposalViewer.message.textContent = 'Unable to load this proposal. Please try again or use Download PDF.';
     }
+}
+
+function releasePortalProposalViewerBlob() {
+    if (proposalViewer.blobUrl) {
+        window.URL.revokeObjectURL(proposalViewer.blobUrl);
+        proposalViewer.blobUrl = null;
+    }
+}
+
+function closePortalProposalViewer() {
+    if (!proposalViewer.backdrop || proposalViewer.backdrop.hidden) return;
+    proposalViewer.backdrop.hidden = true;
+    proposalViewer.frame.removeAttribute('src');
+    proposalViewer.frame.hidden = true;
+    releasePortalProposalViewerBlob();
+    proposalViewer.proposal = null;
+    document.body.classList.remove('modal-open');
+    if (proposalViewer.returnFocus?.isConnected) proposalViewer.returnFocus.focus();
+}
+
+function askPortalProposalViewerConfirm(nextStatus) {
+    proposalViewer.pendingStatus = nextStatus;
+    proposalViewer.confirmText.textContent = nextStatus === 'approved'
+        ? 'Approve this proposal and go ahead with the work?'
+        : 'Decline this proposal?';
+    proposalViewer.confirmButton.textContent = nextStatus === 'approved' ? 'Yes, approve' : 'Yes, decline';
+    proposalViewer.confirmButton.className = nextStatus === 'approved' ? 'btn btn-primary' : 'btn btn-danger';
+    proposalViewer.decision.hidden = true;
+    proposalViewer.confirm.hidden = false;
+    proposalViewer.confirmButton.focus();
+}
+
+function cancelPortalProposalViewerConfirm() {
+    proposalViewer.pendingStatus = null;
+    proposalViewer.confirm.hidden = true;
+    proposalViewer.decision.hidden = false;
+}
+
+async function confirmPortalProposalViewerStatus() {
+    const proposal = proposalViewer.proposal;
+    const nextStatus = proposalViewer.pendingStatus;
+    if (!proposal || !['approved', 'declined'].includes(nextStatus || '')) return;
+
+    proposalViewer.confirmButton.disabled = true;
+    proposalViewer.cancel.disabled = true;
+    try {
+        const updated = await updatePortalProposalStatus(proposal.id, nextStatus);
+        if (proposalViewer.proposal?.id !== proposal.id) return;
+        const fresh = state.portalProposals.find((item) => item.id === proposal.id)
+            || { ...proposal, ...(updated ?? {}), effective_status: nextStatus };
+        proposalViewer.proposal = fresh;
+        renderPortalProposalViewerState(fresh);
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to update proposal status'), true);
+    } finally {
+        proposalViewer.confirmButton.disabled = false;
+        proposalViewer.cancel.disabled = false;
+    }
+}
+
+if (proposalViewer.backdrop) {
+    proposalViewer.close.addEventListener('click', closePortalProposalViewer);
+    proposalViewer.backdrop.addEventListener('click', (event) => {
+        if (event.target === proposalViewer.backdrop) closePortalProposalViewer();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closePortalProposalViewer();
+    });
+    proposalViewer.decision.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-viewer-status]');
+        if (button) askPortalProposalViewerConfirm(button.dataset.viewerStatus);
+    });
+    proposalViewer.cancel.addEventListener('click', cancelPortalProposalViewerConfirm);
+    proposalViewer.confirmButton.addEventListener('click', confirmPortalProposalViewerStatus);
+    proposalViewer.download.addEventListener('click', () => {
+        const proposal = proposalViewer.proposal;
+        if (!proposal) return;
+        downloadProposal(proposal.id, `Proposal-${proposal.proposal_number}-v${proposal.version}.pdf`, true);
+    });
 }
 
 function updatePortalFormsNotification(forms = []) {

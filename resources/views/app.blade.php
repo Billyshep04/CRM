@@ -2100,6 +2100,36 @@
             </main>
         </div>
 
+        <div class="crm-modal-backdrop proposal-viewer-backdrop" id="portal-proposal-viewer" hidden>
+            <section class="proposal-viewer" role="dialog" aria-modal="true" aria-labelledby="portal-proposal-viewer-title">
+                <header class="proposal-viewer-header">
+                    <div class="proposal-viewer-heading">
+                        <div class="card-title" id="portal-proposal-viewer-title">Proposal</div>
+                        <div class="card-subtitle" id="portal-proposal-viewer-subtitle"></div>
+                    </div>
+                    <span class="pill" id="portal-proposal-viewer-status"></span>
+                    <button class="proposal-viewer-close" id="portal-proposal-viewer-close" type="button" aria-label="Close">×</button>
+                </header>
+                <div class="proposal-viewer-body">
+                    <div class="proposal-viewer-message" id="portal-proposal-viewer-message">Loading proposal…</div>
+                    <iframe class="proposal-viewer-frame" id="portal-proposal-viewer-frame" title="Proposal PDF" hidden></iframe>
+                </div>
+                <footer class="proposal-viewer-footer">
+                    <button class="btn btn-outline" id="portal-proposal-viewer-download" type="button">Download PDF</button>
+                    <div class="proposal-viewer-actions" id="portal-proposal-viewer-decision">
+                        <button class="btn btn-outline" type="button" data-viewer-status="declined">Decline</button>
+                        <button class="btn btn-primary" type="button" data-viewer-status="approved">Approve</button>
+                    </div>
+                    <div class="proposal-viewer-actions proposal-viewer-confirm" id="portal-proposal-viewer-confirm" hidden>
+                        <span class="proposal-viewer-confirm-text" id="portal-proposal-viewer-confirm-text"></span>
+                        <button class="btn btn-outline" id="portal-proposal-viewer-cancel" type="button">Cancel</button>
+                        <button class="btn btn-primary" id="portal-proposal-viewer-confirm-button" type="button">Confirm</button>
+                    </div>
+                    <div class="proposal-viewer-outcome" id="portal-proposal-viewer-outcome" hidden></div>
+                </footer>
+            </section>
+        </div>
+
         <div class="crm-modal-backdrop" id="opportunity-follow-up-modal" hidden>
             <section class="crm-modal" role="dialog" aria-modal="true" aria-labelledby="opportunity-follow-up-title">
                 <div class="crm-modal-header">
