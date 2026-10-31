@@ -13,6 +13,7 @@ use App\Models\CustomerFormRequest;
 use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Proposal;
+use App\Models\SeoReport;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
@@ -23,6 +24,7 @@ use App\Services\InvoicePdfService;
 use App\Services\InvoiceSubscriptionMonthSyncService;
 use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
+use App\Services\SeoReportPdfService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -149,6 +151,32 @@ class PortalController extends Controller
     {
         if (!in_array((int) $website->customer_id, $this->resolveCustomerIds($request), true)) abort(404);
         return new PortalWebsiteResource($website->load(['hostingAccount', 'activities' => fn ($q) => $q->where('visible_to_customer', true)->limit(50)]));
+    }
+
+    public function seoReports(Request $request)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        return response()->json([
+            'data' => SeoReport::query()
+                ->whereIn('customer_id', $customerIds)
+                ->orderByDesc('report_month')
+                ->orderByDesc('id')
+                ->get(['id', 'customer_id', 'report_number', 'report_month', 'issue_date', 'website_domain']),
+        ]);
+    }
+
+    public function downloadSeoReport(Request $request, SeoReport $seoReport, SeoReportPdfService $pdfService)
+    {
+        if (!in_array((int) $seoReport->customer_id, $this->resolveCustomerIds($request), true)) {
+            abort(404);
+        }
+
+        $pdf = $pdfService->render($seoReport);
+
+        return $request->boolean('inline')
+            ? $pdf->stream($seoReport->downloadFileName())
+            : $pdf->download($seoReport->downloadFileName());
     }
 
     public function forms(Request $request)
