@@ -162,6 +162,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     Route::middleware('role:admin')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
+        Route::post('seo-reports/{seoReport}/send', [SeoReportController::class, 'send']);
         Route::get('admin/staff-users/{user}', [AdminStaffUserController::class, 'show']);
         Route::delete('admin/staff-users/{user}', [AdminStaffUserController::class, 'destroy']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);

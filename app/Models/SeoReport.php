@@ -18,12 +18,15 @@ class SeoReport extends Model
         'issue_date',
         'website_domain',
         'data',
+        'sent_at',
+        'sent_to',
     ];
 
     protected $casts = [
         'report_month' => 'date',
         'issue_date' => 'date',
         'data' => 'array',
+        'sent_at' => 'datetime',
     ];
 
     public function customer(): BelongsTo
@@ -39,5 +42,15 @@ class SeoReport extends Model
     public function downloadFileName(): string
     {
         return 'SEO-Report-'.$this->report_number.'.pdf';
+    }
+
+    /**
+     * The client contact on the report, falling back to the customer's own email.
+     */
+    public function recipientEmail(): string
+    {
+        $contact = trim((string) ($this->data['contact_email'] ?? ''));
+
+        return $contact !== '' ? $contact : trim((string) $this->customer?->email);
     }
 }

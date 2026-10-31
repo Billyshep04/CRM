@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\SeoReportMailable;
 use App\Models\Customer;
 use App\Models\Role;
 use App\Models\SeoReport;
 use App\Models\User;
 use App\Services\SeoReportPdfService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -152,6 +154,62 @@ class SeoReportTest extends TestCase
         $this->assertStringStartsWith('inline', (string) $inline->headers->get('content-disposition'));
 
         $this->get("/api/portal/seo-reports/{$otherReport->id}/download")->assertNotFound();
+    }
+
+    public function test_saving_a_report_never_emails_the_customer(): void
+    {
+        Mail::fake();
+        $this->actingAsRole('admin');
+        $customer = $this->customer('Harbourside Kitchens');
+
+        $id = $this->postJson('/api/seo-reports', $this->payload($customer))->assertCreated()->json('data.id');
+        $this->putJson("/api/seo-reports/{$id}", $this->payload($customer))->assertOk();
+
+        Mail::assertNothingSent();
+        $this->assertNull(SeoReport::query()->findOrFail($id)->sent_at);
+    }
+
+    public function test_admin_can_send_a_report_to_the_client_contact(): void
+    {
+        Mail::fake();
+        $this->actingAsRole('admin');
+        $customer = $this->customer('Harbourside Kitchens');
+        $report = $this->storedReport($customer, 'SEO-HK-1026');
+        $report->forceFill(['data' => [...$report->data, 'contact_email' => 'sarah@harbourside-kitchens.co.uk']])->save();
+
+        $this->postJson("/api/seo-reports/{$report->id}/send")
+            ->assertOk()
+            ->assertJsonPath('data.sent_to', 'sarah@harbourside-kitchens.co.uk');
+
+        Mail::assertSent(SeoReportMailable::class, function (SeoReportMailable $mail): bool {
+            return $mail->hasTo('sarah@harbourside-kitchens.co.uk')
+                && str_starts_with($mail->pdf, '%PDF')
+                && $mail->subjectLine === 'Your October 2026 SEO report for example.co.uk';
+        });
+        $this->assertNotNull($report->fresh()->sent_at);
+    }
+
+    public function test_send_falls_back_to_the_customer_email(): void
+    {
+        Mail::fake();
+        $this->actingAsRole('admin');
+        $customer = $this->customer('Harbourside Kitchens');
+        $report = $this->storedReport($customer, 'SEO-HK-1026');
+
+        $this->postJson("/api/seo-reports/{$report->id}/send")->assertOk();
+
+        Mail::assertSent(SeoReportMailable::class, fn (SeoReportMailable $mail): bool => $mail->hasTo('hello@harboursidekitchens.co.uk'));
+    }
+
+    public function test_staff_cannot_send_reports(): void
+    {
+        Mail::fake();
+        $this->actingAsRole('staff');
+        $report = $this->storedReport($this->customer('Harbourside Kitchens'), 'SEO-HK-1026');
+
+        $this->postJson("/api/seo-reports/{$report->id}/send")->assertForbidden();
+
+        Mail::assertNothingSent();
     }
 
     public function test_required_fields_are_validated_with_readable_names(): void
