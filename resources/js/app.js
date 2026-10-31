@@ -199,6 +199,7 @@ const dom = {
     portalWebsites: document.getElementById('portal-websites'),
     portalWebsitesDetail: document.getElementById('portal-websites-detail'),
     portalWebsitesRefresh: document.getElementById('portal-websites-refresh'),
+    portalSeoReports: document.getElementById('portal-seo-reports'),
     portalWebsiteDetailTitle: document.getElementById('portal-website-detail-title'),
     portalWebsiteDetailDomain: document.getElementById('portal-website-detail-domain'),
     portalWebsiteHeadline: document.getElementById('portal-website-headline'),
@@ -452,6 +453,19 @@ const dom = {
     proposalAddLineItem: document.getElementById('proposal-add-line-item'),
     proposalPriceTotal: document.getElementById('proposal-price-total'),
     proposalsRefresh: document.getElementById('proposals-refresh'),
+    seoReportsTable: document.getElementById('seo-reports-table'),
+    seoReportsFilterCustomer: document.getElementById('seo-reports-filter-customer'),
+    seoReportsLoadMore: document.getElementById('seo-reports-load-more'),
+    seoReportNew: document.getElementById('seo-report-new'),
+    seoReportEditor: document.getElementById('seo-report-editor'),
+    seoReportForm: document.getElementById('seo-report-form'),
+    seoReportFormTitle: document.getElementById('seo-report-form-title'),
+    seoReportFormStatus: document.getElementById('seo-report-form-status'),
+    seoReportCustomerSelect: document.getElementById('seo-report-customer-select'),
+    seoReportCoverFields: document.getElementById('seo-report-cover-fields'),
+    seoReportSections: document.getElementById('seo-report-sections'),
+    seoReportPreview: document.getElementById('seo-report-preview'),
+    seoReportCancel: document.getElementById('seo-report-cancel'),
     invoicesTable: document.getElementById('invoices-table'),
     invoiceForm: document.getElementById('invoice-form'),
     invoiceFormTitle: document.getElementById('invoice-form-title'),
@@ -530,6 +544,7 @@ const state = {
     recurringCosts: [],
     subscriptions: [],
     proposals: [],
+    seoReports: [],
     tasks: [],
     monthlyTasks: [],
     monthlyTasksSelectedMonth: null,
@@ -555,6 +570,7 @@ const state = {
     customerFormSettings: { types: [] },
     portalInvoices: [],
     portalProposals: [],
+    portalSeoReports: [],
     portalJobs: [],
     portalSubscriptions: [],
     customerForms: [],
@@ -597,6 +613,9 @@ const state = {
             status: 'all',
             customer: 'all',
         },
+        seoReports: {
+            customer: 'all',
+        },
         invoices: {
             status: 'all',
             customer: 'all',
@@ -615,6 +634,7 @@ const state = {
         costs: { page: 1, lastPage: 1 },
         subscriptions: { page: 1, lastPage: 1 },
         proposals: { page: 1, lastPage: 1 },
+        seoReports: { page: 1, lastPage: 1 },
         invoices: { page: 1, lastPage: 1 },
         tasks: { page: 1, lastPage: 1 },
     },
@@ -626,6 +646,7 @@ const state = {
         recurringCost: null,
         subscription: null,
         proposal: null,
+        seoReport: null,
         proposalFormTypeIndex: null,
         customerFormTypeIndex: null,
         task: null,
@@ -677,6 +698,10 @@ const viewMeta = {
     proposals: {
         title: 'Proposals',
         subtitle: 'Create and send customer proposals.',
+    },
+    'seo-reports': {
+        title: 'SEO Reports',
+        subtitle: 'Build monthly SEO performance reports and download them as PDFs.',
     },
     costs: {
         title: 'Costs',
@@ -933,6 +958,9 @@ function setActiveView(view) {
             .then(loadAdminProposalForms)
             .then(loadProposals);
     }
+    if (view === 'seo-reports') {
+        ensureCustomersLoaded().then(loadSeoReports);
+    }
     if (view === 'costs') {
         loadCostMonths();
         loadRecurringCosts();
@@ -964,7 +992,10 @@ function setActiveView(view) {
     if (view === 'portal-proposals') {
         loadPortalProposals();
     }
-    if (view === 'portal-websites') loadPortalWebsites();
+    if (view === 'portal-websites') {
+        loadPortalWebsites();
+        loadPortalSeoReports();
+    }
     if (view === 'portal-website-detail' && state.currentPortalWebsite?.id) loadPortalWebsiteDetail(state.currentPortalWebsite.id);
     if (view === 'portal-forms') {
         loadPortalForms();
@@ -1104,6 +1135,7 @@ const loadMoreButtons = {
     costs: dom.costsLoadMore,
     subscriptions: dom.subscriptionsLoadMore,
     proposals: dom.proposalsLoadMore,
+    seoReports: dom.seoReportsLoadMore,
     invoices: dom.invoicesLoadMore,
 };
 
@@ -3972,7 +4004,7 @@ async function handleStaffUserSubmit(event) {
 }
 
 function populateCustomerSelects(customers) {
-    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect, dom.opportunityCustomerSelect];
+    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect, dom.opportunityCustomerSelect, dom.seoReportCustomerSelect];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value;
@@ -3996,7 +4028,7 @@ function populateCustomerSelects(customers) {
 }
 
 function populateCustomerFilterSelects(customers) {
-    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.proposalsFilterCustomer, dom.invoicesFilterCustomer];
+    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.proposalsFilterCustomer, dom.invoicesFilterCustomer, dom.seoReportsFilterCustomer];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value || 'all';
@@ -7103,6 +7135,515 @@ async function handleProposalAction(event) {
     }
 }
 
+// SEO reports. Every report field has a data-seo-path such as "metrics.sessions.current"
+// mirroring the report's `data` JSON, so one walk fills the form and one walk saves it.
+const seoReportPairs = {
+    metrics: [
+        ['sessions', 'Organic sessions'],
+        ['clicks', 'Search clicks (Search Console)'],
+        ['impressions', 'Impressions (Search Console)'],
+        ['avg_position', 'Average position', '0.1'],
+        ['enquiries', 'Enquiries from search'],
+    ],
+    ranking_buckets: [
+        ['top3', 'Keywords in positions 1–3'],
+        ['top10', 'Keywords in positions 4–10'],
+        ['top20', 'Keywords in positions 11–20'],
+        ['top50', 'Keywords in positions 21–50'],
+    ],
+    authority: [
+        ['domain_authority', 'Domain authority'],
+        ['referring_domains', 'Referring domains'],
+        ['backlinks', 'Total backlinks'],
+    ],
+};
+
+const seoReportRows = {
+    key_wins: { count: 3, columns: '1fr 1.6fr', fields: [['title', 'Headline', 'text', 90], ['detail', 'Detail', 'text', 160]] },
+    landing_pages: { count: 5, columns: '1.6fr 0.7fr 0.7fr', fields: [['path', 'Page path', 'text', 80, '/bespoke-kitchens/'], ['sessions', 'Sessions', 'number'], ['previous', 'Last month (blank = new)', 'number']] },
+    keywords: { count: 10, columns: '1.6fr 0.8fr 0.7fr 0.7fr', fields: [['keyword', 'Keyword', 'text', 60], ['searches', 'Monthly searches', 'number'], ['previous', 'Last month position', 'number'], ['current', 'This month position', 'number']] },
+    fixes: { count: 4, columns: '0.5fr 1.5fr', fields: [['count', 'Number', 'number'], ['label', 'What was fixed', 'text', 40, 'Broken links repaired']] },
+    new_links: { count: 5, columns: '1.4fr 0.6fr 1fr', fields: [['domain', 'Linking domain', 'text', 60], ['authority', 'Authority', 'number'], ['type', 'Type', 'text', 40, 'Directory']] },
+    work_items: { count: 6, columns: '0.6fr 1.3fr 1.8fr', fields: [['category', 'Tag', 'text', 14, 'Content'], ['title', 'What we did', 'text', 80], ['detail', 'Detail', 'text', 140]] },
+};
+
+const seoReportDefaults = {
+    campaign_length: 12,
+    prepared_by: { name: 'Billy Sheppard', phone: '07979 971328', email: 'info@web-stamp.co.uk' },
+};
+
+function seoInput(path, { type = 'text', step = null, maxlength = null, placeholder = '', label = '' } = {}) {
+    const aria = label ? ` aria-label="${escapeHtml(label)}"` : '';
+    if (type === 'textarea') {
+        return `<textarea data-seo-path="${path}"${aria} rows="4"${maxlength ? ` maxlength="${maxlength}"` : ''} placeholder="${escapeHtml(placeholder)}"></textarea>`;
+    }
+    const numberAttrs = type === 'number' ? ` min="0" step="${step || 'any'}" inputmode="decimal"` : '';
+    return `<input type="${type}" data-seo-path="${path}"${aria}${numberAttrs}${maxlength ? ` maxlength="${maxlength}"` : ''} placeholder="${escapeHtml(placeholder)}">`;
+}
+
+function seoField(path, label, options = {}) {
+    return `<label class="field${options.wide ? ' form-grid-wide' : ''}"><span>${escapeHtml(label)}</span>${seoInput(path, options)}</label>`;
+}
+
+function seoSection(number, title, hint, body) {
+    return `<div class="seo-report-section">
+        <div class="seo-report-section-title"><span>${number}</span>${escapeHtml(title)}</div>
+        ${hint ? `<div class="form-hint">${escapeHtml(hint)}</div>` : ''}
+        ${body}
+    </div>`;
+}
+
+function seoPairTable(group) {
+    const rows = seoReportPairs[group].map(([key, label, step]) => `
+        <span class="seo-pair-label">${escapeHtml(label)}</span>
+        ${seoInput(`${group}.${key}.current`, { type: 'number', step, label: `${label}, this month` })}
+        ${seoInput(`${group}.${key}.previous`, { type: 'number', step, label: `${label}, last month` })}`).join('');
+
+    return `<div class="seo-pairs"><span></span><span class="seo-grid-head">This month</span><span class="seo-grid-head">Last month</span>${rows}</div>`;
+}
+
+function seoRowTable(group, title) {
+    const { count, columns, fields } = seoReportRows[group];
+    const head = fields.map(([, label]) => `<span class="seo-grid-head">${escapeHtml(label)}</span>`).join('');
+    let rows = '';
+    for (let index = 0; index < count; index += 1) {
+        rows += fields.map(([key, label, type, maxlength, placeholder]) => seoInput(`${group}.${index}.${key}`, {
+            type: type || 'text',
+            label: `${title} ${index + 1}: ${label}`,
+            maxlength,
+            placeholder: index === 0 ? placeholder : '',
+        })).join('');
+    }
+
+    return `<div class="seo-rows-title">${escapeHtml(title)}</div><div class="seo-rows" style="grid-template-columns: ${columns};">${head}${rows}</div>`;
+}
+
+function renderSeoReportSections() {
+    if (!dom.seoReportSections || dom.seoReportSections.childElementCount) return;
+
+    dom.seoReportCoverFields.innerHTML = [
+        seoField('contact_name', 'Client contact name', { maxlength: 255 }),
+        seoField('contact_email', 'Client contact email', { type: 'email', maxlength: 255 }),
+        seoField('campaign_month', 'Campaign month (e.g. 6)', { type: 'number', step: '1' }),
+        seoField('campaign_length', 'Campaign length in months (e.g. 12)', { type: 'number', step: '1' }),
+    ].join('');
+
+    let history = '<div class="seo-history">';
+    for (let index = 0; index < 10; index += 1) {
+        history += `<label class="field"><span data-seo-history-label="${index}">Month ${index + 1}</span>${seoInput(`traffic_history.${index}`, { type: 'number' })}</label>`;
+    }
+    history += '</div>';
+
+    let priorities = '';
+    for (let index = 0; index < 3; index += 1) {
+        priorities += seoField(`priorities.${index}`, `Priority ${index + 1}`, { maxlength: 90, wide: true });
+    }
+
+    dom.seoReportSections.innerHTML = [
+        seoSection(2, 'Executive summary', '"Keywords in top 10" is worked out from the ranking numbers in section 4.', `
+            ${seoField('summary', 'This month in brief', { type: 'textarea', maxlength: 600 })}
+            ${seoPairTable('metrics')}
+            ${seoRowTable('key_wins', 'Key wins this month')}`),
+        seoSection(3, 'Organic traffic', 'The last two bars of the chart use the organic sessions figures from section 2. Click-through rate is calculated from clicks and impressions.', `
+            <div class="seo-rows-title">Organic sessions for the 10 months before last month</div>
+            ${history}
+            <div class="form-grid">${seoField('growth_since_start', 'Growth since the campaign started (%)', { type: 'number' })}</div>
+            ${seoRowTable('landing_pages', 'Top landing pages from search')}`),
+        seoSection(4, 'Keyword rankings', 'Number of tracked keywords in each position range. The total becomes "the N search terms we track".', `
+            ${seoPairTable('ranking_buckets')}
+            ${seoRowTable('keywords', 'Priority keywords (positions in Google)')}
+            ${seoField('rankings_note', 'What this means', { type: 'textarea', maxlength: 450 })}`),
+        seoSection(5, 'Technical health & authority', 'Core Web Vitals are rated against Google\'s thresholds automatically (LCP 2.5s, INP 200ms, CLS 0.1).', `
+            <div class="form-grid seo-grid-3">
+                ${seoField('health.current', 'Site health score (0–100)', { type: 'number', step: '1' })}
+                ${seoField('health.previous', 'Last month\'s health score', { type: 'number', step: '1' })}
+                <span></span>
+                ${seoField('vitals.lcp', 'Largest Contentful Paint (seconds)', { type: 'number', step: '0.1' })}
+                ${seoField('vitals.inp', 'Interaction to Next Paint (ms)', { type: 'number', step: '1' })}
+                ${seoField('vitals.cls', 'Cumulative Layout Shift', { type: 'number', step: '0.01' })}
+            </div>
+            ${seoRowTable('fixes', 'Issues fixed this month')}
+            ${seoPairTable('authority')}
+            ${seoRowTable('new_links', 'New links earned')}`),
+        seoSection(6, 'Work & next steps', '', `
+            ${seoRowTable('work_items', 'Work completed this month')}
+            <div class="seo-rows-title">Next month's priorities</div>
+            <div class="form-grid">${priorities}</div>
+            <div class="seo-rows-title">Questions contact</div>
+            <div class="form-grid seo-grid-3">
+                ${seoField('prepared_by.name', 'Name', { maxlength: 255 })}
+                ${seoField('prepared_by.phone', 'Phone', { maxlength: 255 })}
+                ${seoField('prepared_by.email', 'Email', { type: 'email', maxlength: 255 })}
+            </div>`),
+    ].join('');
+}
+
+function getSeoPath(source, path) {
+    return path.split('.').reduce((value, key) => (value == null ? undefined : value[key]), source);
+}
+
+function setSeoPath(target, path, value) {
+    const keys = path.split('.');
+    let node = target;
+    keys.forEach((key, index) => {
+        if (index === keys.length - 1) {
+            node[key] = value;
+            return;
+        }
+        if (node[key] == null) node[key] = /^\d+$/.test(keys[index + 1]) ? [] : {};
+        node = node[key];
+    });
+}
+
+function updateSeoHistoryLabels() {
+    const monthValue = dom.seoReportForm?.querySelector('input[name="report_month"]')?.value || '';
+    const [year, month] = monthValue.split('-').map(Number);
+    dom.seoReportForm?.querySelectorAll('[data-seo-history-label]').forEach((label) => {
+        const index = Number(label.dataset.seoHistoryLabel);
+        if (!year || !month) {
+            label.textContent = `Month ${index + 1}`;
+            return;
+        }
+        // Inputs cover the 12-month chart minus its last two bars: report month −11 to −2.
+        const date = new Date(year, month - 1 - (11 - index), 1);
+        label.textContent = date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    });
+}
+
+function fillSeoReportForm(report = null) {
+    renderSeoReportSections();
+    const form = dom.seoReportForm;
+    form.reset();
+
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const data = report?.data || seoReportDefaults;
+
+    form.querySelector('select[name="customer_id"]').value = report?.customer_id || '';
+    form.querySelector('input[name="website_domain"]').value = report?.website_domain || '';
+    form.querySelector('input[name="report_month"]').value = (report?.report_month || '').slice(0, 7)
+        || `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+    form.querySelector('input[name="issue_date"]').value = (report?.issue_date || '').slice(0, 10)
+        || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    form.querySelector('input[name="report_number"]').value = report?.report_number || '';
+
+    form.querySelectorAll('[data-seo-path]').forEach((input) => {
+        const value = getSeoPath(data, input.dataset.seoPath);
+        input.value = value == null ? '' : value;
+    });
+
+    updateSeoHistoryLabels();
+}
+
+function openSeoReportEditor(report = null, title = 'New SEO report') {
+    state.editing.seoReport = report?.id || null;
+    fillSeoReportForm(report);
+    if (dom.seoReportFormTitle) dom.seoReportFormTitle.textContent = title;
+    setFormStatus(dom.seoReportFormStatus, '');
+    dom.seoReportEditor.hidden = false;
+    dom.seoReportEditor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeSeoReportEditor() {
+    state.editing.seoReport = null;
+    if (dom.seoReportEditor) dom.seoReportEditor.hidden = true;
+}
+
+/**
+ * Start next month's report from this one: this month's figures become "last month"
+ * and the month-specific writing is cleared.
+ */
+function rollSeoReportForward(report) {
+    const data = JSON.parse(JSON.stringify(report.data || {}));
+    const shiftPairs = (group) => Object.values(data[group] || {}).forEach((pair) => {
+        if (!pair) return;
+        pair.previous = pair.current ?? null;
+        pair.current = null;
+    });
+
+    const oldSessionsPrevious = data.metrics?.sessions?.previous ?? null;
+    ['metrics', 'ranking_buckets', 'authority'].forEach(shiftPairs);
+    if (data.health) data.health = { previous: data.health.current ?? null, current: null };
+    data.traffic_history = [...(data.traffic_history || []).slice(1, 10), oldSessionsPrevious];
+    data.landing_pages = (data.landing_pages || []).map((page) => ({ ...page, previous: page.sessions ?? null, sessions: null }));
+    data.keywords = (data.keywords || []).map((row) => ({ ...row, previous: row.current ?? null, current: null }));
+    data.fixes = (data.fixes || []).map((fix) => ({ ...fix, count: null }));
+    if (data.campaign_month) data.campaign_month = Number(data.campaign_month) + 1;
+    ['summary', 'rankings_note', 'growth_since_start', 'vitals'].forEach((key) => { data[key] = null; });
+    ['key_wins', 'new_links', 'work_items', 'priorities'].forEach((key) => { data[key] = []; });
+
+    const [year, month] = String(report.report_month || '').slice(0, 7).split('-').map(Number);
+    const next = new Date(year, month, 1);
+
+    return {
+        customer_id: report.customer_id,
+        website_domain: report.website_domain,
+        report_month: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`,
+        issue_date: '',
+        report_number: '',
+        data,
+    };
+}
+
+function collectSeoReportPayload() {
+    const form = dom.seoReportForm;
+    const data = {};
+    form.querySelectorAll('[data-seo-path]').forEach((input) => {
+        const value = input.value.trim();
+        setSeoPath(data, input.dataset.seoPath, value === '' ? null : value);
+    });
+
+    return {
+        customer_id: Number(form.querySelector('select[name="customer_id"]').value) || null,
+        website_domain: form.querySelector('input[name="website_domain"]').value.trim(),
+        report_month: form.querySelector('input[name="report_month"]').value,
+        issue_date: form.querySelector('input[name="issue_date"]').value,
+        report_number: form.querySelector('input[name="report_number"]').value.trim() || null,
+        data,
+    };
+}
+
+function seoReportPayloadError(payload) {
+    if (!payload.customer_id) return 'Select a customer.';
+    if (!payload.website_domain) return 'Enter the website.';
+    if (!payload.report_month) return 'Choose the report month.';
+    if (!payload.issue_date) return 'Choose the issue date.';
+    return '';
+}
+
+async function handleSeoReportCustomerChange() {
+    const form = dom.seoReportForm;
+    const customerId = Number(dom.seoReportCustomerSelect?.value || 0);
+    if (!form || !customerId) return;
+
+    const customer = state.customerOptions.find((item) => Number(item.id) === customerId);
+    const emailInput = form.querySelector('[data-seo-path="contact_email"]');
+    if (customer?.email && emailInput && !emailInput.value) emailInput.value = customer.email;
+
+    const domainInput = form.querySelector('input[name="website_domain"]');
+    if (!domainInput || domainInput.value) return;
+    try {
+        const response = await api.get(`/api/websites${buildQuery({ customer_id: customerId, per_page: 5 })}`);
+        const website = (response?.data?.data ?? [])[0];
+        const domain = website?.current_domain || website?.production_domain || website?.domain || '';
+        if (domain && !domainInput.value) domainInput.value = domain;
+    } catch (error) {
+        // The domain can still be typed in by hand.
+    }
+}
+
+async function loadSeoReports(append = false) {
+    if (!dom.seoReportsTable) return;
+    setLoadMoreLoading('seoReports', true);
+
+    if (!append) {
+        resetPagination('seoReports');
+        resetTable(dom.seoReportsTable);
+        const loadingRow = document.createElement('div');
+        loadingRow.className = 'table-row table-empty seo-reports';
+        loadingRow.innerHTML = '<span>Loading SEO reports...</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.seoReportsTable.appendChild(loadingRow);
+    }
+
+    try {
+        const page = append ? state.pagination.seoReports.page + 1 : 1;
+        const query = buildQuery({ per_page: 20, page, customer_id: state.filters.seoReports.customer });
+        const response = await api.get(`/api/seo-reports${query}`);
+        const items = response?.data?.data ?? [];
+        state.seoReports = append ? [...state.seoReports, ...items] : items;
+        const { current_page: currentPage = page, last_page: lastPage = page } = response?.data ?? {};
+        state.pagination.seoReports = { page: currentPage, lastPage };
+        updateLoadMoreVisibility('seoReports');
+        renderSeoReports();
+    } catch (error) {
+        resetTable(dom.seoReportsTable);
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty seo-reports';
+        emptyRow.innerHTML = '<span>Unable to load SEO reports.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.seoReportsTable.appendChild(emptyRow);
+    } finally {
+        setLoadMoreLoading('seoReports', false);
+    }
+}
+
+function formatSeoReportMonth(value) {
+    const [year, month] = String(value || '').slice(0, 7).split('-').map(Number);
+    if (!year || !month) return '';
+    return new Date(year, month - 1, 1).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+}
+
+function renderSeoReports() {
+    if (!dom.seoReportsTable) return;
+    resetTable(dom.seoReportsTable);
+
+    if (!state.seoReports.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty seo-reports';
+        emptyRow.innerHTML = '<span>No SEO reports yet. Click New report to create one.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.seoReportsTable.appendChild(emptyRow);
+        return;
+    }
+
+    state.seoReports.forEach((report) => {
+        const row = document.createElement('div');
+        row.className = 'table-row seo-reports';
+        row.innerHTML = `
+            <span>${escapeHtml(report.report_number)}</span>
+            <span>${escapeHtml(report.customer?.name || getCustomerName(report.customer_id))}</span>
+            <span>${escapeHtml(formatSeoReportMonth(report.report_month))}</span>
+            <span>${escapeHtml(report.website_domain)}</span>
+            <span>${formatDate(report.issue_date)}</span>
+            <div class="row-actions">
+                <button class="btn btn-outline btn-small" data-action="edit" data-id="${report.id}">Edit</button>
+                <button class="btn btn-outline btn-small" data-action="view" data-id="${report.id}">View PDF</button>
+                <button class="btn btn-outline btn-small" data-action="download" data-id="${report.id}">Download</button>
+                <button class="btn btn-outline btn-small" data-action="next-month" data-id="${report.id}" title="Start next month's report from this one">Next month</button>
+                <button class="btn btn-outline btn-small" data-action="delete" data-id="${report.id}">Delete</button>
+            </div>
+        `;
+        dom.seoReportsTable.appendChild(row);
+    });
+}
+
+async function openSeoReportPdf(request) {
+    // Open the tab before the request so pop-up blockers treat it as part of the click.
+    const pdfWindow = window.open('', '_blank');
+    try {
+        const response = await request();
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        if (pdfWindow) {
+            pdfWindow.location.href = blobUrl;
+        } else {
+            // Pop-up blocked: never navigate this tab away from an unsaved form.
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.target = '_blank';
+            link.rel = 'noopener';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        }
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 60000);
+        return true;
+    } catch (error) {
+        pdfWindow?.close();
+        throw error;
+    }
+}
+
+async function blobErrorMessage(error, fallback) {
+    const data = error?.response?.data;
+    if (data instanceof Blob) {
+        try {
+            const parsed = JSON.parse(await data.text());
+            return getErrorMessage({ response: { data: parsed } }, fallback);
+        } catch (parseError) {
+            return fallback;
+        }
+    }
+    return getErrorMessage(error, fallback);
+}
+
+async function handleSeoReportSubmit(event) {
+    event.preventDefault();
+    const payload = collectSeoReportPayload();
+    const problem = seoReportPayloadError(payload);
+    if (problem) {
+        setFormStatus(dom.seoReportFormStatus, problem, true);
+        return;
+    }
+
+    try {
+        if (state.editing.seoReport) {
+            await api.put(`/api/seo-reports/${state.editing.seoReport}`, payload);
+            showToast('SEO report updated');
+        } else {
+            await api.post('/api/seo-reports', payload);
+            showToast('SEO report saved');
+        }
+        closeSeoReportEditor();
+        await loadSeoReports();
+    } catch (error) {
+        setFormStatus(dom.seoReportFormStatus, getErrorMessage(error, 'Unable to save SEO report.'), true);
+    }
+}
+
+async function handleSeoReportPreview() {
+    const payload = collectSeoReportPayload();
+    const problem = seoReportPayloadError(payload);
+    if (problem) {
+        setFormStatus(dom.seoReportFormStatus, problem, true);
+        return;
+    }
+
+    setFormStatus(dom.seoReportFormStatus, 'Building preview...');
+    try {
+        await openSeoReportPdf(() => api.post('/api/seo-reports/preview', payload, { responseType: 'blob' }));
+        setFormStatus(dom.seoReportFormStatus, '');
+    } catch (error) {
+        setFormStatus(dom.seoReportFormStatus, await blobErrorMessage(error, 'Unable to build the preview.'), true);
+    }
+}
+
+async function handleSeoReportAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const id = Number(actionButton.dataset.id);
+    const action = actionButton.dataset.action;
+    const report = state.seoReports.find((item) => item.id === id);
+    if (!report) return;
+
+    if (action === 'edit') {
+        openSeoReportEditor(report, `Edit ${report.report_number}`);
+        return;
+    }
+
+    if (action === 'next-month') {
+        openSeoReportEditor(rollSeoReportForward(report), `New report from ${report.report_number}`);
+        setFormStatus(dom.seoReportFormStatus, 'This month\'s figures have moved to the "last month" columns. Fill in the new month and save.');
+        return;
+    }
+
+    if (action === 'view') {
+        try {
+            await openSeoReportPdf(() => api.get(`/api/seo-reports/${id}/download?inline=1`, { responseType: 'blob' }));
+        } catch (error) {
+            showToast('Unable to open SEO report', true);
+        }
+        return;
+    }
+
+    if (action === 'download') {
+        try {
+            const response = await api.get(`/api/seo-reports/${id}/download`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `SEO-Report-${report.report_number}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            showToast('Unable to download SEO report', true);
+        }
+        return;
+    }
+
+    if (action === 'delete') {
+        if (!window.confirm(`Delete SEO report ${report.report_number}?`)) return;
+        try {
+            await api.delete(`/api/seo-reports/${id}`);
+            if (state.editing.seoReport === id) closeSeoReportEditor();
+            showToast('SEO report deleted');
+            await loadSeoReports();
+        } catch (error) {
+            showToast(getErrorMessage(error, 'Unable to delete SEO report.'), true);
+        }
+    }
+}
+
 async function loadPortalProposals() {
     if (!dom.portalProposals) return;
     resetTable(dom.portalProposals);
@@ -7380,6 +7921,155 @@ if (proposalViewer.backdrop) {
         const proposal = proposalViewer.proposal;
         if (!proposal) return;
         downloadProposal(proposal.id, `Proposal-${proposal.proposal_number}-v${proposal.version}.pdf`, true);
+    });
+}
+
+async function loadPortalSeoReports() {
+    if (!dom.portalSeoReports) return;
+    resetTable(dom.portalSeoReports);
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty portal-seo-reports';
+    loadingRow.innerHTML = '<span>Loading SEO reports...</span><span></span><span></span><span></span><span></span>';
+    dom.portalSeoReports.appendChild(loadingRow);
+
+    try {
+        const response = await api.get('/api/portal/seo-reports');
+        state.portalSeoReports = response?.data?.data ?? [];
+        renderPortalSeoReports(state.portalSeoReports);
+    } catch (error) {
+        state.portalSeoReports = [];
+        renderPortalSeoReports([], 'Unable to load SEO reports.');
+    }
+}
+
+function renderPortalSeoReports(reports = [], emptyMessage = 'No SEO reports yet. They will appear here each month.') {
+    if (!dom.portalSeoReports) return;
+    resetTable(dom.portalSeoReports);
+
+    if (!reports.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty portal-seo-reports';
+        emptyRow.innerHTML = `<span>${escapeHtml(emptyMessage)}</span><span></span><span></span><span></span><span></span>`;
+        dom.portalSeoReports.appendChild(emptyRow);
+        return;
+    }
+
+    reports.forEach((report) => {
+        const row = document.createElement('div');
+        row.className = 'table-row portal-seo-reports';
+        row.innerHTML = `
+            <span>${escapeHtml(report.report_number)}</span>
+            <span>${escapeHtml(formatSeoReportMonth(report.report_month))}</span>
+            <span>${escapeHtml(report.website_domain)}</span>
+            <span>${formatDate(report.issue_date)}</span>
+            <div class="row-actions">
+                <button type="button" class="btn btn-primary btn-small" data-action="portal-seo-report-view" data-id="${report.id}">View</button>
+                <button type="button" class="btn btn-outline btn-small btn-icon" data-action="portal-seo-report-download" data-id="${report.id}" aria-label="Download PDF" title="Download PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
+            </div>
+        `;
+        dom.portalSeoReports.appendChild(row);
+    });
+}
+
+async function downloadPortalSeoReport(report) {
+    try {
+        const response = await api.get(`/api/portal/seo-reports/${report.id}/download`, { responseType: 'blob' });
+        const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `SEO-Report-${report.report_number}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+        showToast('Unable to download SEO report', true);
+    }
+}
+
+// Same popup as proposals, but reports are read-only so it only offers Download.
+const seoReportViewer = {
+    backdrop: document.getElementById('portal-seo-report-viewer'),
+    title: document.getElementById('portal-seo-report-viewer-title'),
+    subtitle: document.getElementById('portal-seo-report-viewer-subtitle'),
+    close: document.getElementById('portal-seo-report-viewer-close'),
+    message: document.getElementById('portal-seo-report-viewer-message'),
+    frame: document.getElementById('portal-seo-report-viewer-frame'),
+    download: document.getElementById('portal-seo-report-viewer-download'),
+    report: null,
+    blobUrl: null,
+    returnFocus: null,
+};
+
+function releasePortalSeoReportViewerBlob() {
+    if (seoReportViewer.blobUrl) {
+        window.URL.revokeObjectURL(seoReportViewer.blobUrl);
+        seoReportViewer.blobUrl = null;
+    }
+}
+
+async function openPortalSeoReportViewer(report) {
+    if (!seoReportViewer.backdrop) return;
+    seoReportViewer.report = report;
+    seoReportViewer.returnFocus = document.activeElement;
+    seoReportViewer.title.textContent = `${formatSeoReportMonth(report.report_month)} SEO report`;
+    seoReportViewer.subtitle.textContent = [report.report_number, report.website_domain].filter(Boolean).join(' · ');
+
+    seoReportViewer.frame.hidden = true;
+    seoReportViewer.frame.removeAttribute('src');
+    seoReportViewer.message.hidden = false;
+    seoReportViewer.message.textContent = 'Loading report…';
+    seoReportViewer.backdrop.hidden = false;
+    document.body.classList.add('modal-open');
+    seoReportViewer.close.focus();
+
+    try {
+        const response = await api.get(`/api/portal/seo-reports/${report.id}/download?inline=1`, { responseType: 'blob' });
+        if (seoReportViewer.report?.id !== report.id || seoReportViewer.backdrop.hidden) return;
+        releasePortalSeoReportViewerBlob();
+        seoReportViewer.blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+        seoReportViewer.frame.src = `${seoReportViewer.blobUrl}#navpanes=0&view=FitH`;
+        seoReportViewer.frame.hidden = false;
+        seoReportViewer.message.hidden = true;
+    } catch (error) {
+        if (seoReportViewer.report?.id !== report.id) return;
+        seoReportViewer.message.textContent = 'Unable to load this report. Please try again or use Download PDF.';
+    }
+}
+
+function closePortalSeoReportViewer() {
+    if (!seoReportViewer.backdrop || seoReportViewer.backdrop.hidden) return;
+    seoReportViewer.backdrop.hidden = true;
+    seoReportViewer.frame.removeAttribute('src');
+    seoReportViewer.frame.hidden = true;
+    releasePortalSeoReportViewerBlob();
+    seoReportViewer.report = null;
+    document.body.classList.remove('modal-open');
+    if (seoReportViewer.returnFocus?.isConnected) seoReportViewer.returnFocus.focus();
+}
+
+if (dom.portalSeoReports) {
+    dom.portalSeoReports.addEventListener('click', (event) => {
+        const actionButton = event.target.closest('[data-action]');
+        if (!actionButton) return;
+        const report = state.portalSeoReports.find((item) => item.id === Number(actionButton.dataset.id));
+        if (!report) return;
+
+        if (actionButton.dataset.action === 'portal-seo-report-view') openPortalSeoReportViewer(report);
+        if (actionButton.dataset.action === 'portal-seo-report-download') downloadPortalSeoReport(report);
+    });
+}
+
+if (seoReportViewer.backdrop) {
+    seoReportViewer.close.addEventListener('click', closePortalSeoReportViewer);
+    seoReportViewer.backdrop.addEventListener('click', (event) => {
+        if (event.target === seoReportViewer.backdrop) closePortalSeoReportViewer();
+    });
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape') closePortalSeoReportViewer();
+    });
+    seoReportViewer.download.addEventListener('click', () => {
+        if (seoReportViewer.report) downloadPortalSeoReport(seoReportViewer.report);
     });
 }
 
@@ -8975,6 +9665,42 @@ if (dom.proposalsLoadMore) {
     dom.proposalsLoadMore.addEventListener('click', () => loadProposals(true));
 }
 
+if (dom.seoReportsTable) {
+    dom.seoReportsTable.addEventListener('click', handleSeoReportAction);
+}
+
+if (dom.seoReportsLoadMore) {
+    dom.seoReportsLoadMore.addEventListener('click', () => loadSeoReports(true));
+}
+
+if (dom.seoReportsFilterCustomer) {
+    dom.seoReportsFilterCustomer.addEventListener('change', () => {
+        state.filters.seoReports.customer = dom.seoReportsFilterCustomer.value || 'all';
+        loadSeoReports();
+    });
+}
+
+if (dom.seoReportNew) {
+    dom.seoReportNew.addEventListener('click', () => openSeoReportEditor());
+}
+
+if (dom.seoReportForm) {
+    dom.seoReportForm.addEventListener('submit', handleSeoReportSubmit);
+    dom.seoReportForm.querySelector('input[name="report_month"]')?.addEventListener('change', updateSeoHistoryLabels);
+}
+
+if (dom.seoReportCustomerSelect) {
+    dom.seoReportCustomerSelect.addEventListener('change', handleSeoReportCustomerChange);
+}
+
+if (dom.seoReportPreview) {
+    dom.seoReportPreview.addEventListener('click', handleSeoReportPreview);
+}
+
+if (dom.seoReportCancel) {
+    dom.seoReportCancel.addEventListener('click', closeSeoReportEditor);
+}
+
 if (dom.opportunityForm) dom.opportunityForm.addEventListener('submit', handleOpportunitySubmit);
 if (dom.opportunityFollowUpForm) dom.opportunityFollowUpForm.addEventListener('submit', handleOpportunityFollowUpSubmit);
 if (dom.opportunityFollowUpClose) dom.opportunityFollowUpClose.addEventListener('click', closeOpportunityFollowUp);
@@ -9298,7 +10024,12 @@ if (dom.krystalImportList) dom.krystalImportList.addEventListener('click', async
     }
 });
 if (dom.hostingAccountsList) dom.hostingAccountsList.addEventListener('click',async(event)=>{const map=event.target.closest('[data-map-hosting]');if(map){const id=map.dataset.mapHosting;const customerId=dom.hostingAccountsList.querySelector(`[data-hosting-customer="${id}"]`)?.value;const websiteId=dom.hostingAccountsList.querySelector(`[data-hosting-website="${id}"]`)?.value;try{await api.put(`/api/hosting-accounts/${id}`,{customer_id:customerId?Number(customerId):null,website_id:websiteId?Number(websiteId):null});await loadHostingOptions();showToast('Hosting account mapping saved.');}catch(e){showToast(getErrorMessage(e,'Unable to save mapping.'),true);}return;}const open=event.target.closest('[data-open-cpanel]');if(open){try{const r=await api.post(`/api/hosting-accounts/${open.dataset.openCpanel}/session`);window.open(r?.data?.data?.url,'_blank','noopener');}catch(e){showToast(getErrorMessage(e,'Temporary cPanel login is unavailable.'),true);}}});
-if (dom.portalWebsitesRefresh) dom.portalWebsitesRefresh.addEventListener('click', loadPortalWebsites);
+if (dom.portalWebsitesRefresh) {
+    dom.portalWebsitesRefresh.addEventListener('click', () => {
+        loadPortalWebsites();
+        loadPortalSeoReports();
+    });
+}
 if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click', (event) => {
     const button = event.target.closest('[data-open-portal-website]');
     if (!button) return;

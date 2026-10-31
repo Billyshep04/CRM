@@ -111,6 +111,7 @@
                     <a href="#" class="nav-item staff-only" data-view="lead-discovery" title="Lead Discovery"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/><path d="M11 8v6M8 11h6"/></svg><span class="nav-label">Lead Discovery</span></a>
                     <a href="#" class="nav-item staff-only" data-view="revenue-opportunities" title="Revenue Opportunities"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></svg><span class="nav-label">Revenue Opportunities</span></a>
                     <a href="#" class="nav-item staff-only" data-view="proposals" title="Proposals"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/></svg><span class="nav-label">Proposals</span></a>
+                    <a href="#" class="nav-item staff-only" data-view="seo-reports" title="SEO Reports"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 6-6"/><path d="M15 8h5v5"/></svg><span class="nav-label">SEO Reports</span></a>
                     <div class="nav-section staff-only">Delivery</div>
                     <a href="#" class="nav-item staff-only" data-view="jobs" title="Jobs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></svg><span class="nav-label">Jobs</span></a>
                     <a href="#" class="nav-item staff-only" data-view="websites" title="Websites"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg><span class="nav-label">Websites</span></a>
@@ -1503,6 +1504,89 @@
                     </section>
                 </section>
 
+                <section class="view staff-view" data-view="seo-reports">
+                    <section class="content-grid proposals-layout">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">SEO reports</div>
+                                    <div class="card-subtitle">Monthly 6-page SEO performance reports for customers.</div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-primary" id="seo-report-new" type="button">New report</button>
+                                </div>
+                            </div>
+                            <div class="filters">
+                                <label class="field">
+                                    <span>Customer</span>
+                                    <select id="seo-reports-filter-customer"></select>
+                                </label>
+                            </div>
+                            <div class="table" id="seo-reports-table">
+                                <div class="table-row table-header seo-reports">
+                                    <span>Report</span>
+                                    <span>Customer</span>
+                                    <span>Month</span>
+                                    <span>Website</span>
+                                    <span>Issued</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty seo-reports">
+                                    <span>Loading SEO reports...</span>
+                                    <span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            <div class="table-actions">
+                                <button class="btn btn-ghost" id="seo-reports-load-more" type="button">Load more</button>
+                            </div>
+                        </div>
+
+                        <div class="card" id="seo-report-editor" hidden>
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="seo-report-form-title">New SEO report</div>
+                                    <div class="card-subtitle">Each section below fills one page of the PDF. Leave a section blank to hide it.</div>
+                                </div>
+                            </div>
+                            <form id="seo-report-form" class="form-stack" novalidate>
+                                <div class="seo-report-section">
+                                    <div class="seo-report-section-title"><span>1</span>Cover</div>
+                                    <div class="form-grid">
+                                        <label class="field">
+                                            <span>Customer</span>
+                                            <select name="customer_id" id="seo-report-customer-select" required></select>
+                                        </label>
+                                        <label class="field">
+                                            <span>Website</span>
+                                            <input type="text" name="website_domain" placeholder="harbourside-kitchens.co.uk" maxlength="255" required>
+                                        </label>
+                                        <label class="field">
+                                            <span>Report month</span>
+                                            <input type="month" name="report_month" required>
+                                        </label>
+                                        <label class="field">
+                                            <span>Issue date</span>
+                                            <input type="date" name="issue_date" required>
+                                        </label>
+                                        <label class="field">
+                                            <span>Report number</span>
+                                            <input type="text" name="report_number" maxlength="50" placeholder="Leave blank to auto-number, e.g. SEO-HK-1026">
+                                        </label>
+                                    </div>
+                                    <div class="form-grid" id="seo-report-cover-fields"></div>
+                                </div>
+                                <div id="seo-report-sections"></div>
+                                <div id="seo-report-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save report</button>
+                                    <button type="button" class="btn btn-outline" id="seo-report-preview">Preview PDF</button>
+                                    <button type="button" class="btn btn-ghost" id="seo-report-cancel">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </section>
+
                 <section class="view staff-view" data-view="invoices">
                     <section class="content-grid invoices-layout">
                         <div class="card">
@@ -1931,7 +2015,29 @@
                 </section>
 
                 <section class="view portal-view" data-view="portal-websites">
-                    <section class="content-grid"><div class="card wide"><div class="card-header"><div><div class="card-title">Your websites</div><div class="card-subtitle">Current availability, maintenance and service information.</div></div><button class="btn btn-outline" id="portal-websites-refresh" type="button">Refresh</button></div><div class="stack" id="portal-websites-detail"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div></div></section>
+                    <section class="content-grid"><div class="card wide"><div class="card-header"><div><div class="card-title">Your websites</div><div class="card-subtitle">Current availability, maintenance and service information.</div></div><button class="btn btn-outline" id="portal-websites-refresh" type="button">Refresh</button></div><div class="stack" id="portal-websites-detail"><div class="site-card"><div><div class="site-name">Loading websites…</div></div></div></div></div>
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Your SEO reports</div>
+                                    <div class="card-subtitle">Monthly reports on how your website is performing in Google.</div>
+                                </div>
+                            </div>
+                            <div class="table" id="portal-seo-reports">
+                                <div class="table-row table-header portal-seo-reports">
+                                    <span>Report</span>
+                                    <span>Month</span>
+                                    <span>Website</span>
+                                    <span>Issued</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty portal-seo-reports">
+                                    <span>Loading SEO reports...</span>
+                                    <span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
                 </section>
 
                 <section class="view portal-view" data-view="portal-website-detail">
@@ -2126,6 +2232,25 @@
                         <button class="btn btn-primary" id="portal-proposal-viewer-confirm-button" type="button">Confirm</button>
                     </div>
                     <div class="proposal-viewer-outcome" id="portal-proposal-viewer-outcome" hidden></div>
+                </footer>
+            </section>
+        </div>
+
+        <div class="crm-modal-backdrop proposal-viewer-backdrop" id="portal-seo-report-viewer" hidden>
+            <section class="proposal-viewer" role="dialog" aria-modal="true" aria-labelledby="portal-seo-report-viewer-title">
+                <header class="proposal-viewer-header">
+                    <div class="proposal-viewer-heading">
+                        <div class="card-title" id="portal-seo-report-viewer-title">SEO report</div>
+                        <div class="card-subtitle" id="portal-seo-report-viewer-subtitle"></div>
+                    </div>
+                    <button class="proposal-viewer-close" id="portal-seo-report-viewer-close" type="button" aria-label="Close">×</button>
+                </header>
+                <div class="proposal-viewer-body">
+                    <div class="proposal-viewer-message" id="portal-seo-report-viewer-message">Loading report…</div>
+                    <iframe class="proposal-viewer-frame" id="portal-seo-report-viewer-frame" title="SEO report PDF" hidden></iframe>
+                </div>
+                <footer class="proposal-viewer-footer">
+                    <button class="btn btn-outline" id="portal-seo-report-viewer-download" type="button">Download PDF</button>
                 </footer>
             </section>
         </div>
