@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Models\SeoReport;
+use App\Services\SeoReportMailer;
 use App\Services\SeoReportPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class SeoReportController extends Controller
 {
@@ -63,6 +67,37 @@ class SeoReportController extends Controller
         return $request->boolean('inline')
             ? $pdf->stream($seoReport->downloadFileName())
             : $pdf->download($seoReport->downloadFileName());
+    }
+
+    /**
+     * Email the saved report to the client. Only ever called from the Send button, never on save.
+     */
+    public function send(SeoReport $seoReport, SeoReportMailer $mailer)
+    {
+        try {
+            $sentTo = $mailer->send($seoReport);
+        } catch (Throwable $exception) {
+            Log::error('SEO report email send failed', [
+                'seo_report_id' => $seoReport->id,
+                'report_number' => $seoReport->report_number,
+                'customer_id' => $seoReport->customer_id,
+                'error' => $exception->getMessage(),
+            ]);
+            report($exception);
+
+            throw ValidationException::withMessages([
+                'send' => [$exception->getMessage() === 'Customer email is missing.'
+                    ? 'Add a client contact email to the report, or an email to the customer, before sending.'
+                    : 'SEO report email could not be sent. Check the mail settings.'],
+            ]);
+        }
+
+        $seoReport->forceFill(['sent_at' => now(), 'sent_to' => $sentTo])->save();
+
+        return response()->json([
+            'message' => "SEO report sent to {$sentTo}.",
+            'data' => $seoReport->fresh()->load('customer:id,name,email'),
+        ]);
     }
 
     /**

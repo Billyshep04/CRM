@@ -1330,7 +1330,14 @@ body[data-role="admin"] .admin-inline-only {
 }
 
 .table-row.seo-reports {
-    grid-template-columns: 0.9fr 1.1fr 0.8fr 1.1fr 0.5fr 2.2fr;
+    grid-template-columns: 0.9fr 1.1fr 0.8fr 1.1fr 0.6fr 2.5fr;
+}
+
+.seo-report-sent {
+    display: block;
+    margin-top: 2px;
+    font-size: 0.75rem;
+    color: var(--text-muted);
 }
 
 .table-row.portal-invoices {

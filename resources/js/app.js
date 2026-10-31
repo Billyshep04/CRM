@@ -7492,8 +7492,9 @@ function renderSeoReports() {
             <span>${escapeHtml(report.customer?.name || getCustomerName(report.customer_id))}</span>
             <span>${escapeHtml(formatSeoReportMonth(report.report_month))}</span>
             <span>${escapeHtml(report.website_domain)}</span>
-            <span>${formatDate(report.issue_date)}</span>
+            <span>${formatDate(report.issue_date)}${report.sent_at ? `<small class="seo-report-sent" title="Sent to ${escapeHtml(report.sent_to || '')}">Sent ${formatDate(report.sent_at)}</small>` : ''}</span>
             <div class="row-actions">
+                ${state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-action="send" data-id="${report.id}">${report.sent_at ? 'Resend' : 'Send'}</button>` : ''}
                 <button class="btn btn-outline btn-small" data-action="edit" data-id="${report.id}">Edit</button>
                 <button class="btn btn-outline btn-small" data-action="view" data-id="${report.id}">View PDF</button>
                 <button class="btn btn-outline btn-small" data-action="download" data-id="${report.id}">Download</button>
@@ -7627,6 +7628,28 @@ async function handleSeoReportAction(event) {
             window.URL.revokeObjectURL(blobUrl);
         } catch (error) {
             showToast('Unable to download SEO report', true);
+        }
+        return;
+    }
+
+    if (action === 'send') {
+        if (state.editing.seoReport === id) {
+            showToast('Save your changes first, then send the report.', true);
+            return;
+        }
+        const recipient = (report.data?.contact_email || '').trim() || report.customer?.email || 'the customer';
+        const resendNote = report.sent_at ? ` It was already sent on ${formatDate(report.sent_at)}.` : '';
+        if (!window.confirm(`Email SEO report ${report.report_number} to ${recipient}?${resendNote}`)) return;
+        actionButton.disabled = true;
+        actionButton.textContent = 'Sending...';
+        try {
+            const response = await api.post(`/api/seo-reports/${id}/send`);
+            showToast(response?.data?.message || 'SEO report sent');
+            await loadSeoReports();
+        } catch (error) {
+            showToast(getErrorMessage(error, 'Unable to send SEO report.'), true);
+            actionButton.disabled = false;
+            actionButton.textContent = report.sent_at ? 'Resend' : 'Send';
         }
         return;
     }
