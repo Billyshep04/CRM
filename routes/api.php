@@ -28,6 +28,7 @@ use App\Http\Controllers\PortalController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\RevenueOpportunityController;
 use App\Http\Controllers\SeoReportController;
+use App\Http\Controllers\SocialReportController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\SubscriptionController;
 use App\Http\Controllers\TaskController;
@@ -112,6 +113,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::post('seo-reports/preview', [SeoReportController::class, 'preview']);
         Route::apiResource('seo-reports', SeoReportController::class);
         Route::get('seo-reports/{seoReport}/download', [SeoReportController::class, 'download']);
+        Route::post('social-reports/preview', [SocialReportController::class, 'preview']);
+        Route::post('social-reports/images', [SocialReportController::class, 'uploadImage']);
+        Route::get('social-reports/images/{name}', [SocialReportController::class, 'showImage'])->where('name', '[A-Za-z0-9]{32}\.jpg');
+        Route::apiResource('social-reports', SocialReportController::class);
+        Route::get('social-reports/{socialReport}/download', [SocialReportController::class, 'download']);
         Route::get('tasks/dashboard', [TaskController::class, 'dashboard']);
         Route::get('tasks/monthly', [TaskController::class, 'monthly']);
         Route::apiResource('tasks', TaskController::class);
@@ -163,6 +169,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::middleware('role:admin')->group(function (): void {
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::post('seo-reports/{seoReport}/send', [SeoReportController::class, 'send']);
+        Route::post('social-reports/{socialReport}/send', [SocialReportController::class, 'send']);
         Route::get('admin/staff-users/{user}', [AdminStaffUserController::class, 'show']);
         Route::delete('admin/staff-users/{user}', [AdminStaffUserController::class, 'destroy']);
         Route::post('admin/staff-users', [AdminStaffUserController::class, 'store']);
@@ -224,6 +231,8 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('websites/{website}', [PortalController::class, 'website']);
         Route::get('seo-reports', [PortalController::class, 'seoReports']);
         Route::get('seo-reports/{seoReport}/download', [PortalController::class, 'downloadSeoReport']);
+        Route::get('social-reports', [PortalController::class, 'socialReports']);
+        Route::get('social-reports/{socialReport}/download', [PortalController::class, 'downloadSocialReport']);
         Route::get('forms', [PortalController::class, 'forms']);
         Route::get('forms/{customerFormRequest}', [PortalController::class, 'form']);
         Route::post('forms/{customerFormRequest}/submit', [PortalController::class, 'submitForm']);

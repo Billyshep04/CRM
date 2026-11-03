@@ -200,6 +200,7 @@ const dom = {
     portalWebsitesDetail: document.getElementById('portal-websites-detail'),
     portalWebsitesRefresh: document.getElementById('portal-websites-refresh'),
     portalSeoReports: document.getElementById('portal-seo-reports'),
+    portalSocialReports: document.getElementById('portal-social-reports'),
     portalWebsiteDetailTitle: document.getElementById('portal-website-detail-title'),
     portalWebsiteDetailDomain: document.getElementById('portal-website-detail-domain'),
     portalWebsiteHeadline: document.getElementById('portal-website-headline'),
@@ -466,6 +467,20 @@ const dom = {
     seoReportSections: document.getElementById('seo-report-sections'),
     seoReportPreview: document.getElementById('seo-report-preview'),
     seoReportCancel: document.getElementById('seo-report-cancel'),
+    socialReportsTable: document.getElementById('social-reports-table'),
+    socialReportsFilterCustomer: document.getElementById('social-reports-filter-customer'),
+    socialReportsLoadMore: document.getElementById('social-reports-load-more'),
+    socialReportNew: document.getElementById('social-report-new'),
+    socialReportEditor: document.getElementById('social-report-editor'),
+    socialReportForm: document.getElementById('social-report-form'),
+    socialReportFormTitle: document.getElementById('social-report-form-title'),
+    socialReportFormStatus: document.getElementById('social-report-form-status'),
+    socialReportCustomerSelect: document.getElementById('social-report-customer-select'),
+    socialReportCoverFields: document.getElementById('social-report-cover-fields'),
+    socialReportChannels: document.getElementById('social-report-channels'),
+    socialReportSections: document.getElementById('social-report-sections'),
+    socialReportPreview: document.getElementById('social-report-preview'),
+    socialReportCancel: document.getElementById('social-report-cancel'),
     invoicesTable: document.getElementById('invoices-table'),
     invoiceForm: document.getElementById('invoice-form'),
     invoiceFormTitle: document.getElementById('invoice-form-title'),
@@ -545,6 +560,7 @@ const state = {
     subscriptions: [],
     proposals: [],
     seoReports: [],
+    socialReports: [],
     tasks: [],
     monthlyTasks: [],
     monthlyTasksSelectedMonth: null,
@@ -571,6 +587,7 @@ const state = {
     portalInvoices: [],
     portalProposals: [],
     portalSeoReports: [],
+    portalSocialReports: [],
     portalJobs: [],
     portalSubscriptions: [],
     customerForms: [],
@@ -616,6 +633,9 @@ const state = {
         seoReports: {
             customer: 'all',
         },
+        socialReports: {
+            customer: 'all',
+        },
         invoices: {
             status: 'all',
             customer: 'all',
@@ -635,6 +655,7 @@ const state = {
         subscriptions: { page: 1, lastPage: 1 },
         proposals: { page: 1, lastPage: 1 },
         seoReports: { page: 1, lastPage: 1 },
+        socialReports: { page: 1, lastPage: 1 },
         invoices: { page: 1, lastPage: 1 },
         tasks: { page: 1, lastPage: 1 },
     },
@@ -647,6 +668,7 @@ const state = {
         subscription: null,
         proposal: null,
         seoReport: null,
+        socialReport: null,
         proposalFormTypeIndex: null,
         customerFormTypeIndex: null,
         task: null,
@@ -702,6 +724,10 @@ const viewMeta = {
     'seo-reports': {
         title: 'SEO Reports',
         subtitle: 'Build monthly SEO performance reports and download them as PDFs.',
+    },
+    'social-reports': {
+        title: 'Social Reports',
+        subtitle: 'Build monthly social media growth reports and download them as PDFs.',
     },
     costs: {
         title: 'Costs',
@@ -961,6 +987,9 @@ function setActiveView(view) {
     if (view === 'seo-reports') {
         ensureCustomersLoaded().then(loadSeoReports);
     }
+    if (view === 'social-reports') {
+        ensureCustomersLoaded().then(loadSocialReports);
+    }
     if (view === 'costs') {
         loadCostMonths();
         loadRecurringCosts();
@@ -995,6 +1024,7 @@ function setActiveView(view) {
     if (view === 'portal-websites') {
         loadPortalWebsites();
         loadPortalSeoReports();
+        loadPortalSocialReports();
     }
     if (view === 'portal-website-detail' && state.currentPortalWebsite?.id) loadPortalWebsiteDetail(state.currentPortalWebsite.id);
     if (view === 'portal-forms') {
@@ -1136,6 +1166,7 @@ const loadMoreButtons = {
     subscriptions: dom.subscriptionsLoadMore,
     proposals: dom.proposalsLoadMore,
     seoReports: dom.seoReportsLoadMore,
+    socialReports: dom.socialReportsLoadMore,
     invoices: dom.invoicesLoadMore,
 };
 
@@ -4004,7 +4035,7 @@ async function handleStaffUserSubmit(event) {
 }
 
 function populateCustomerSelects(customers) {
-    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect, dom.opportunityCustomerSelect, dom.seoReportCustomerSelect];
+    const selects = [dom.jobCustomerSelect, dom.subscriptionCustomerSelect, dom.proposalCustomerSelect, dom.invoiceCustomerSelect, dom.opportunityCustomerSelect, dom.seoReportCustomerSelect, dom.socialReportCustomerSelect];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value;
@@ -4028,7 +4059,7 @@ function populateCustomerSelects(customers) {
 }
 
 function populateCustomerFilterSelects(customers) {
-    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.proposalsFilterCustomer, dom.invoicesFilterCustomer, dom.seoReportsFilterCustomer];
+    const selects = [dom.jobsFilterCustomer, dom.subscriptionsFilterCustomer, dom.proposalsFilterCustomer, dom.invoicesFilterCustomer, dom.seoReportsFilterCustomer, dom.socialReportsFilterCustomer];
     selects.forEach((select) => {
         if (!select) return;
         const currentValue = select.value || 'all';
@@ -7193,17 +7224,17 @@ function seoSection(number, title, hint, body) {
     </div>`;
 }
 
-function seoPairTable(group) {
-    const rows = seoReportPairs[group].map(([key, label, step]) => `
+function seoPairTable(group, pairs = seoReportPairs[group]) {
+    const rows = pairs.map(([key, label, step, type = 'number', placeholder = '']) => `
         <span class="seo-pair-label">${escapeHtml(label)}</span>
-        ${seoInput(`${group}.${key}.current`, { type: 'number', step, label: `${label}, this month` })}
-        ${seoInput(`${group}.${key}.previous`, { type: 'number', step, label: `${label}, last month` })}`).join('');
+        ${seoInput(`${group}.${key}.current`, { type, step, placeholder, label: `${label}, this month` })}
+        ${seoInput(`${group}.${key}.previous`, { type, step, placeholder, label: `${label}, last month` })}`).join('');
 
     return `<div class="seo-pairs"><span></span><span class="seo-grid-head">This month</span><span class="seo-grid-head">Last month</span>${rows}</div>`;
 }
 
-function seoRowTable(group, title) {
-    const { count, columns, fields } = seoReportRows[group];
+function seoRowTable(group, title, definition = seoReportRows[group]) {
+    const { count, columns, fields } = definition;
     const head = fields.map(([, label]) => `<span class="seo-grid-head">${escapeHtml(label)}</span>`).join('');
     let rows = '';
     for (let index = 0; index < count; index += 1) {
@@ -7667,6 +7698,527 @@ async function handleSeoReportAction(event) {
     }
 }
 
+// Social media reports reuse the SEO form helpers: every field has a data-seo-path under
+// the report's `data`. Each channel's fields sit under platforms.<key> and only show
+// while its box is ticked. Labels mirror SocialReport::PLATFORMS on the server.
+const socialPlatforms = [
+    {
+        key: 'instagram', name: 'Instagram', handle: '@harbourside.kitchens', postsWord: 'Posts',
+        cards: [['followers', 'Followers'], ['reach', 'Reach'], ['engagement_rate', 'Engagement rate (%)', '0.1'], ['highlight', 'Profile visits']],
+        history: 'New followers', audience: ['Top location', 'Main age group', 'Best day to post', 'Saves this month'],
+        formats: ['Reels', 'Carousels', 'Single images'], averageColumn: 'Avg. reach', postMetric: 'Reach',
+    },
+    {
+        key: 'facebook', name: 'Facebook', handle: 'facebook.com/harboursidekitchens', postsWord: 'Posts',
+        cards: [['followers', 'Page followers'], ['reach', 'Reach'], ['engagement_rate', 'Engagement rate (%)', '0.1'], ['highlight', 'Link clicks']],
+        history: 'New followers', audience: ['Top location', 'Main age group', 'Best day to post', 'New recommendations'],
+        formats: ['Videos & Reels', 'Photo posts', 'Link posts'], averageColumn: 'Avg. reach', postMetric: 'Reach',
+    },
+    {
+        key: 'threads', name: 'Threads', handle: '@harbourside.kitchens', postsWord: 'Posts',
+        cards: [['followers', 'Followers'], ['reach', 'Views'], ['engagement_rate', 'Engagement rate (%)', '0.1'], ['highlight', 'Replies']],
+        history: 'New followers', audience: ['Top location', 'Main age group', 'Best day to post', 'Reposts & quotes'],
+        formats: ['Text posts', 'Image posts', 'Questions & polls'], averageColumn: 'Avg. views', postMetric: 'Views',
+    },
+    {
+        key: 'linkedin', name: 'LinkedIn', handle: 'Harbourside Kitchens Ltd · company page', postsWord: 'Posts',
+        cards: [['followers', 'Followers'], ['reach', 'Impressions'], ['engagement_rate', 'Engagement rate (%)', '0.1'], ['highlight', 'Page views']],
+        history: 'New followers', audience: ['Top location', 'Top industry', 'Best day to post', 'Clicks to website'],
+        formats: ['Document carousels', 'Image posts', 'Articles'], averageColumn: 'Avg. impressions', postMetric: 'Impressions',
+    },
+    {
+        key: 'x', name: 'X', handle: '@HarboursideKit', postsWord: 'Posts',
+        cards: [['followers', 'Followers'], ['reach', 'Impressions'], ['engagement_rate', 'Engagement rate (%)', '0.1'], ['highlight', 'Profile visits']],
+        history: 'New followers', audience: ['Top location', 'Main age group', 'Best day to post', 'Mentions'],
+        formats: ['Posts with media', 'Text posts', 'Replies & quotes'], averageColumn: 'Avg. impressions', postMetric: 'Impressions',
+    },
+    {
+        key: 'youtube', name: 'YouTube', handle: '@HarboursideKitchens', postsWord: 'Videos',
+        cards: [['followers', 'Subscribers'], ['reach', 'Views'], ['watch_time', 'Watch time (hours)'], ['engagement_rate', 'Engagement rate (%) — page 2 only', '0.1']],
+        duration: true,
+        history: 'New subscribers', audience: ['Top location', 'Main age group', 'Top traffic source', 'Likes this month'],
+        formats: ['Long-form videos', 'Shorts', 'Community posts'], postsColumn: 'Published', averageColumn: 'Avg. views', postMetric: 'Views',
+    },
+];
+
+const socialReportDefaults = {
+    prepared_by: { phone: '07979 971328', email: 'info@web-stamp.co.uk' },
+};
+
+function socialPlatformDefaults() {
+    const platforms = {};
+    socialPlatforms.forEach((platform) => {
+        platforms[platform.key] = { formats: platform.formats.map((label) => ({ label })) };
+    });
+    return platforms;
+}
+
+function socialImageSlot(base, index) {
+    return `<div class="social-image-slot" data-social-image-slot>
+        <span class="seo-grid-head">Image for post ${index + 1}</span>
+        <div class="social-image-preview" data-social-image-preview><span>No image</span></div>
+        <input type="hidden" data-seo-path="${base}.top_posts.${index}.image">
+        <div class="social-image-actions">
+            <label class="btn btn-outline btn-small">Upload<input type="file" accept="image/jpeg,image/png,image/webp,image/gif" data-social-image-file hidden></label>
+            <button type="button" class="btn btn-ghost btn-small" data-social-image-remove hidden>Remove</button>
+        </div>
+    </div>`;
+}
+
+function socialPlatformSection(platform) {
+    const base = `platforms.${platform.key}`;
+    const postsWord = platform.postsWord;
+
+    let history = '<div class="seo-history social-history">';
+    for (let index = 0; index < 5; index += 1) {
+        history += `<label class="field"><span data-social-history-label="${index}">Month ${index + 1}</span>${seoInput(`${base}.history.${index}`, { type: 'number', step: '1' })}</label>`;
+    }
+    history += '</div>';
+
+    const audience = platform.audience.map((label, index) => seoField(`${base}.audience.${index}`, label, { maxlength: 24 })).join('');
+
+    let images = '<div class="social-image-row">';
+    for (let index = 0; index < 3; index += 1) images += socialImageSlot(base, index);
+    images += '</div>';
+
+    const body = `
+        <div class="form-grid seo-grid-3">
+            ${seoField(`${base}.handle`, 'Account handle or page name', { maxlength: 60, placeholder: platform.handle })}
+            ${seoField(`${base}.posts.current`, `${postsWord} this month`, { type: 'number', step: '1' })}
+            ${seoField(`${base}.posts.previous`, `${postsWord} last month`, { type: 'number', step: '1' })}
+        </div>
+        ${seoPairTable(`${base}.metrics`, platform.cards)}
+        ${platform.duration ? seoPairTable(base, [['avg_duration', 'Avg. view duration (m:ss)', null, 'text', '3:42']]) : ''}
+        <div class="seo-rows-title">${escapeHtml(platform.history)} in the 5 months before this one</div>
+        ${history}
+        <div class="seo-rows-title">Audience snapshot</div>
+        <div class="form-grid">${audience}</div>
+        ${seoRowTable(`${base}.formats`, 'Performance by content type', {
+            count: 3,
+            columns: '1.4fr 0.6fr 0.8fr 0.8fr',
+            fields: [['label', 'Format', 'text', 40], ['posts', platform.postsColumn || 'Posts', 'number'], ['average', platform.averageColumn, 'number'], ['engagement', 'Avg. engagement (%)', 'number']],
+        })}
+        ${seoRowTable(`${base}.top_posts`, platform.key === 'youtube' ? 'Top videos this month' : 'Top posts this month', {
+            count: 3,
+            columns: '1.8fr 0.6fr 0.6fr 0.7fr',
+            fields: [['title', 'Title', 'text', 70], ['stat', platform.postMetric, 'number'], ['metric', 'Second stat', 'number'], ['metric_label', 'Second stat name', 'text', 12, 'likes']],
+        })}
+        ${images}
+        ${seoField(`${base}.insight`, 'Insight', { type: 'textarea', maxlength: 300 })}`;
+
+    return `<div data-social-platform="${platform.key}" hidden>${seoSection('', platform.name, `This month's bar on the chart is worked out from the ${platform.cards[0][1].toLowerCase()} figures.`, body)}</div>`;
+}
+
+function renderSocialReportSections() {
+    if (!dom.socialReportSections || dom.socialReportSections.childElementCount) return;
+
+    dom.socialReportCoverFields.innerHTML = [
+        seoField('contact_name', 'Client contact name', { maxlength: 255 }),
+        seoField('contact_email', 'Client contact email', { type: 'email', maxlength: 255 }),
+        seoField('prepared_by.phone', 'Footer phone', { maxlength: 255 }),
+        seoField('prepared_by.email', 'Footer email', { type: 'email', maxlength: 255 }),
+    ].join('');
+
+    dom.socialReportChannels.innerHTML = socialPlatforms.map((platform) => `
+        <label class="social-channel"><input type="checkbox" value="${platform.key}" data-social-channel> ${escapeHtml(platform.name)}</label>`).join('');
+
+    dom.socialReportSections.innerHTML = [
+        seoSection(2, 'All platforms', 'Total followers, reach and posts are added up from the channel sections automatically.', `
+            ${seoField('summary', 'This month in brief', { type: 'textarea', maxlength: 600 })}
+            ${seoPairTable('totals', [['engagements', 'Engagements'], ['engagement_rate', 'Average engagement rate (%)', '0.1'], ['website_clicks', 'Clicks to website']])}`),
+        ...socialPlatforms.map(socialPlatformSection),
+    ].join('');
+}
+
+function updateSocialChannelSections() {
+    const form = dom.socialReportForm;
+    if (!form) return;
+    let number = 3;
+    socialPlatforms.forEach((platform) => {
+        const ticked = form.querySelector(`[data-social-channel][value="${platform.key}"]`)?.checked;
+        const section = form.querySelector(`[data-social-platform="${platform.key}"]`);
+        if (!section) return;
+        section.hidden = !ticked;
+        if (ticked) {
+            section.querySelector('.seo-report-section-title span').textContent = number;
+            number += 1;
+        }
+    });
+}
+
+function updateSocialHistoryLabels() {
+    const monthValue = dom.socialReportForm?.querySelector('input[name="report_month"]')?.value || '';
+    const [year, month] = monthValue.split('-').map(Number);
+    dom.socialReportForm?.querySelectorAll('[data-social-history-label]').forEach((label) => {
+        const index = Number(label.dataset.socialHistoryLabel);
+        if (!year || !month) {
+            label.textContent = `Month ${index + 1}`;
+            return;
+        }
+        // The chart's six bars run to the report month; these are the five before it.
+        const date = new Date(year, month - 1 - (5 - index), 1);
+        label.textContent = date.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    });
+}
+
+function socialImageName(path) {
+    return String(path || '').split('/').pop();
+}
+
+async function showSocialImage(slot) {
+    const preview = slot.querySelector('[data-social-image-preview]');
+    const path = slot.querySelector('input[type="hidden"]').value;
+    const remove = slot.querySelector('[data-social-image-remove]');
+    const previous = preview.querySelector('img');
+    if (previous?.src) window.URL.revokeObjectURL(previous.src);
+
+    remove.hidden = !path;
+    if (!path) {
+        preview.innerHTML = '<span>No image</span>';
+        return;
+    }
+    preview.innerHTML = '<span>Loading…</span>';
+    try {
+        const response = await api.get(`/api/social-reports/images/${socialImageName(path)}`, { responseType: 'blob' });
+        if (slot.querySelector('input[type="hidden"]').value !== path) return;
+        const img = document.createElement('img');
+        img.alt = '';
+        img.src = window.URL.createObjectURL(response.data);
+        preview.replaceChildren(img);
+    } catch (error) {
+        preview.innerHTML = '<span>Image missing</span>';
+    }
+}
+
+async function handleSocialImageChange(event) {
+    const fileInput = event.target.closest('[data-social-image-file]');
+    if (!fileInput?.files?.length) return;
+    const slot = fileInput.closest('[data-social-image-slot]');
+    const preview = slot.querySelector('[data-social-image-preview]');
+    const formData = new FormData();
+    formData.append('image', fileInput.files[0]);
+    fileInput.value = '';
+    preview.innerHTML = '<span>Uploading…</span>';
+
+    try {
+        const response = await api.post('/api/social-reports/images', formData);
+        slot.querySelector('input[type="hidden"]').value = response?.data?.data?.path || '';
+    } catch (error) {
+        showToast(getErrorMessage(error, 'Unable to upload that image.'), true);
+    }
+    showSocialImage(slot);
+}
+
+function fillSocialReportForm(report = null) {
+    renderSocialReportSections();
+    const form = dom.socialReportForm;
+    form.reset();
+
+    const today = new Date();
+    const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    const data = report?.data || { ...socialReportDefaults, platforms: socialPlatformDefaults() };
+
+    form.querySelector('select[name="customer_id"]').value = report?.customer_id || '';
+    form.querySelector('input[name="report_month"]').value = (report?.report_month || '').slice(0, 7)
+        || `${lastMonth.getFullYear()}-${String(lastMonth.getMonth() + 1).padStart(2, '0')}`;
+    form.querySelector('input[name="issue_date"]').value = (report?.issue_date || '').slice(0, 10)
+        || `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    form.querySelector('input[name="report_number"]').value = report?.report_number || '';
+
+    form.querySelectorAll('[data-seo-path]').forEach((input) => {
+        const value = getSeoPath(data, input.dataset.seoPath);
+        input.value = value == null ? '' : value;
+    });
+    form.querySelectorAll('[data-social-channel]').forEach((checkbox) => {
+        checkbox.checked = (data.channels || []).includes(checkbox.value);
+    });
+    form.querySelectorAll('[data-social-image-slot]').forEach(showSocialImage);
+
+    updateSocialChannelSections();
+    updateSocialHistoryLabels();
+}
+
+function openSocialReportEditor(report = null, title = 'New social media report') {
+    state.editing.socialReport = report?.id || null;
+    fillSocialReportForm(report);
+    if (dom.socialReportFormTitle) dom.socialReportFormTitle.textContent = title;
+    setFormStatus(dom.socialReportFormStatus, '');
+    dom.socialReportEditor.hidden = false;
+    dom.socialReportEditor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function closeSocialReportEditor() {
+    state.editing.socialReport = null;
+    if (dom.socialReportEditor) dom.socialReportEditor.hidden = true;
+}
+
+/**
+ * Start next month's report from this one: this month's figures become "last month",
+ * this month's follower growth joins the chart history, and the writing is cleared.
+ */
+function rollSocialReportForward(report) {
+    const data = JSON.parse(JSON.stringify(report.data || {}));
+    const shift = (pair) => (pair ? { previous: pair.current ?? null, current: null } : pair);
+
+    Object.values(data.platforms || {}).forEach((platform) => {
+        const followers = platform.metrics?.followers;
+        const growth = followers?.current != null && followers?.previous != null
+            ? Math.max(0, Number(followers.current) - Number(followers.previous))
+            : null;
+        Object.keys(platform.metrics || {}).forEach((key) => { platform.metrics[key] = shift(platform.metrics[key]); });
+        platform.posts = shift(platform.posts);
+        platform.avg_duration = shift(platform.avg_duration);
+        platform.history = [...(platform.history || []).slice(1, 5), growth];
+        platform.formats = (platform.formats || []).map((row) => ({ label: row.label }));
+        platform.top_posts = [];
+        platform.insight = null;
+    });
+    Object.keys(data.totals || {}).forEach((key) => { data.totals[key] = shift(data.totals[key]); });
+    data.summary = null;
+
+    const [year, month] = String(report.report_month || '').slice(0, 7).split('-').map(Number);
+    const next = new Date(year, month, 1);
+
+    return {
+        customer_id: report.customer_id,
+        report_month: `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, '0')}`,
+        issue_date: '',
+        report_number: '',
+        data,
+    };
+}
+
+function collectSocialReportPayload() {
+    const form = dom.socialReportForm;
+    const data = {};
+    form.querySelectorAll('[data-seo-path]').forEach((input) => {
+        const value = input.value.trim();
+        setSeoPath(data, input.dataset.seoPath, value === '' ? null : value);
+    });
+    data.channels = [...form.querySelectorAll('[data-social-channel]:checked')].map((checkbox) => checkbox.value);
+
+    return {
+        customer_id: Number(form.querySelector('select[name="customer_id"]').value) || null,
+        report_month: form.querySelector('input[name="report_month"]').value,
+        issue_date: form.querySelector('input[name="issue_date"]').value,
+        report_number: form.querySelector('input[name="report_number"]').value.trim() || null,
+        data,
+    };
+}
+
+function socialReportPayloadError(payload) {
+    if (!payload.customer_id) return 'Select a customer.';
+    if (!payload.report_month) return 'Choose the report month.';
+    if (!payload.issue_date) return 'Choose the issue date.';
+    if (!payload.data.channels.length) return 'Tick at least one social media channel.';
+    return '';
+}
+
+function handleSocialReportCustomerChange() {
+    const form = dom.socialReportForm;
+    const customerId = Number(dom.socialReportCustomerSelect?.value || 0);
+    if (!form || !customerId) return;
+
+    const customer = state.customerOptions.find((item) => Number(item.id) === customerId);
+    const emailInput = form.querySelector('[data-seo-path="contact_email"]');
+    if (customer?.email && emailInput && !emailInput.value) emailInput.value = customer.email;
+}
+
+function socialReportChannelNames(report) {
+    const selected = report?.data?.channels || [];
+    return socialPlatforms.filter((platform) => selected.includes(platform.key)).map((platform) => platform.name);
+}
+
+async function loadSocialReports(append = false) {
+    if (!dom.socialReportsTable) return;
+    setLoadMoreLoading('socialReports', true);
+
+    if (!append) {
+        resetPagination('socialReports');
+        resetTable(dom.socialReportsTable);
+        const loadingRow = document.createElement('div');
+        loadingRow.className = 'table-row table-empty social-reports';
+        loadingRow.innerHTML = '<span>Loading social media reports...</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.socialReportsTable.appendChild(loadingRow);
+    }
+
+    try {
+        const page = append ? state.pagination.socialReports.page + 1 : 1;
+        const query = buildQuery({ per_page: 20, page, customer_id: state.filters.socialReports.customer });
+        const response = await api.get(`/api/social-reports${query}`);
+        const items = response?.data?.data ?? [];
+        state.socialReports = append ? [...state.socialReports, ...items] : items;
+        const { current_page: currentPage = page, last_page: lastPage = page } = response?.data ?? {};
+        state.pagination.socialReports = { page: currentPage, lastPage };
+        updateLoadMoreVisibility('socialReports');
+        renderSocialReports();
+    } catch (error) {
+        resetTable(dom.socialReportsTable);
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty social-reports';
+        emptyRow.innerHTML = '<span>Unable to load social media reports.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.socialReportsTable.appendChild(emptyRow);
+    } finally {
+        setLoadMoreLoading('socialReports', false);
+    }
+}
+
+function renderSocialReports() {
+    if (!dom.socialReportsTable) return;
+    resetTable(dom.socialReportsTable);
+
+    if (!state.socialReports.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty social-reports';
+        emptyRow.innerHTML = '<span>No social media reports yet. Click New report to create one.</span><span></span><span></span><span></span><span></span><span></span>';
+        dom.socialReportsTable.appendChild(emptyRow);
+        return;
+    }
+
+    state.socialReports.forEach((report) => {
+        const row = document.createElement('div');
+        row.className = 'table-row social-reports';
+        row.innerHTML = `
+            <span>${escapeHtml(report.report_number)}</span>
+            <span>${escapeHtml(report.customer?.name || getCustomerName(report.customer_id))}</span>
+            <span>${escapeHtml(formatSeoReportMonth(report.report_month))}</span>
+            <span>${escapeHtml(socialReportChannelNames(report).join(', '))}</span>
+            <span>${formatDate(report.issue_date)}${report.sent_at ? `<small class="seo-report-sent" title="Sent to ${escapeHtml(report.sent_to || '')}">Sent ${formatDate(report.sent_at)}</small>` : ''}</span>
+            <div class="row-actions">
+                ${state.role === 'admin' ? `<button class="btn btn-outline btn-small" data-action="send" data-id="${report.id}">${report.sent_at ? 'Resend' : 'Send'}</button>` : ''}
+                <button class="btn btn-outline btn-small" data-action="edit" data-id="${report.id}">Edit</button>
+                <button class="btn btn-outline btn-small" data-action="view" data-id="${report.id}">View PDF</button>
+                <button class="btn btn-outline btn-small" data-action="download" data-id="${report.id}">Download</button>
+                <button class="btn btn-outline btn-small" data-action="next-month" data-id="${report.id}" title="Start next month's report from this one">Next month</button>
+                <button class="btn btn-outline btn-small" data-action="delete" data-id="${report.id}">Delete</button>
+            </div>
+        `;
+        dom.socialReportsTable.appendChild(row);
+    });
+}
+
+async function handleSocialReportSubmit(event) {
+    event.preventDefault();
+    const payload = collectSocialReportPayload();
+    const problem = socialReportPayloadError(payload);
+    if (problem) {
+        setFormStatus(dom.socialReportFormStatus, problem, true);
+        return;
+    }
+
+    try {
+        if (state.editing.socialReport) {
+            await api.put(`/api/social-reports/${state.editing.socialReport}`, payload);
+            showToast('Social media report updated');
+        } else {
+            await api.post('/api/social-reports', payload);
+            showToast('Social media report created');
+        }
+        closeSocialReportEditor();
+        await loadSocialReports();
+    } catch (error) {
+        setFormStatus(dom.socialReportFormStatus, getErrorMessage(error, 'Unable to save social media report.'), true);
+    }
+}
+
+async function handleSocialReportPreview() {
+    const payload = collectSocialReportPayload();
+    const problem = socialReportPayloadError(payload);
+    if (problem) {
+        setFormStatus(dom.socialReportFormStatus, problem, true);
+        return;
+    }
+
+    setFormStatus(dom.socialReportFormStatus, 'Building preview...');
+    try {
+        await openSeoReportPdf(() => api.post('/api/social-reports/preview', payload, { responseType: 'blob' }));
+        setFormStatus(dom.socialReportFormStatus, '');
+    } catch (error) {
+        setFormStatus(dom.socialReportFormStatus, await blobErrorMessage(error, 'Unable to build the preview.'), true);
+    }
+}
+
+async function handleSocialReportAction(event) {
+    const actionButton = event.target.closest('[data-action]');
+    if (!actionButton) return;
+
+    const id = Number(actionButton.dataset.id);
+    const action = actionButton.dataset.action;
+    const report = state.socialReports.find((item) => item.id === id);
+    if (!report) return;
+
+    if (action === 'edit') {
+        openSocialReportEditor(report, `Edit ${report.report_number}`);
+        return;
+    }
+
+    if (action === 'next-month') {
+        openSocialReportEditor(rollSocialReportForward(report), `New report from ${report.report_number}`);
+        setFormStatus(dom.socialReportFormStatus, 'This month\'s figures have moved to the "last month" columns. Fill in the new month and save.');
+        return;
+    }
+
+    if (action === 'view') {
+        try {
+            await openSeoReportPdf(() => api.get(`/api/social-reports/${id}/download?inline=1`, { responseType: 'blob' }));
+        } catch (error) {
+            showToast('Unable to open social media report', true);
+        }
+        return;
+    }
+
+    if (action === 'download') {
+        try {
+            const response = await api.get(`/api/social-reports/${id}/download`, { responseType: 'blob' });
+            const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = `Social-Media-Report-${report.report_number}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+            showToast('Unable to download social media report', true);
+        }
+        return;
+    }
+
+    if (action === 'send') {
+        if (state.editing.socialReport === id) {
+            showToast('Save your changes first, then send the report.', true);
+            return;
+        }
+        const recipient = (report.data?.contact_email || '').trim() || report.customer?.email || 'the customer';
+        const resendNote = report.sent_at ? ` It was already sent on ${formatDate(report.sent_at)}.` : '';
+        if (!window.confirm(`Email social media report ${report.report_number} to ${recipient}?${resendNote}`)) return;
+        actionButton.disabled = true;
+        actionButton.textContent = 'Sending...';
+        try {
+            const response = await api.post(`/api/social-reports/${id}/send`);
+            showToast(response?.data?.message || 'Social media report sent');
+            await loadSocialReports();
+        } catch (error) {
+            showToast(getErrorMessage(error, 'Unable to send social media report.'), true);
+            actionButton.disabled = false;
+            actionButton.textContent = report.sent_at ? 'Resend' : 'Send';
+        }
+        return;
+    }
+
+    if (action === 'delete') {
+        if (!window.confirm(`Delete social media report ${report.report_number}?`)) return;
+        try {
+            await api.delete(`/api/social-reports/${id}`);
+            if (state.editing.socialReport === id) closeSocialReportEditor();
+            showToast('Social media report deleted');
+            await loadSocialReports();
+        } catch (error) {
+            showToast(getErrorMessage(error, 'Unable to delete social media report.'), true);
+        }
+    }
+}
+
 async function loadPortalProposals() {
     if (!dom.portalProposals) return;
     resetTable(dom.portalProposals);
@@ -7994,19 +8546,85 @@ function renderPortalSeoReports(reports = [], emptyMessage = 'No SEO reports yet
     });
 }
 
-async function downloadPortalSeoReport(report) {
+async function loadPortalSocialReports() {
+    if (!dom.portalSocialReports) return;
+    resetTable(dom.portalSocialReports);
+    const loadingRow = document.createElement('div');
+    loadingRow.className = 'table-row table-empty portal-seo-reports';
+    loadingRow.innerHTML = '<span>Loading social media reports...</span><span></span><span></span><span></span><span></span>';
+    dom.portalSocialReports.appendChild(loadingRow);
+
     try {
-        const response = await api.get(`/api/portal/seo-reports/${report.id}/download`, { responseType: 'blob' });
+        const response = await api.get('/api/portal/social-reports');
+        state.portalSocialReports = response?.data?.data ?? [];
+        renderPortalSocialReports(state.portalSocialReports);
+    } catch (error) {
+        state.portalSocialReports = [];
+        renderPortalSocialReports([], 'Unable to load social media reports.');
+    }
+}
+
+function renderPortalSocialReports(reports = [], emptyMessage = 'No social media reports yet. They will appear here each month.') {
+    if (!dom.portalSocialReports) return;
+    resetTable(dom.portalSocialReports);
+
+    if (!reports.length) {
+        const emptyRow = document.createElement('div');
+        emptyRow.className = 'table-row table-empty portal-seo-reports';
+        emptyRow.innerHTML = `<span>${escapeHtml(emptyMessage)}</span><span></span><span></span><span></span><span></span>`;
+        dom.portalSocialReports.appendChild(emptyRow);
+        return;
+    }
+
+    reports.forEach((report) => {
+        const row = document.createElement('div');
+        row.className = 'table-row portal-seo-reports portal-social-reports';
+        row.innerHTML = `
+            <span>${escapeHtml(report.report_number)}</span>
+            <span>${escapeHtml(formatSeoReportMonth(report.report_month))}</span>
+            <span>${escapeHtml((report.channels || []).join(', '))}</span>
+            <span>${formatDate(report.issue_date)}</span>
+            <div class="row-actions">
+                <button type="button" class="btn btn-primary btn-small" data-action="portal-seo-report-view" data-id="${report.id}">View</button>
+                <button type="button" class="btn btn-outline btn-small btn-icon" data-action="portal-seo-report-download" data-id="${report.id}" aria-label="Download PDF" title="Download PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></button>
+            </div>
+        `;
+        dom.portalSocialReports.appendChild(row);
+    });
+}
+
+// SEO and social media reports share the portal viewer and download code.
+const portalReportKinds = {
+    seo: {
+        url: '/api/portal/seo-reports',
+        title: (report) => `${formatSeoReportMonth(report.report_month)} SEO report`,
+        subtitle: (report) => [report.report_number, report.website_domain],
+        fileName: (report) => `SEO-Report-${report.report_number}.pdf`,
+        failure: 'Unable to download SEO report',
+    },
+    social: {
+        url: '/api/portal/social-reports',
+        title: (report) => `${formatSeoReportMonth(report.report_month)} social media report`,
+        subtitle: (report) => [report.report_number, (report.channels || []).join(', ')],
+        fileName: (report) => `Social-Media-Report-${report.report_number}.pdf`,
+        failure: 'Unable to download social media report',
+    },
+};
+
+async function downloadPortalSeoReport(report, kind = 'seo') {
+    const config = portalReportKinds[kind];
+    try {
+        const response = await api.get(`${config.url}/${report.id}/download`, { responseType: 'blob' });
         const blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
         const link = document.createElement('a');
         link.href = blobUrl;
-        link.download = `SEO-Report-${report.report_number}.pdf`;
+        link.download = config.fileName(report);
         document.body.appendChild(link);
         link.click();
         link.remove();
         window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
-        showToast('Unable to download SEO report', true);
+        showToast(config.failure, true);
     }
 }
 
@@ -8020,6 +8638,7 @@ const seoReportViewer = {
     frame: document.getElementById('portal-seo-report-viewer-frame'),
     download: document.getElementById('portal-seo-report-viewer-download'),
     report: null,
+    kind: 'seo',
     blobUrl: null,
     returnFocus: null,
 };
@@ -8031,12 +8650,14 @@ function releasePortalSeoReportViewerBlob() {
     }
 }
 
-async function openPortalSeoReportViewer(report) {
+async function openPortalSeoReportViewer(report, kind = 'seo') {
     if (!seoReportViewer.backdrop) return;
+    const config = portalReportKinds[kind];
     seoReportViewer.report = report;
+    seoReportViewer.kind = kind;
     seoReportViewer.returnFocus = document.activeElement;
-    seoReportViewer.title.textContent = `${formatSeoReportMonth(report.report_month)} SEO report`;
-    seoReportViewer.subtitle.textContent = [report.report_number, report.website_domain].filter(Boolean).join(' · ');
+    seoReportViewer.title.textContent = config.title(report);
+    seoReportViewer.subtitle.textContent = config.subtitle(report).filter(Boolean).join(' · ');
 
     seoReportViewer.frame.hidden = true;
     seoReportViewer.frame.removeAttribute('src');
@@ -8047,15 +8668,15 @@ async function openPortalSeoReportViewer(report) {
     seoReportViewer.close.focus();
 
     try {
-        const response = await api.get(`/api/portal/seo-reports/${report.id}/download?inline=1`, { responseType: 'blob' });
-        if (seoReportViewer.report?.id !== report.id || seoReportViewer.backdrop.hidden) return;
+        const response = await api.get(`${config.url}/${report.id}/download?inline=1`, { responseType: 'blob' });
+        if (seoReportViewer.report !== report || seoReportViewer.backdrop.hidden) return;
         releasePortalSeoReportViewerBlob();
         seoReportViewer.blobUrl = window.URL.createObjectURL(new Blob([response.data], { type: 'application/pdf' }));
         seoReportViewer.frame.src = `${seoReportViewer.blobUrl}#navpanes=0&view=FitH`;
         seoReportViewer.frame.hidden = false;
         seoReportViewer.message.hidden = true;
     } catch (error) {
-        if (seoReportViewer.report?.id !== report.id) return;
+        if (seoReportViewer.report !== report) return;
         seoReportViewer.message.textContent = 'Unable to load this report. Please try again or use Download PDF.';
     }
 }
@@ -8083,6 +8704,18 @@ if (dom.portalSeoReports) {
     });
 }
 
+if (dom.portalSocialReports) {
+    dom.portalSocialReports.addEventListener('click', (event) => {
+        const actionButton = event.target.closest('[data-action]');
+        if (!actionButton) return;
+        const report = state.portalSocialReports.find((item) => item.id === Number(actionButton.dataset.id));
+        if (!report) return;
+
+        if (actionButton.dataset.action === 'portal-seo-report-view') openPortalSeoReportViewer(report, 'social');
+        if (actionButton.dataset.action === 'portal-seo-report-download') downloadPortalSeoReport(report, 'social');
+    });
+}
+
 if (seoReportViewer.backdrop) {
     seoReportViewer.close.addEventListener('click', closePortalSeoReportViewer);
     seoReportViewer.backdrop.addEventListener('click', (event) => {
@@ -8092,7 +8725,7 @@ if (seoReportViewer.backdrop) {
         if (event.key === 'Escape') closePortalSeoReportViewer();
     });
     seoReportViewer.download.addEventListener('click', () => {
-        if (seoReportViewer.report) downloadPortalSeoReport(seoReportViewer.report);
+        if (seoReportViewer.report) downloadPortalSeoReport(seoReportViewer.report, seoReportViewer.kind);
     });
 }
 
@@ -9724,6 +10357,53 @@ if (dom.seoReportCancel) {
     dom.seoReportCancel.addEventListener('click', closeSeoReportEditor);
 }
 
+if (dom.socialReportsTable) {
+    dom.socialReportsTable.addEventListener('click', handleSocialReportAction);
+}
+
+if (dom.socialReportsLoadMore) {
+    dom.socialReportsLoadMore.addEventListener('click', () => loadSocialReports(true));
+}
+
+if (dom.socialReportsFilterCustomer) {
+    dom.socialReportsFilterCustomer.addEventListener('change', () => {
+        state.filters.socialReports.customer = dom.socialReportsFilterCustomer.value || 'all';
+        loadSocialReports();
+    });
+}
+
+if (dom.socialReportNew) {
+    dom.socialReportNew.addEventListener('click', () => openSocialReportEditor());
+}
+
+if (dom.socialReportForm) {
+    dom.socialReportForm.addEventListener('submit', handleSocialReportSubmit);
+    dom.socialReportForm.querySelector('input[name="report_month"]')?.addEventListener('change', updateSocialHistoryLabels);
+    dom.socialReportForm.addEventListener('change', (event) => {
+        if (event.target.matches('[data-social-channel]')) updateSocialChannelSections();
+        if (event.target.matches('[data-social-image-file]')) handleSocialImageChange(event);
+    });
+    dom.socialReportForm.addEventListener('click', (event) => {
+        const remove = event.target.closest('[data-social-image-remove]');
+        if (!remove) return;
+        const slot = remove.closest('[data-social-image-slot]');
+        slot.querySelector('input[type="hidden"]').value = '';
+        showSocialImage(slot);
+    });
+}
+
+if (dom.socialReportCustomerSelect) {
+    dom.socialReportCustomerSelect.addEventListener('change', handleSocialReportCustomerChange);
+}
+
+if (dom.socialReportPreview) {
+    dom.socialReportPreview.addEventListener('click', handleSocialReportPreview);
+}
+
+if (dom.socialReportCancel) {
+    dom.socialReportCancel.addEventListener('click', closeSocialReportEditor);
+}
+
 if (dom.opportunityForm) dom.opportunityForm.addEventListener('submit', handleOpportunitySubmit);
 if (dom.opportunityFollowUpForm) dom.opportunityFollowUpForm.addEventListener('submit', handleOpportunityFollowUpSubmit);
 if (dom.opportunityFollowUpClose) dom.opportunityFollowUpClose.addEventListener('click', closeOpportunityFollowUp);
@@ -10051,6 +10731,7 @@ if (dom.portalWebsitesRefresh) {
     dom.portalWebsitesRefresh.addEventListener('click', () => {
         loadPortalWebsites();
         loadPortalSeoReports();
+        loadPortalSocialReports();
     });
 }
 if (dom.portalWebsitesDetail) dom.portalWebsitesDetail.addEventListener('click', (event) => {

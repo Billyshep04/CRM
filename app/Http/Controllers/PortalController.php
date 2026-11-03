@@ -14,6 +14,7 @@ use App\Models\Invoice;
 use App\Models\Job;
 use App\Models\Proposal;
 use App\Models\SeoReport;
+use App\Models\SocialReport;
 use App\Models\Subscription;
 use App\Models\Website;
 use App\Services\AdminMailSettings;
@@ -25,6 +26,7 @@ use App\Services\InvoiceSubscriptionMonthSyncService;
 use App\Services\ProposalPdfService;
 use App\Services\RecurringInvoiceService;
 use App\Services\SeoReportPdfService;
+use App\Services\SocialReportPdfService;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -177,6 +179,39 @@ class PortalController extends Controller
         return $request->boolean('inline')
             ? $pdf->stream($seoReport->downloadFileName())
             : $pdf->download($seoReport->downloadFileName());
+    }
+
+    public function socialReports(Request $request)
+    {
+        $customerIds = $this->resolveCustomerIds($request);
+
+        return response()->json([
+            'data' => SocialReport::query()
+                ->whereIn('customer_id', $customerIds)
+                ->orderByDesc('report_month')
+                ->orderByDesc('id')
+                ->get(['id', 'customer_id', 'report_number', 'report_month', 'issue_date', 'data'])
+                ->map(fn (SocialReport $report): array => [
+                    'id' => $report->id,
+                    'report_number' => $report->report_number,
+                    'report_month' => $report->report_month,
+                    'issue_date' => $report->issue_date,
+                    'channels' => array_map(fn (string $key): string => SocialReport::PLATFORMS[$key]['name'], $report->channels()),
+                ]),
+        ]);
+    }
+
+    public function downloadSocialReport(Request $request, SocialReport $socialReport, SocialReportPdfService $pdfService)
+    {
+        if (!in_array((int) $socialReport->customer_id, $this->resolveCustomerIds($request), true)) {
+            abort(404);
+        }
+
+        $pdf = $pdfService->render($socialReport);
+
+        return $request->boolean('inline')
+            ? $pdf->stream($socialReport->downloadFileName())
+            : $pdf->download($socialReport->downloadFileName());
     }
 
     public function forms(Request $request)

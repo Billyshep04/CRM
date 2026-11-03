@@ -1,5 +1,5 @@
 {{-- Opens a report page; pdf.partials.seo-report-footer closes it. --}}
-<div class="page{{ $number === 6 ? ' last' : '' }}">
+<div class="page{{ $number === ($totalPages ?? 6) ? ' last' : '' }}">
     <div class="rule"></div>
     <div class="band">
         <table>
