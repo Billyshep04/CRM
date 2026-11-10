@@ -121,6 +121,8 @@
                     <a href="#" class="nav-item staff-only" data-view="subscriptions" title="Subscriptions"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/></svg><span class="nav-label">Subscriptions</span></a>
                     <a href="#" class="nav-item staff-only" data-view="costs" title="Costs"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/><path d="M21 9h-6a3 3 0 0 0 0 6h6z"/></svg><span class="nav-label">Costs</span></a>
                     <a href="#" class="nav-item admin-only" data-view="monthly-finance" title="Monthly Finance"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="5"/><rect x="12" y="8" width="3" height="9"/><rect x="17" y="5" width="3" height="12"/></svg><span class="nav-label">Monthly Finance</span></a>
+                    <div class="nav-section admin-only">Marketing</div>
+                    <a href="#" class="nav-item admin-only" data-view="email-marketing" title="Email Marketing"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 6L2 7"/></svg><span class="nav-label">Email Marketing</span></a>
                     <div class="nav-section admin-only">Team</div>
                     <a href="#" class="nav-item admin-only" data-view="staff-tracking" title="Staff"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg><span class="nav-label">Staff</span></a>
                     <a href="#" class="nav-item customer-only" data-view="portal" title="My Portal"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg><span class="nav-label">My Portal</span></a>
@@ -1667,6 +1669,573 @@
                             </form>
                         </div>
                     </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="email-marketing">
+                    <div class="email-tabs">
+                        <div class="segmented" role="radiogroup" aria-label="Email marketing section">
+                            <label><input type="radio" name="email-marketing-tab" value="campaigns" checked><span>Campaigns</span></label>
+                            <label><input type="radio" name="email-marketing-tab" value="lists"><span>Lists</span></label>
+                        </div>
+                    </div>
+
+                    <section class="content-grid proposals-layout" data-email-panel="campaigns">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Campaigns</div>
+                                    <div class="card-subtitle">Marketing emails sent to your lists. Each person gets their own copy with an unsubscribe link.</div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-primary" id="email-campaign-new" type="button">New campaign</button>
+                                </div>
+                            </div>
+                            <div class="filters email-filters">
+                                <label class="field">
+                                    <span>Search</span>
+                                    <input type="search" id="email-campaigns-search" placeholder="Name or subject">
+                                </label>
+                                <label class="field">
+                                    <span>Status</span>
+                                    <select id="email-campaigns-status">
+                                        <option value="all">All statuses</option>
+                                        <option value="draft">Draft</option>
+                                        <option value="scheduled">Scheduled</option>
+                                        <option value="sending">Sending</option>
+                                        <option value="sent">Sent</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="table" id="email-campaigns-table">
+                                <div class="table-row table-header email-campaigns">
+                                    <span>Campaign</span>
+                                    <span>Subject</span>
+                                    <span>Lists</span>
+                                    <span>Status</span>
+                                    <span>Sent</span>
+                                    <span>Recipients</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty email-campaigns">
+                                    <span>Loading campaigns...</span>
+                                    <span></span><span></span><span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            <div class="table-actions">
+                                <button class="btn btn-ghost" id="email-campaigns-load-more" type="button">Load more</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="content-grid proposals-layout" data-email-panel="lists" hidden>
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Email lists</div>
+                                    <div class="card-subtitle">Mailing lists for marketing emails. These are separate from CRM customers.</div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-primary" id="email-list-new" type="button">New list</button>
+                                </div>
+                            </div>
+                            <div class="filters email-filters">
+                                <label class="field">
+                                    <span>Search</span>
+                                    <input type="search" id="email-lists-search" placeholder="List name">
+                                </label>
+                            </div>
+                            <div class="table" id="email-lists-table">
+                                <div class="table-row table-header email-lists">
+                                    <span>List</span>
+                                    <span>Description</span>
+                                    <span>Subscribers</span>
+                                    <span>Created</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty email-lists">
+                                    <span>Loading lists...</span>
+                                    <span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            <div class="table-actions">
+                                <button class="btn btn-ghost" id="email-lists-load-more" type="button">Load more</button>
+                            </div>
+                        </div>
+
+                        <div class="card" id="email-list-editor" hidden>
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="email-list-form-title">New list</div>
+                                    <div class="card-subtitle">Give the list a name you'll recognise when choosing who to send a campaign to.</div>
+                                </div>
+                            </div>
+                            <form id="email-list-form" class="form-stack" novalidate>
+                                <label class="field">
+                                    <span>Name</span>
+                                    <input type="text" name="name" maxlength="255" placeholder="Monthly newsletter" required>
+                                </label>
+                                <label class="field">
+                                    <span>Description</span>
+                                    <textarea name="description" rows="3" maxlength="2000" placeholder="Who is on this list and what they signed up for"></textarea>
+                                </label>
+                                <div id="email-list-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Save list</button>
+                                    <button type="button" class="btn btn-ghost" id="email-list-cancel">Cancel</button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="email-campaign">
+                    <section class="detail-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="email-campaign-title">New campaign</div>
+                                    <div class="card-subtitle" id="email-campaign-subtitle">Draft</div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="email-campaign-duplicate" type="button" hidden>Duplicate</button>
+                                    <button class="btn btn-outline" id="email-campaign-back" type="button">Back to campaigns</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card wide email-schedule-card" id="email-campaign-schedule" hidden>
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="email-campaign-schedule-title"></div>
+                                    <div class="card-subtitle" id="email-campaign-schedule-subtitle"></div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="email-campaign-unschedule" type="button" hidden>Cancel schedule</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card wide" id="email-campaign-progress" hidden>
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="email-campaign-progress-title">Sending</div>
+                                    <div class="card-subtitle" id="email-campaign-progress-subtitle"></div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="email-campaign-retry" type="button" hidden>Retry failed</button>
+                                </div>
+                            </div>
+                            <div class="email-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" id="email-campaign-progress-bar"><span></span></div>
+                            <div class="panel-grid email-stats">
+                                <div class="card"><div class="card-label">Sent</div><div class="card-value" data-email-stat="sent">0</div><div class="card-meta">Delivered to the provider</div></div>
+                                <div class="card"><div class="card-label">Failed</div><div class="card-value" data-email-stat="failed">0</div><div class="card-meta">Couldn't be sent</div></div>
+                                <div class="card"><div class="card-label">Unsubscribed</div><div class="card-value" data-email-stat="unsubscribed">0</div><div class="card-meta">Used this email's link</div></div>
+                                <div class="card"><div class="card-label">Skipped</div><div class="card-value" data-email-stat="skipped">0</div><div class="card-meta">Left before it was sent</div></div>
+                            </div>
+                            <div class="filters email-filters">
+                                <label class="field">
+                                    <span>Delivery log</span>
+                                    <select id="email-campaign-log-status">
+                                        <option value="all">Everyone</option>
+                                        <option value="sent">Sent</option>
+                                        <option value="failed">Failed</option>
+                                        <option value="unsubscribed">Unsubscribed</option>
+                                        <option value="skipped">Skipped</option>
+                                        <option value="pending">Waiting to send</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span>Search</span>
+                                    <input type="search" id="email-campaign-log-search" placeholder="Email address">
+                                </label>
+                            </div>
+                            <div class="table" id="email-campaign-log">
+                                <div class="table-row table-header email-campaign-log">
+                                    <span>Email</span><span>Status</span><span>Sent</span><span>Details</span>
+                                </div>
+                            </div>
+                            <div class="table-actions">
+                                <button class="btn btn-ghost" id="email-campaign-log-more" type="button">Load more</button>
+                            </div>
+                        </div>
+
+                        <div class="email-campaign-layout">
+                            <div class="stack">
+                                <form id="email-campaign-form" class="stack" novalidate>
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div>
+                                                <div class="card-title">Details</div>
+                                                <div class="card-subtitle">What recipients see in their inbox.</div>
+                                            </div>
+                                        </div>
+                                        <div class="form-stack">
+                                            <label class="field">
+                                                <span>Campaign name</span>
+                                                <input type="text" name="name" maxlength="255" placeholder="November SEO audit offer" required>
+                                            </label>
+                                            <label class="field">
+                                                <span>Subject line</span>
+                                                <input type="text" name="subject" maxlength="255" placeholder="Can customers find you on Google?">
+                                            </label>
+                                            <label class="field">
+                                                <span>Preview text</span>
+                                                <input type="text" name="preview_text" maxlength="255" placeholder="Leave blank if your HTML already has a preheader">
+                                            </label>
+                                            <div class="form-grid">
+                                                <label class="field">
+                                                    <span>From name</span>
+                                                    <input type="text" name="from_name" maxlength="255">
+                                                </label>
+                                                <label class="field">
+                                                    <span>From email</span>
+                                                    <input type="email" name="from_email" maxlength="255">
+                                                </label>
+                                                <label class="field form-grid-wide">
+                                                    <span>Reply-to (optional)</span>
+                                                    <input type="email" name="reply_to" maxlength="255" placeholder="Where replies should go, if different">
+                                                </label>
+                                            </div>
+                                            <div class="form-hint" id="email-campaign-from-hint"></div>
+                                        </div>
+                                    </div>
+
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div>
+                                                <div class="card-title">Send to</div>
+                                                <div class="card-subtitle" id="email-campaign-recipient-count">Choose one or more lists.</div>
+                                            </div>
+                                        </div>
+                                        <div class="email-campaign-lists" id="email-campaign-lists"></div>
+                                    </div>
+
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div>
+                                                <div class="card-title">Email HTML</div>
+                                                <div class="card-subtitle">Paste your full HTML email or upload the file. It's sent exactly as written.</div>
+                                            </div>
+                                            <div class="card-header-actions">
+                                                <input type="file" id="email-campaign-html-file" accept=".html,.htm,text/html" hidden>
+                                                <button class="btn btn-outline" id="email-campaign-html-upload" type="button">Upload .html file</button>
+                                            </div>
+                                        </div>
+                                        <label class="field">
+                                            <span class="email-visually-hidden">HTML</span>
+                                            <textarea name="html_body" class="email-html-editor" rows="18" spellcheck="false" wrap="off" placeholder="&lt;!DOCTYPE html&gt;…"></textarea>
+                                        </label>
+                                        <div class="email-html-meta">
+                                            <span id="email-campaign-unsubscribe-check"></span>
+                                            <span id="email-campaign-html-size" class="form-hint"></span>
+                                        </div>
+                                        <div class="form-hint">
+                                            Merge tags: <code>@{{first_name}}</code> <code>@{{last_name}}</code> <code>@{{email}}</code> <code>@{{unsubscribe_url}}</code> <code>@{{view_in_browser_url}}</code>.
+                                            Add a fallback for empty names, e.g. <code>@{{first_name|there}}</code>.
+                                        </div>
+                                    </div>
+
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <div>
+                                                <div class="card-title">Ready to send?</div>
+                                                <div class="card-subtitle">Checked each time you save.</div>
+                                            </div>
+                                        </div>
+                                        <ul class="email-checks" id="email-campaign-checks"></ul>
+                                        <div id="email-campaign-form-status" class="form-hint"></div>
+                                        <div class="form-actions">
+                                            <button type="submit" class="btn btn-outline" id="email-campaign-save">Save draft</button>
+                                            <button type="button" class="btn btn-primary" id="email-campaign-send" disabled>Send campaign…</button>
+                                        </div>
+                                    </div>
+                                </form>
+
+                                <form class="card" id="email-campaign-test-form" novalidate>
+                                    <div class="card-header">
+                                        <div>
+                                            <div class="card-title">Send a test</div>
+                                            <div class="card-subtitle">Saves the draft, then sends it with "[Test]" in the subject. Up to 5 addresses.</div>
+                                        </div>
+                                    </div>
+                                    <div class="email-test-row">
+                                        <label class="field">
+                                            <span class="email-visually-hidden">Test email addresses</span>
+                                            <input type="text" name="emails" placeholder="you@web-stamp.co.uk, colleague@web-stamp.co.uk">
+                                        </label>
+                                        <button class="btn btn-outline" type="submit" id="email-campaign-test-submit">Send test</button>
+                                    </div>
+                                    <div id="email-campaign-test-status" class="form-hint"></div>
+                                </form>
+                            </div>
+
+                            <div class="card email-preview-card">
+                                <div class="card-header">
+                                    <div>
+                                        <div class="card-title">Preview</div>
+                                        <div class="card-subtitle">Merge tags show sample values.</div>
+                                    </div>
+                                    <div class="segmented" role="radiogroup" aria-label="Preview size">
+                                        <label><input type="radio" name="email-preview-mode" value="desktop" checked><span>Desktop</span></label>
+                                        <label><input type="radio" name="email-preview-mode" value="mobile"><span>Mobile</span></label>
+                                        <label><input type="radio" name="email-preview-mode" value="text"><span>Plain text</span></label>
+                                    </div>
+                                </div>
+                                <div class="email-preview-frame-wrap" id="email-preview-wrap">
+                                    <iframe id="email-preview-frame" title="Email preview" sandbox="allow-popups allow-popups-to-escape-sandbox"></iframe>
+                                    <div class="email-preview-empty" id="email-preview-empty">Paste or upload your HTML to see a preview.</div>
+                                </div>
+                                <pre class="email-preview-text" id="email-preview-text" hidden></pre>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="crm-modal-backdrop" id="email-send-modal" hidden>
+                        <section class="crm-modal customer-form-modal" role="dialog" aria-modal="true" aria-labelledby="email-send-modal-title">
+                            <div class="crm-modal-header">
+                                <div>
+                                    <div class="card-title" id="email-send-modal-title">Send campaign</div>
+                                    <div class="card-subtitle" id="email-send-modal-subtitle">Check everything below. Once it starts, it can't be stopped or changed.</div>
+                                </div>
+                                <button class="crm-modal-close" type="button" data-email-modal-close aria-label="Close">×</button>
+                            </div>
+                            <form id="email-send-form" class="form-stack" novalidate>
+                                <div class="email-send-summary" id="email-send-summary"></div>
+                                <div class="segmented" role="radiogroup" aria-label="When to send">
+                                    <label><input type="radio" name="send_when" value="now" checked><span>Send now</span></label>
+                                    <label><input type="radio" name="send_when" value="later"><span>Schedule for later</span></label>
+                                </div>
+                                <label class="field" id="email-send-at-field" hidden>
+                                    <span>Send on</span>
+                                    <input type="datetime-local" name="scheduled_at">
+                                    <small class="form-hint">Your local time. Recipients are worked out when it sends, so anyone who joins or leaves the lists before then is included or left out.</small>
+                                </label>
+                                <label class="check-row email-check-row"><input type="checkbox" name="confirmed"><span id="email-send-confirm-label">I'm ready to send this campaign.</span></label>
+                                <div id="email-send-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary" id="email-send-submit">Send now</button>
+                                    <button type="button" class="btn btn-ghost" data-email-modal-close>Cancel</button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+                </section>
+
+                <section class="view staff-view admin-only-view" data-view="email-list-detail">
+                    <section class="detail-grid">
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title" id="email-list-detail-title">List</div>
+                                    <div class="card-subtitle" id="email-list-detail-description"></div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="email-list-detail-edit" type="button">Edit list</button>
+                                    <button class="btn btn-outline" id="email-list-detail-back" type="button">Back to lists</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel-grid">
+                            <div class="card">
+                                <div class="card-label">Subscribed</div>
+                                <div class="card-value" id="email-list-subscribed-count">0</div>
+                                <div class="card-meta">Will receive campaigns</div>
+                            </div>
+                            <div class="card">
+                                <div class="card-label">Unsubscribed</div>
+                                <div class="card-value" id="email-list-unsubscribed-count">0</div>
+                                <div class="card-meta">Never emailed again, from any list</div>
+                            </div>
+                            <div class="card">
+                                <div class="card-label">Bounced</div>
+                                <div class="card-value" id="email-list-bounced-count">0</div>
+                                <div class="card-meta">Address doesn't accept email</div>
+                            </div>
+                        </div>
+
+                        <div class="card wide">
+                            <div class="card-header">
+                                <div>
+                                    <div class="card-title">Subscribers</div>
+                                    <div class="card-subtitle">Each email address appears once, however many lists it's on.</div>
+                                </div>
+                                <div class="card-header-actions">
+                                    <button class="btn btn-outline" id="email-subscriber-import" type="button">Import CSV</button>
+                                    <button class="btn btn-primary" id="email-subscriber-new" type="button">Add subscriber</button>
+                                </div>
+                            </div>
+                            <div class="filters email-filters">
+                                <label class="field">
+                                    <span>Search</span>
+                                    <input type="search" id="email-subscribers-search" placeholder="Email or name">
+                                </label>
+                                <label class="field">
+                                    <span>Status</span>
+                                    <select id="email-subscribers-status">
+                                        <option value="all">All statuses</option>
+                                        <option value="subscribed">Subscribed</option>
+                                        <option value="unsubscribed">Unsubscribed</option>
+                                        <option value="bounced">Bounced</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="table" id="email-subscribers-table">
+                                <div class="table-row table-header email-subscribers">
+                                    <span>Subscriber</span>
+                                    <span>Status</span>
+                                    <span>Consent</span>
+                                    <span>Added</span>
+                                    <span>Actions</span>
+                                </div>
+                                <div class="table-row table-empty email-subscribers">
+                                    <span>Loading subscribers...</span>
+                                    <span></span><span></span><span></span><span></span>
+                                </div>
+                            </div>
+                            <div class="table-actions">
+                                <button class="btn btn-ghost" id="email-subscribers-load-more" type="button">Load more</button>
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="crm-modal-backdrop" id="email-subscriber-modal" hidden>
+                        <section class="crm-modal customer-form-modal" role="dialog" aria-modal="true" aria-labelledby="email-subscriber-modal-title">
+                            <div class="crm-modal-header">
+                                <div>
+                                    <div class="card-title" id="email-subscriber-modal-title">Add subscriber</div>
+                                    <div class="card-subtitle" id="email-subscriber-modal-subtitle">Only add people who have agreed to receive marketing emails.</div>
+                                </div>
+                                <button class="crm-modal-close" type="button" data-email-modal-close aria-label="Close">×</button>
+                            </div>
+                            <form id="email-subscriber-form" class="form-stack" novalidate>
+                                <label class="field">
+                                    <span>Email</span>
+                                    <input type="email" name="email" maxlength="254" placeholder="name@example.com" required>
+                                </label>
+                                <div class="form-grid">
+                                    <label class="field">
+                                        <span>First name</span>
+                                        <input type="text" name="first_name" maxlength="255">
+                                    </label>
+                                    <label class="field">
+                                        <span>Last name</span>
+                                        <input type="text" name="last_name" maxlength="255">
+                                    </label>
+                                </div>
+                                <label class="field" data-email-new-only>
+                                    <span>How did they give consent?</span>
+                                    <select name="consent_source" data-email-consent-select required></select>
+                                </label>
+                                <label class="field">
+                                    <span>Consent note</span>
+                                    <textarea name="consent_note" rows="2" maxlength="2000" placeholder="e.g. Signed up on the website contact form, 3 Nov 2026"></textarea>
+                                </label>
+                                <div class="form-hint" id="email-subscriber-consent-record" hidden></div>
+                                <div id="email-subscriber-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary" id="email-subscriber-submit">Add subscriber</button>
+                                    <button type="button" class="btn btn-ghost" data-email-modal-close>Cancel</button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div class="crm-modal-backdrop" id="email-status-modal" hidden>
+                        <section class="crm-modal customer-form-modal" role="dialog" aria-modal="true" aria-labelledby="email-status-modal-title">
+                            <div class="crm-modal-header">
+                                <div>
+                                    <div class="card-title" id="email-status-modal-title">Unsubscribe</div>
+                                    <div class="card-subtitle" id="email-status-modal-subtitle"></div>
+                                </div>
+                                <button class="crm-modal-close" type="button" data-email-modal-close aria-label="Close">×</button>
+                            </div>
+                            <form id="email-status-form" class="form-stack" novalidate>
+                                <label class="field" id="email-status-reason-field">
+                                    <span>Reason</span>
+                                    <select name="reason">
+                                        <option value="unsubscribed">They asked to unsubscribe</option>
+                                        <option value="bounced">The address bounces</option>
+                                    </select>
+                                </label>
+                                <label class="field">
+                                    <span id="email-status-note-label">Note</span>
+                                    <textarea name="note" rows="3" maxlength="2000"></textarea>
+                                </label>
+                                <div id="email-status-form-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary" id="email-status-submit">Unsubscribe</button>
+                                    <button type="button" class="btn btn-ghost" data-email-modal-close>Cancel</button>
+                                </div>
+                            </form>
+                        </section>
+                    </div>
+
+                    <div class="crm-modal-backdrop" id="email-import-modal" hidden>
+                        <section class="crm-modal customer-form-modal email-import-modal" role="dialog" aria-modal="true" aria-labelledby="email-import-modal-title">
+                            <div class="crm-modal-header">
+                                <div>
+                                    <div class="card-title" id="email-import-modal-title">Import subscribers</div>
+                                    <div class="card-subtitle" id="email-import-modal-subtitle">Upload a CSV file with one person per row.</div>
+                                </div>
+                                <button class="crm-modal-close" type="button" data-email-modal-close aria-label="Close">×</button>
+                            </div>
+
+                            <form id="email-import-upload" class="form-stack" novalidate>
+                                <label class="field">
+                                    <span>CSV file</span>
+                                    <input type="file" name="file" accept=".csv,text/csv" required>
+                                </label>
+                                <div class="form-hint">Needs a column of email addresses. First and last name columns are optional. Up to 5 MB.</div>
+                                <div id="email-import-upload-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary">Next: match columns</button>
+                                    <button type="button" class="btn btn-ghost" data-email-modal-close>Cancel</button>
+                                </div>
+                            </form>
+
+                            <form id="email-import-mapping" class="form-stack" novalidate hidden>
+                                <div class="form-grid">
+                                    <label class="field">
+                                        <span>Email column</span>
+                                        <select name="map_email" data-email-column-select required></select>
+                                    </label>
+                                    <label class="field">
+                                        <span>First name column</span>
+                                        <select name="map_first_name" data-email-column-select data-optional></select>
+                                    </label>
+                                    <label class="field">
+                                        <span>Last name column</span>
+                                        <select name="map_last_name" data-email-column-select data-optional></select>
+                                    </label>
+                                    <label class="check-row email-check-row"><input type="checkbox" name="has_header" checked><span>The first row contains column names</span></label>
+                                </div>
+                                <div class="table email-import-sample" id="email-import-sample"></div>
+                                <label class="field">
+                                    <span>How did these people give consent?</span>
+                                    <select name="consent_source" data-email-consent-select required></select>
+                                </label>
+                                <label class="field">
+                                    <span>Consent note</span>
+                                    <textarea name="consent_note" rows="2" maxlength="2000" placeholder="e.g. Newsletter sign-ups from the website, Jan to Oct 2026"></textarea>
+                                </label>
+                                <label class="check-row email-check-row"><input type="checkbox" name="consent_confirmed"><span>I confirm everyone in this file has agreed to receive marketing emails from us.</span></label>
+                                <div id="email-import-mapping-status" class="form-hint"></div>
+                                <div class="form-actions">
+                                    <button type="submit" class="btn btn-primary" id="email-import-submit">Import</button>
+                                    <button type="button" class="btn btn-ghost" id="email-import-back">Choose a different file</button>
+                                </div>
+                            </form>
+
+                            <div id="email-import-summary" class="form-stack" hidden>
+                                <div class="email-import-totals" id="email-import-totals"></div>
+                                <div class="table" id="email-import-details"></div>
+                                <div class="form-actions">
+                                    <button type="button" class="btn btn-primary" data-email-modal-close>Done</button>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
                 </section>
 
                 <section class="view staff-view" data-view="invoices">

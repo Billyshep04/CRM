@@ -16,6 +16,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\EnsureRole::class,
             'permission' => \App\Http\Middleware\EnsurePermission::class,
         ]);
+
+        // Campaign HTML is stored exactly as pasted, so it must not be trimmed.
+        $middleware->trimStrings(except: ['html_body']);
+
+        // Mail apps send RFC 8058 one-click unsubscribes without a CSRF token; the link's own token authorises it.
+        $middleware->validateCsrfTokens(except: ['email/unsubscribe/*']);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

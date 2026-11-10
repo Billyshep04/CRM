@@ -1,4 +1,5 @@
 import './bootstrap';
+import { initEmailMarketing } from './email-marketing';
 
 const authKey = 'auth_token';
 const themeKey = 'theme_preference';
@@ -544,6 +545,8 @@ const dashboardTileDefaults = {
     open_opportunities: true,
 };
 
+let emailMarketing = null;
+
 const state = {
     view: 'dashboard',
     role: 'guest',
@@ -729,6 +732,18 @@ const viewMeta = {
         title: 'Social Reports',
         subtitle: 'Build monthly social media growth reports and download them as PDFs.',
     },
+    'email-marketing': {
+        title: 'Email Marketing',
+        subtitle: 'Mailing lists and marketing campaigns.',
+    },
+    'email-list-detail': {
+        title: 'Email List',
+        subtitle: 'Subscribers, consent records and imports.',
+    },
+    'email-campaign': {
+        title: 'Email Campaign',
+        subtitle: 'Build the email, preview it and send a test.',
+    },
     costs: {
         title: 'Costs',
         subtitle: 'Track expenses and receipt uploads.',
@@ -890,6 +905,8 @@ function updateUrlForView(view) {
     if (view === 'website-detail' && state.currentWebsite?.id) hash += `/${state.currentWebsite.id}`;
     else if (view === 'customer-detail' && state.currentCustomer?.id) hash += `/${state.currentCustomer.id}`;
     else if (view === 'lead-detail' && state.currentLead?.id) hash += `/${state.currentLead.id}`;
+    else if (view === 'email-list-detail' && emailMarketing?.currentListId()) hash += `/${emailMarketing.currentListId()}`;
+    else if (view === 'email-campaign' && emailMarketing?.currentCampaignId()) hash += `/${emailMarketing.currentCampaignId()}`;
     else if (view === 'portal-website-detail' && state.currentPortalWebsite?.id) hash += `/${state.currentPortalWebsite.id}`;
     if (window.location.hash !== hash) window.history.replaceState(null, '', hash);
 }
@@ -906,15 +923,17 @@ function restoreViewFromUrl(role) {
     if (view === 'website-detail' && id) { openWebsiteDetail(id); return true; }
     if (view === 'customer-detail' && id) { openCustomerDetail(Number(id)); return true; }
     if (view === 'lead-detail' && id) { openLeadDetail(id); return true; }
+    if (view === 'email-list-detail' && id && role === 'admin') { emailMarketing?.openList(Number(id)); return true; }
+    if (view === 'email-campaign' && role === 'admin') { emailMarketing?.openCampaign(id ? Number(id) : null); return true; }
     if (!viewMeta[view]) return false;
-    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'].includes(view) && role !== 'admin') return false;
+    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking', 'email-marketing', 'email-list-detail', 'email-campaign'].includes(view) && role !== 'admin') return false;
     if (view === 'monthly-tasks' && role !== 'staff') return false;
     setActiveView(view);
     return true;
 }
 
 function setActiveView(view) {
-    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'].includes(view) && state.role !== 'admin') {
+    if (['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking', 'email-marketing', 'email-list-detail', 'email-campaign'].includes(view) && state.role !== 'admin') {
         return;
     }
 
@@ -924,7 +943,7 @@ function setActiveView(view) {
 
     const meta = viewMeta[view] || viewMeta.dashboard;
     state.view = view;
-    const navView = view === 'customer-detail' ? 'customers' : (view === 'website-detail' ? 'websites' : (view === 'lead-detail' ? 'lead-discovery' : view));
+    const navView = view === 'customer-detail' ? 'customers' : (view === 'website-detail' ? 'websites' : (view === 'lead-detail' ? 'lead-discovery' : (['email-list-detail', 'email-campaign'].includes(view) ? 'email-marketing' : view)));
     updateUrlForView(view);
     updateBackgroundTaskPills();
 
@@ -989,6 +1008,9 @@ function setActiveView(view) {
     }
     if (view === 'social-reports') {
         ensureCustomersLoaded().then(loadSocialReports);
+    }
+    if (view.startsWith('email-') && state.role === 'admin') {
+        emailMarketing?.onView(view);
     }
     if (view === 'costs') {
         loadCostMonths();
@@ -9486,7 +9508,7 @@ async function handlePortalInvoiceAction(event) {
 }
 
 function initializeNavigation() {
-    const adminOnlyViews = ['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking'];
+    const adminOnlyViews = ['monthly-finance', 'proposal-form-edit', 'customer-form-edit', 'staff-tracking', 'email-marketing', 'email-list-detail', 'email-campaign'];
     const staffOnlyViews = ['tasks', 'monthly-tasks'];
 
     dom.navItems.forEach((item) => {
@@ -11033,6 +11055,7 @@ if (dom.portalFormPanel) {
     });
 }
 
+emailMarketing = initEmailMarketing({ api, showToast, escapeHtml, formatDate, getErrorMessage, setFormStatus, setActiveView, resetTable, buildQuery, debounce });
 initializeInvoiceForm();
 initializeNavigation();
 applyStoredTheme();

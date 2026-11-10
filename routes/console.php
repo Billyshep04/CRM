@@ -55,3 +55,17 @@ Artisan::command('websites:resume-launches', function (): void {
 })->purpose('Resume website launches waiting for DNS or SSL.');
 
 Schedule::command('websites:resume-launches')->everyTenMinutes()->withoutOverlapping()->onOneServer();
+
+Artisan::command('email-campaigns:resume', function (\App\Services\EmailMarketing\CampaignSender $sender): void {
+    $count = $sender->resumeStalled();
+    $this->info("Resumed {$count} campaign(s).");
+})->purpose('Restart email campaigns whose sending was interrupted.');
+
+Schedule::command('email-campaigns:resume')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+
+Artisan::command('email-campaigns:send-scheduled', function (\App\Services\EmailMarketing\CampaignSender $sender): void {
+    $result = $sender->sendDueScheduled();
+    $this->info("Started {$result['started']} scheduled campaign(s); {$result['failed']} couldn't be sent.");
+})->purpose('Start email campaigns whose scheduled time has arrived.');
+
+Schedule::command('email-campaigns:send-scheduled')->everyMinute()->withoutOverlapping()->onOneServer();

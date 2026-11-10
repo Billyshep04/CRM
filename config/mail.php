@@ -79,6 +79,22 @@ return [
             'transport' => 'array',
         ],
 
+        // Email Marketing campaigns only. Kept apart from transactional mail (invoices, proposals)
+        // and logged locally until MARKETING_MAIL_TRANSPORT=smtp is set with SMTP2GO credentials.
+        'marketing' => env('MARKETING_MAIL_TRANSPORT', 'log') === 'smtp' ? [
+            'transport' => 'smtp',
+            'scheme' => env('MARKETING_MAIL_SCHEME'),
+            'host' => env('MARKETING_MAIL_HOST', 'mail.smtp2go.com'),
+            'port' => env('MARKETING_MAIL_PORT', 2525),
+            'username' => env('MARKETING_MAIL_USERNAME'),
+            'password' => env('MARKETING_MAIL_PASSWORD'),
+            'timeout' => 30,
+            'local_domain' => env('MAIL_EHLO_DOMAIN', parse_url((string) env('APP_URL', 'http://localhost'), PHP_URL_HOST)),
+        ] : [
+            'transport' => env('MARKETING_MAIL_TRANSPORT', 'log'),
+            'channel' => env('MAIL_LOG_CHANNEL'),
+        ],
+
         'failover' => [
             'transport' => 'failover',
             'mailers' => [
