@@ -15,6 +15,9 @@ use App\Http\Controllers\CostController;
 use App\Http\Controllers\RecurringCostController;
 use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\CustomerFormController;
+use App\Http\Controllers\EmailCampaignController;
+use App\Http\Controllers\EmailListController;
+use App\Http\Controllers\EmailSubscriberController;
 use App\Http\Controllers\FollowUpController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\JobController;
@@ -167,6 +170,31 @@ Route::middleware('auth:sanctum')->group(function (): void {
     });
 
     Route::middleware('role:admin')->group(function (): void {
+        // Email marketing: admin only, and separate from CRM customers.
+        Route::get('email-subscribers/options', [EmailSubscriberController::class, 'options']);
+        Route::apiResource('email-lists', EmailListController::class);
+        Route::get('email-lists/{emailList}/subscribers', [EmailSubscriberController::class, 'index']);
+        Route::post('email-lists/{emailList}/subscribers', [EmailSubscriberController::class, 'store']);
+        Route::delete('email-lists/{emailList}/subscribers/{emailSubscriber}', [EmailSubscriberController::class, 'destroy']);
+        Route::post('email-lists/{emailList}/import/preview', [EmailSubscriberController::class, 'importPreview']);
+        Route::post('email-lists/{emailList}/import', [EmailSubscriberController::class, 'import']);
+        Route::put('email-subscribers/{emailSubscriber}', [EmailSubscriberController::class, 'update']);
+        Route::post('email-subscribers/{emailSubscriber}/unsubscribe', [EmailSubscriberController::class, 'unsubscribe']);
+        Route::post('email-subscribers/{emailSubscriber}/resubscribe', [EmailSubscriberController::class, 'resubscribe']);
+        Route::get('email-campaigns/options', [EmailCampaignController::class, 'options']);
+        Route::get('email-campaigns/recipient-count', [EmailCampaignController::class, 'recipientCount']);
+        Route::post('email-campaigns/plain-text', [EmailCampaignController::class, 'plainText']);
+        Route::apiResource('email-campaigns', EmailCampaignController::class);
+        Route::post('email-campaigns/{emailCampaign}/duplicate', [EmailCampaignController::class, 'duplicate']);
+        Route::post('email-campaigns/{emailCampaign}/test', [EmailCampaignController::class, 'test'])->middleware('throttle:10,1');
+        Route::get('email-campaigns/{emailCampaign}/send-summary', [EmailCampaignController::class, 'sendSummary']);
+        Route::post('email-campaigns/{emailCampaign}/send', [EmailCampaignController::class, 'send'])->middleware('throttle:10,1');
+        Route::get('email-campaigns/{emailCampaign}/progress', [EmailCampaignController::class, 'progress']);
+        Route::post('email-campaigns/{emailCampaign}/schedule', [EmailCampaignController::class, 'schedule'])->middleware('throttle:10,1');
+        Route::post('email-campaigns/{emailCampaign}/unschedule', [EmailCampaignController::class, 'unschedule']);
+        Route::get('email-campaigns/{emailCampaign}/recipients', [EmailCampaignController::class, 'recipients']);
+        Route::post('email-campaigns/{emailCampaign}/retry-failed', [EmailCampaignController::class, 'retryFailed'])->middleware('throttle:10,1');
+
         Route::post('brand/logo', [BrandSettingController::class, 'updateLogo']);
         Route::post('seo-reports/{seoReport}/send', [SeoReportController::class, 'send']);
         Route::post('social-reports/{socialReport}/send', [SocialReportController::class, 'send']);
