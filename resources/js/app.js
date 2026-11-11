@@ -6298,7 +6298,9 @@ function renderCosts() {
             <span>${escapeHtml(costType)}</span>
             <span>${receiptButton}</span>
             <div class="row-actions">
-                ${cost.entry_type === 'one_off' ? `<button class="btn btn-outline btn-small" data-action="edit" data-id="${cost.cost_id}">Edit</button><button class="btn btn-outline btn-small" data-action="delete" data-id="${cost.cost_id}">Delete</button>` : `<button class="btn btn-outline btn-small" data-action="edit-recurring" data-id="${cost.recurring_cost_id || ''}">Edit schedule</button>`}
+                ${cost.recurring_cost_id
+                    ? `<button class="btn btn-outline btn-small" data-action="edit-recurring" data-id="${cost.recurring_cost_id}">Edit schedule</button><button class="btn btn-outline btn-small" data-action="delete-recurring" data-id="${cost.recurring_cost_id}">Delete</button>`
+                    : `${cost.entry_type === 'one_off' ? `<button class="btn btn-outline btn-small" data-action="edit" data-id="${cost.cost_id}">Edit</button>` : ''}<button class="btn btn-outline btn-small" data-action="delete" data-id="${cost.cost_id}" data-recurring="${cost.entry_type === 'recurring' ? '1' : ''}">Delete</button>`}
             </div>
         `;
         dom.costsTable.appendChild(row);
@@ -6382,7 +6384,10 @@ async function handleCostAction(event) {
     }
 
     if (action === 'delete' && id) {
-        if (!window.confirm('Delete this cost?')) return;
+        const message = actionButton.dataset.recurring
+            ? 'Delete this recurring cost? It will be removed from every month, including past months.'
+            : 'Delete this cost?';
+        if (!window.confirm(message)) return;
         try {
             await api.delete(`/api/costs/${id}`);
             await loadCostMonths();
@@ -6392,13 +6397,25 @@ async function handleCostAction(event) {
     }
 
     if (action === 'edit-recurring' && id) editRecurringCost(id);
+    if (action === 'delete-recurring' && id) await deleteRecurringCost(id);
+}
+
+async function deleteRecurringCost(id) {
+    if (!window.confirm('Delete this recurring cost? It will be removed from every month, including past months. Use "Stop" instead if you want to keep previous months.')) return;
+    try {
+        await api.delete(`/api/recurring-costs/${id}/permanent`);
+        if (state.editing.recurringCost === Number(id)) resetRecurringCostForm();
+        await Promise.all([loadRecurringCosts(), loadCostMonths()]);
+    } catch (error) {
+        setFormStatus(dom.recurringCostFormStatus, getErrorMessage(error, 'Unable to delete recurring cost.'), true);
+    }
 }
 
 async function loadRecurringCosts() {
     if (!dom.recurringCostsList) return;
     try {
         state.recurringCosts = (await api.get('/api/recurring-costs'))?.data?.data ?? [];
-        dom.recurringCostsList.innerHTML = state.recurringCosts.length ? state.recurringCosts.map((cost) => `<div class="site-card"><div><div class="site-name">${escapeHtml(cost.description)}</div><div class="site-meta">${formatCurrency(Number(cost.current_amount))} · ${escapeHtml(cost.frequency)} · from ${formatDate(cost.starts_on)}${cost.active ? '' : ` · stopped ${formatDate(cost.ends_on)}`}</div></div><div class="row-actions"><button class="btn btn-outline btn-small" data-recurring-action="edit" data-id="${cost.id}">Edit / change price</button>${cost.active ? `<button class="btn btn-outline btn-small" data-recurring-action="stop" data-id="${cost.id}">Stop</button>` : ''}</div></div>`).join('') : '<div class="form-hint">No recurring costs yet.</div>';
+        dom.recurringCostsList.innerHTML = state.recurringCosts.length ? state.recurringCosts.map((cost) => `<div class="site-card"><div><div class="site-name">${escapeHtml(cost.description)}</div><div class="site-meta">${formatCurrency(Number(cost.current_amount))} · ${escapeHtml(cost.frequency)} · from ${formatDate(cost.starts_on)}${cost.active ? '' : ` · stopped ${formatDate(cost.ends_on)}`}</div></div><div class="row-actions"><button class="btn btn-outline btn-small" data-recurring-action="edit" data-id="${cost.id}">Edit / change price</button>${cost.active ? `<button class="btn btn-outline btn-small" data-recurring-action="stop" data-id="${cost.id}">Stop</button>` : ''}<button class="btn btn-outline btn-small" data-recurring-action="delete" data-id="${cost.id}">Delete</button></div></div>`).join('') : '<div class="form-hint">No recurring costs yet.</div>';
     } catch { dom.recurringCostsList.innerHTML = '<div class="form-hint">Unable to load recurring costs.</div>'; }
 }
 
@@ -10154,6 +10171,7 @@ if (dom.costsMonths) dom.costsMonths.addEventListener('click', (event) => {
 if (dom.recurringCostsList) dom.recurringCostsList.addEventListener('click', async (event) => {
     const button = event.target.closest('[data-recurring-action]'); if (!button) return;
     if (button.dataset.recurringAction === 'edit') editRecurringCost(button.dataset.id);
+    if (button.dataset.recurringAction === 'delete') await deleteRecurringCost(button.dataset.id);
     if (button.dataset.recurringAction === 'stop' && window.confirm('Stop this recurring cost after the current month? Previous months will be kept.')) {
         try { await api.delete(`/api/recurring-costs/${button.dataset.id}`); await Promise.all([loadRecurringCosts(), loadCostMonths()]); }
         catch (error) { setFormStatus(dom.recurringCostFormStatus, getErrorMessage(error, 'Unable to stop recurring cost.'), true); }

@@ -154,6 +154,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('costs', CostController::class);
         Route::get('costs/{cost}/receipt', [CostController::class, 'downloadReceipt']);
         Route::apiResource('recurring-costs', RecurringCostController::class)->only(['index', 'store', 'update', 'destroy']);
+        Route::delete('recurring-costs/{recurringCost}/permanent', [RecurringCostController::class, 'forceDestroy']);
         Route::apiResource('invoices', InvoiceController::class);
         Route::patch('invoices/{invoice}/archive', [InvoiceController::class, 'archive']);
         Route::patch('invoices/{invoice}/unarchive', [InvoiceController::class, 'unarchive']);

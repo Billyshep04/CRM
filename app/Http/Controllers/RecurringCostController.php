@@ -56,6 +56,13 @@ class RecurringCostController extends Controller
         return response()->json(['message' => 'Recurring cost stopped. Previous monthly costs have been preserved.']);
     }
 
+    public function forceDestroy(RecurringCost $recurringCost)
+    {
+        $recurringCost->delete();
+
+        return response()->json(['message' => 'Recurring cost deleted.']);
+    }
+
     private function present(RecurringCost $cost): array
     {
         $rates = $cost->rates->sortBy('effective_from')->values();
